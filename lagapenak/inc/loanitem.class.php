@@ -59,6 +59,41 @@ class PluginLagapenakLoanItem extends CommonDBTM {
         return self::getAssetTypes()[$itemtype] ?? $itemtype;
     }
 
+    static function getTypeIcon($itemtype) {
+        $icons = [
+            'Computer'         => '<i class="fas fa-laptop"></i>',
+            'Monitor'          => '<i class="fas fa-desktop"></i>',
+            'NetworkEquipment' => '<i class="fas fa-network-wired"></i>',
+            'Peripheral'       => '<i class="fas fa-mouse"></i>',
+            'Phone'            => '<i class="fas fa-phone"></i>',
+            'Printer'          => '<i class="fas fa-print"></i>',
+        ];
+        return $icons[$itemtype] ?? '<i class="fas fa-box"></i>';
+    }
+
+    /**
+     * Batch-load items for multiple loans in a single query.
+     * Returns [ loans_id => [ item_row, ... ], ... ]
+     */
+    static function getItemsGroupedByLoan(array $loan_ids) {
+        global $DB;
+
+        if (empty($loan_ids)) {
+            return [];
+        }
+        $ids_sql = implode(',', array_map('intval', $loan_ids));
+        $result  = $DB->query(
+            "SELECT * FROM `glpi_plugin_lagapenak_loanitems`
+             WHERE `loans_id` IN ({$ids_sql})
+             ORDER BY `loans_id`, `id`"
+        );
+        $grouped = [];
+        while ($row = $DB->fetchAssoc($result)) {
+            $grouped[$row['loans_id']][] = $row;
+        }
+        return $grouped;
+    }
+
     // ── Reservable filter ────────────────────────────────────────────────────
 
     /**
@@ -83,6 +118,57 @@ class PluginLagapenakLoanItem extends CommonDBTM {
             $ids[] = (int) $row['items_id'];
         }
         return $ids; // empty array = no reservable assets of this type
+    }
+
+    // ── Availability check ───────────────────────────────────────────────────
+
+    /**
+     * Returns loans that already have this item with an overlapping effective period.
+     *
+     * Effective period per existing item:
+     *   COALESCE(li.date_checkout, l.fecha_inicio) → COALESCE(li.date_checkin, l.fecha_fin)
+     * Uses item-level dates when set, falling back to the parent loan's dates.
+     *
+     * $fecha_inicio / $fecha_fin should be the effective period of the item being added
+     * (item checkout/checkin if provided, else the loan's fecha_inicio/fecha_fin).
+     */
+    static function getConflictingLoans($itemtype, $items_id, $exclude_loans_id, $fecha_inicio = null, $fecha_fin = null) {
+        global $DB;
+
+        $active_statuses = implode(',', [
+            PluginLagapenakLoan::STATUS_PENDING,
+            PluginLagapenakLoan::STATUS_IN_PROGRESS,
+            PluginLagapenakLoan::STATUS_DELIVERED,
+        ]);
+
+        $overlap = '';
+        if (!empty($fecha_inicio) && !empty($fecha_fin)) {
+            $fi = $DB->escape($fecha_inicio);
+            $ff = $DB->escape($fecha_fin);
+            // Strict overlap using effective item dates (COALESCE: item date if set, else loan date).
+            // Adjacent slots (one ends exactly when another starts) are NOT a conflict.
+            $overlap = " AND (COALESCE(li.date_checkout, l.fecha_inicio) < '{$ff}'
+                          AND COALESCE(li.date_checkin,  l.fecha_fin)    > '{$fi}')";
+        }
+
+        $result = $DB->query(
+            "SELECT l.id, l.name, l.fecha_inicio, l.fecha_fin, l.status,
+                    COALESCE(li.date_checkout, l.fecha_inicio) AS eff_start,
+                    COALESCE(li.date_checkin,  l.fecha_fin)    AS eff_end
+             FROM `glpi_plugin_lagapenak_loanitems` li
+             JOIN `glpi_plugin_lagapenak_loans` l ON l.id = li.loans_id
+             WHERE li.itemtype = '" . $DB->escape($itemtype) . "'
+               AND li.items_id = " . (int) $items_id . "
+               AND li.loans_id != " . (int) $exclude_loans_id . "
+               AND l.status IN ({$active_statuses})
+               {$overlap}"
+        );
+
+        $conflicts = [];
+        while ($row = $DB->fetchAssoc($result)) {
+            $conflicts[] = $row;
+        }
+        return $conflicts;
     }
 
     // ── CRUD ─────────────────────────────────────────────────────────────────
@@ -165,10 +251,11 @@ class PluginLagapenakLoanItem extends CommonDBTM {
 
     /**
      * Auto-sync the parent loan status based on its items' statuses.
-     * Pending  → all items pending
-     * Delivered → at least one delivered or returned, not all closed
-     * Returned  → all items returned/incident
-     * Cancelled → never auto-set; gestor sets it manually
+     * Pending     → all items pending (or no items)
+     * En curso    → some items delivered/closed, some still pending
+     * Delivered   → no items pending (all delivered or some already closed)
+     * Returned    → all items returned/incident
+     * Cancelled   → never auto-set; gestor sets it manually
      */
     static function syncLoanStatus($loans_id) {
         global $DB;
@@ -186,23 +273,28 @@ class PluginLagapenakLoanItem extends CommonDBTM {
         if (empty($items)) {
             $new_status = PluginLagapenakLoan::STATUS_PENDING;
         } else {
-            $total    = count($items);
-            $pending  = 0;
-            $returned = 0;
+            $total     = count($items);
+            $pending   = 0;
+            $delivered = 0;
+            $closed    = 0; // returned + incident
             foreach ($items as $it) {
                 $s = (int) $it['status'];
                 if ($s === self::STATUS_PENDING) {
                     $pending++;
+                } elseif ($s === self::STATUS_DELIVERED) {
+                    $delivered++;
                 } elseif ($s === self::STATUS_RETURNED || $s === self::STATUS_INCIDENT) {
-                    $returned++;
+                    $closed++;
                 }
             }
-            if ($returned === $total) {
-                $new_status = PluginLagapenakLoan::STATUS_RETURNED;   // all closed
+            if ($closed === $total) {
+                $new_status = PluginLagapenakLoan::STATUS_RETURNED;      // all items closed
             } elseif ($pending === 0) {
-                $new_status = PluginLagapenakLoan::STATUS_DELIVERED;   // none pending, some delivered
+                $new_status = PluginLagapenakLoan::STATUS_DELIVERED;     // none pending, all delivered
+            } elseif ($delivered > 0 || $closed > 0) {
+                $new_status = PluginLagapenakLoan::STATUS_IN_PROGRESS;   // mix: some pending, some out
             } else {
-                $new_status = PluginLagapenakLoan::STATUS_PENDING;     // any pending → overall pending
+                $new_status = PluginLagapenakLoan::STATUS_PENDING;       // all still pending
             }
         }
 

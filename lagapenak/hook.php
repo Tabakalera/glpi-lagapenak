@@ -56,7 +56,34 @@ function plugin_lagapenak_install() {
 
     ProfileRight::addProfileRights(['plugin_lagapenak_loan']);
 
+    // Default display columns for loan list (users_id=0 = global default)
+    // 3=Estado, 4=Solicitante, 5=Destinatario, 6=F.Inicio, 7=F.Fin
+    plugin_lagapenak_set_display_prefs();
+
     return true;
+}
+
+/**
+ * Insert default display preferences for the loan list if not already set.
+ * Safe to call multiple times (checks existence first).
+ */
+function plugin_lagapenak_set_display_prefs() {
+    $columns = [3, 4, 5, 6, 7]; // search option IDs (name=1 is always shown)
+    $dp = new DisplayPreference();
+    foreach ($columns as $rank => $num) {
+        if (!countElementsInTable('glpi_displaypreferences', [
+            'itemtype' => 'PluginLagapenakLoan',
+            'num'      => $num,
+            'users_id' => 0,
+        ])) {
+            $dp->add([
+                'itemtype' => 'PluginLagapenakLoan',
+                'num'      => $num,
+                'rank'     => $rank + 1,
+                'users_id' => 0,
+            ]);
+        }
+    }
 }
 
 function plugin_lagapenak_uninstall() {
@@ -67,6 +94,9 @@ function plugin_lagapenak_uninstall() {
             $DB->queryOrDie("DROP TABLE `$table`", $DB->error());
         }
     }
+
+    // Remove display preferences
+    $DB->delete('glpi_displaypreferences', ['itemtype' => 'PluginLagapenakLoan']);
 
     ProfileRight::deleteProfileRights(['plugin_lagapenak_loan']);
 

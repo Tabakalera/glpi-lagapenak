@@ -13,7 +13,30 @@
       "Bash(curl -s \"https://raw.githubusercontent.com/glpi-project/glpi/10.0.18/src/Html.php\")",
       "Bash(curl -s \"https://raw.githubusercontent.com/glpi-project/glpi/10.0.18/inc/includes.php\")",
       "Bash(curl -s \"https://raw.githubusercontent.com/glpi-project/glpi/10.0.18/templates/layout/parts/head.html.twig\")",
-      "Bash(curl -s \"https://raw.githubusercontent.com/glpi-project/glpi/10.0.18/js/common.js\")"
+      "Bash(curl -s \"https://raw.githubusercontent.com/glpi-project/glpi/10.0.18/js/common.js\")",
+      "Bash(docker ps --format \"{{.Names}}\\\\t{{.ID}}\")",
+      "Bash(docker exec glpi-lagapenak-glpi-1 find / -name \"loan.class.php\")",
+      "Bash(docker exec glpi-lagapenak-glpi-1 find / -name \"lagapenak\" -type d)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 find /var -name \"*.php\")",
+      "Bash(docker exec glpi-lagapenak-glpi-1 ls /)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 ls //)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 find //var//www -name \"plugins\" -type d)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 ls //var//www/html/glpi/plugins/)",
+      "Bash(docker cp \"c:/Proiektuak/glpi-lagapenak/lagapenak/inc/profile.class.php\" \"glpi-lagapenak-glpi-1://var/www/html/glpi/plugins/lagapenak/inc/profile.class.php\")",
+      "Bash(docker exec glpi-lagapenak-glpi-1 find //var/log -name \"*.log\")",
+      "Bash(docker exec glpi-lagapenak-glpi-1 tail -30 //var/log/apache2/error.log)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 cat //var/log/apache2/error.log)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 grep -i \"lagapenak\\\\|fatal\" //var/log/apache2/error.log)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 find //var/www/html/glpi/files/_log -name \"*.log\")",
+      "Bash(docker exec glpi-lagapenak-glpi-1 cat //var/www/html/glpi/files/_log/php-errors.log)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 tail -c 3000 //var/www/html/glpi/files/_log/php-errors.log)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 find //var/www/html/glpi/files/_cache -type f)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 ls //var/www/html/glpi/files/)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 ls //var/www/html/glpi/files/_cache/)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 rm -rf //var/www/html/glpi/files/_cache/core/*)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 ls //var/www/html/glpi/plugins/lagapenak/inc/)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 cat //var/www/html/glpi/plugins/lagapenak/setup.php)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 grep -n \"registerStandardTab\\\\|addtabon\" //var/www/html/glpi/src/Plugin.php)"
     ]
   }
 }

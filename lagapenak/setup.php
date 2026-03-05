@@ -38,3 +38,8 @@ function plugin_lagapenak_check_prerequisites() {
 function plugin_lagapenak_check_config() {
     return true;
 }
+
+function plugin_init_lagapenak() {
+    Plugin::registerClass('PluginLagapenakLoan');
+    Plugin::registerClass('PluginLagapenakProfile', ['addtabon' => ['Profile']]);
+}
