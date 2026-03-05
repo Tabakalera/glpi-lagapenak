@@ -1,0 +1,27 @@
+services:
+  mariadb:
+    image: mariadb:10.11
+    environment:
+      MYSQL_ROOT_PASSWORD: glpi_root
+      MYSQL_DATABASE: glpi
+      MYSQL_USER: glpi
+      MYSQL_PASSWORD: glpi
+    volumes:
+      - mariadb_data:/var/lib/mysql
+
+  glpi:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      TIMEZONE: Europe/Madrid
+    volumes:
+      - glpi_config:/var/www/html/glpi/config
+      - glpi_files:/var/www/html/glpi/files
+    depends_on:
+      - mariadb
+
+volumes:
+  mariadb_data:
+  glpi_config:
+  glpi_files:

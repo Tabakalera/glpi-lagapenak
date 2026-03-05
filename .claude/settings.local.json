@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:hub.docker.com)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 cat /var/www/html/glpi/plugins/lagapenak/front/loan.php)",
+      "Bash(docker exec glpi-lagapenak-glpi-1 bash -c \"cat //var/www/html/glpi/plugins/lagapenak/front/loan.php\")",
+      "Bash(docker exec glpi-lagapenak-glpi-1 bash -c \"tail -30 //var/log/apache2/error.log\")",
+      "Bash(docker exec glpi-lagapenak-glpi-1 bash -c \"cat //var/www/html/glpi/files/_log/php-errors.log 2>/dev/null | tail -20 || echo ''no log file''\")",
+      "Bash(docker cp \"c:/Proiektuak/glpi-lagapenak/lagapenak/front/loan.php\" \"glpi-lagapenak-glpi-1://var/www/html/glpi/plugins/lagapenak/front/loan.php\")",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/glpi-project/glpi/10.0.18/src/Html.php\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/glpi-project/glpi/10.0.18/inc/includes.php\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/glpi-project/glpi/10.0.18/templates/layout/parts/head.html.twig\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/glpi-project/glpi/10.0.18/js/common.js\")"
+    ]
+  }
+}
