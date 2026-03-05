@@ -41,11 +41,6 @@ $fc_locale = $CFG_GLPI['root_doc'] . '/public/lib/fullcalendar/core/locales/es.m
             <a href="<?= $list_url ?>" class="btn btn-sm btn-outline-secondary">
                 <i class="fas fa-list me-1"></i>Lista
             </a>
-            <?php if (PluginLagapenakLoan::canCreate()): ?>
-            <a href="<?= $add_url ?>" class="btn btn-sm btn-success">
-                <i class="fas fa-plus me-1"></i>Nuevo préstamo
-            </a>
-            <?php endif; ?>
         </div>
     </div>
 
@@ -224,8 +219,7 @@ function initAssetCalendar() {
         .catch(failure);
     }, true);
 
-    // Default to week view for asset (hours visible)
-    opts.defaultView = 'timeGridWeek';
+    opts.defaultView = 'dayGridMonth';
 
     assetCalendar = new FullCalendar.Calendar(document.getElementById('cal-asset'), opts);
     assetCalendar.render();

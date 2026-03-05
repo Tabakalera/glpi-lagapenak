@@ -314,4 +314,166 @@ class PluginLagapenakLoanItem extends CommonDBTM {
         }
         return 'ID: ' . $items_id;
     }
+
+    // ── Native GLPI search support ───────────────────────────────────────────
+
+    static function canView() {
+        return Session::haveRight(self::$rightname, READ);
+    }
+
+    static function getTypeName($nb = 0) {
+        return 'Activos en préstamo';
+    }
+
+    function rawSearchOptions() {
+        $tab = parent::rawSearchOptions();
+
+        // Asset name: computed CASE WHEN across asset tables (searchable + sortable)
+        // Hardcode table name — REFTABLE placeholder gets quoted by GLPI making it invalid SQL
+        $t = self::getTable();
+        $name_sql = "CASE `{$t}`.`itemtype`
+            WHEN 'Computer'         THEN (SELECT name FROM `glpi_computers`        WHERE id = `{$t}`.`items_id`)
+            WHEN 'Monitor'          THEN (SELECT name FROM `glpi_monitors`          WHERE id = `{$t}`.`items_id`)
+            WHEN 'NetworkEquipment' THEN (SELECT name FROM `glpi_networkequipments` WHERE id = `{$t}`.`items_id`)
+            WHEN 'Peripheral'       THEN (SELECT name FROM `glpi_peripherals`       WHERE id = `{$t}`.`items_id`)
+            WHEN 'Phone'            THEN (SELECT name FROM `glpi_phones`            WHERE id = `{$t}`.`items_id`)
+            WHEN 'Printer'          THEN (SELECT name FROM `glpi_printers`          WHERE id = `{$t}`.`items_id`)
+            ELSE CONCAT(`{$t}`.`itemtype`, ' #', `{$t}`.`items_id`)
+        END";
+
+        $tab[] = [
+            'id'            => 1,
+            'table'         => self::getTable(),
+            'field'         => 'items_id',
+            'name'          => 'Activo',
+            'datatype'      => 'string',
+            'computation'   => $name_sql,
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
+            'id'            => 2,
+            'table'         => self::getTable(),
+            'field'         => 'itemtype',
+            'name'          => 'Tipo',
+            'datatype'      => 'specific',
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
+            'id'            => 3,
+            'table'         => self::getTable(),
+            'field'         => 'status',
+            'name'          => 'Estado',
+            'datatype'      => 'specific',
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
+            'id'            => 4,
+            'table'         => self::getTable(),
+            'field'         => 'date_checkout',
+            'name'          => 'Fecha entrega',
+            'datatype'      => 'datetime',
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
+            'id'            => 5,
+            'table'         => self::getTable(),
+            'field'         => 'date_checkin',
+            'name'          => 'Fecha devolución',
+            'datatype'      => 'datetime',
+            'massiveaction' => false,
+        ];
+
+        // linkfield MUST be at top level — GLPI reads $searchopt[$id]['linkfield'] directly
+        $loan_join = ['jointype' => ''];
+
+        $tab[] = [
+            'id'            => 6,
+            'table'         => 'glpi_plugin_lagapenak_loans',
+            'field'         => 'name',
+            'linkfield'     => 'loans_id',
+            'name'          => 'Préstamo',
+            'datatype'      => 'string',
+            'massiveaction' => false,
+            'joinparams'    => $loan_join,
+        ];
+
+        $tab[] = [
+            'id'            => 7,
+            'table'         => 'glpi_plugin_lagapenak_loans',
+            'field'         => 'fecha_inicio',
+            'linkfield'     => 'loans_id',
+            'name'          => 'Inicio préstamo',
+            'datatype'      => 'datetime',
+            'massiveaction' => false,
+            'joinparams'    => $loan_join,
+        ];
+
+        $tab[] = [
+            'id'            => 8,
+            'table'         => 'glpi_plugin_lagapenak_loans',
+            'field'         => 'fecha_fin',
+            'linkfield'     => 'loans_id',
+            'name'          => 'Fin préstamo',
+            'datatype'      => 'datetime',
+            'massiveaction' => false,
+            'joinparams'    => $loan_join,
+        ];
+
+        $tab[] = [
+            'id'            => 9,
+            'table'         => 'glpi_plugin_lagapenak_loans',
+            'field'         => 'status',
+            'linkfield'     => 'loans_id',
+            'name'          => 'Estado préstamo',
+            'datatype'      => 'specific',
+            'massiveaction' => false,
+            'joinparams'    => $loan_join,
+        ];
+
+        return $tab;
+    }
+
+    static function getSpecificValueToDisplay($field, $values, array $options = []) {
+        if (!is_array($values)) {
+            $values = [$field => $values];
+        }
+        switch ($field) {
+            case 'itemtype':
+                return self::getTypeLabel($values[$field]);
+            case 'status':
+                return self::getStatusBadge((int)$values[$field]);
+        }
+        return parent::getSpecificValueToDisplay($field, $values, $options);
+    }
+
+    static function getSpecificValueToSelect($field, $name = '', $values = '', array $options = []) {
+        if (!is_array($values)) {
+            $values = [$field => $values];
+        }
+        $options['display'] = false;
+        switch ($field) {
+            case 'itemtype':
+                return Dropdown::showFromArray(
+                    $name,
+                    self::getAssetTypes(),
+                    array_merge($options, ['value' => $values[$field] ?? ''])
+                );
+            case 'status':
+                return Dropdown::showFromArray(
+                    $name,
+                    [
+                        self::STATUS_PENDING   => 'Pendiente',
+                        self::STATUS_DELIVERED => 'Entregado',
+                        self::STATUS_RETURNED  => 'Devuelto',
+                        self::STATUS_INCIDENT  => 'Incidencia',
+                    ],
+                    array_merge($options, ['value' => $values[$field] ?? ''])
+                );
+        }
+        return parent::getSpecificValueToSelect($field, $name, $values, $options);
+    }
 }
