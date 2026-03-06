@@ -36,13 +36,12 @@ $active_statuses = implode(',', [
 $fi = $DB->escape($fecha_inicio);
 $ff = $DB->escape($fecha_fin);
 
-// 1. All distinct assets that have ever appeared in a loan
+// 1. All assets with "Autorizar reservas" active (same source as the add-item dropdown)
 $result = $DB->query(
-    "SELECT DISTINCT li.itemtype, li.items_id
-     FROM `glpi_plugin_lagapenak_loanitems` li
-     JOIN `glpi_plugin_lagapenak_loans` l ON l.id = li.loans_id
-     WHERE l.status != " . (int)PluginLagapenakLoan::STATUS_CANCELLED . "
-     ORDER BY li.itemtype, li.items_id"
+    "SELECT ri.itemtype, ri.items_id
+     FROM `glpi_reservationitems` ri
+     WHERE ri.is_active = 1
+     ORDER BY ri.itemtype, ri.items_id"
 );
 
 $all_assets = [];
@@ -62,9 +61,9 @@ while ($row = $DB->fetchAssoc($result)) {
     }
 
     $all_assets[] = [
-        'itemtype' => $it,
-        'items_id' => $iid,
-        'name'     => $name,
+        'itemtype'   => $it,
+        'items_id'   => $iid,
+        'name'       => $name,
         'type_label' => PluginLagapenakLoanItem::getTypeLabel($it),
     ];
 }

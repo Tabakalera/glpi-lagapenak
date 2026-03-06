@@ -78,8 +78,8 @@ if ($tab === 'prestamos') {
 
 // ── TAB 3: Disponibilidad ─────────────────────────────────────────────────────
 } elseif ($tab === 'disponibilidad') {
-    $default_start = date('Y-m-d') . 'T00:00';
-    $default_end   = date('Y-m-d', strtotime('+30 days')) . 'T23:59';
+    $default_start = date('Y-m-d') . 'T12:00';
+    $default_end   = date('Y-m-d', strtotime('+1 day')) . 'T12:00';
     $asset_types   = PluginLagapenakLoanItem::getAssetTypes();
     ?>
     <div class="container-fluid mt-3">
@@ -143,6 +143,33 @@ if ($tab === 'prestamos') {
                 </select>
             </div>
 
+            <!-- ── Bulk action bar (visible when ≥1 item selected) ── -->
+            <div id="bulk-bar" class="d-flex align-items-center gap-2 flex-wrap p-2 mb-2 border rounded bg-light" style="display:none!important;">
+                <span class="fw-bold text-primary" id="bulk-count"></span>
+                <!-- Custom searchable loan picker -->
+                <div id="bulk-loan-wrapper" style="position:relative;min-width:280px;">
+                    <input type="text" id="bulk-loan-search"
+                           placeholder="Buscar préstamo…"
+                           autocomplete="off"
+                           class="form-control form-control-sm"
+                           style="color:#212529;background-color:#fff;cursor:pointer;">
+                    <div id="bulk-loan-dropdown"
+                         style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;
+                                background:#fff;border:1px solid #ced4da;border-radius:0 0 .25rem .25rem;
+                                max-height:220px;overflow-y:auto;box-shadow:0 4px 8px rgba(0,0,0,.15);">
+                    </div>
+                    <!-- Hidden input keeps selected loan id -->
+                    <input type="hidden" id="bulk-loan-select">
+                </div>
+                <button id="bulk-add-btn" class="btn btn-sm btn-success" disabled>
+                    <i class="fas fa-plus me-1"></i>Añadir al préstamo
+                </button>
+                <button id="bulk-clear-btn" class="btn btn-sm btn-outline-secondary ms-auto">
+                    <i class="fas fa-times me-1"></i>Deseleccionar todo
+                </button>
+            </div>
+            <div id="bulk-result" class="mb-2" style="display:none;"></div>
+
             <div id="avail-empty-filter" class="text-center text-muted py-3" style="display:none;">
                 Ningún activo coincide con los filtros aplicados.
             </div>
@@ -150,6 +177,9 @@ if ($tab === 'prestamos') {
             <table class="table table-sm table-bordered table-hover" id="avail-table" style="display:none;">
                 <thead class="table-light">
                     <tr>
+                        <th style="width:36px;text-align:center;">
+                            <input type="checkbox" id="avail-check-all" title="Seleccionar todos los libres de esta página">
+                        </th>
                         <th class="avail-sortable" data-col="type_label" style="cursor:pointer;white-space:nowrap;">
                             Tipo <span class="avail-sort-icon text-muted">⇅</span>
                         </th>
@@ -179,6 +209,26 @@ if ($tab === 'prestamos') {
     <script>
     var AVAIL_URL     = <?= json_encode($avail_url) ?>;
     var LOAN_FORM_URL = <?= json_encode($loan_form) ?>;
+    var BULK_ADD_URL  = <?= json_encode($plugin_web . '/ajax/bulk_add.php') ?>;
+    var BULK_CSRF     = <?= json_encode(Session::getNewCSRFToken()) ?>;
+    <?php
+    // Active loans (Pendiente + En curso) for bulk dropdown
+    global $DB;
+    $bulk_loan_rows = $DB->request([
+        'FROM'  => 'glpi_plugin_lagapenak_loans',
+        'WHERE' => ['status' => [PluginLagapenakLoan::STATUS_PENDING, PluginLagapenakLoan::STATUS_IN_PROGRESS]],
+        'ORDER' => ['name ASC'],
+    ]);
+    $bulk_loans = [];
+    foreach ($bulk_loan_rows as $blr) {
+        $bulk_loans[] = [
+            'id'    => $blr['id'],
+            'label' => '#' . $blr['id'] . ' — ' . $blr['name']
+                     . ' (' . PluginLagapenakLoan::getStatusName($blr['status']) . ')',
+        ];
+    }
+    ?>
+    var BULK_LOANS = <?= json_encode($bulk_loans) ?>;
 
     // State
     var avAllRows      = [];   // all rows from server
@@ -329,6 +379,23 @@ if ($tab === 'prestamos') {
             var tr = document.createElement('tr');
             if (!row.available) tr.classList.add('table-danger');
 
+            // Checkbox column
+            var tdChk = document.createElement('td');
+            tdChk.style.textAlign = 'center';
+            tdChk.style.verticalAlign = 'middle';
+            if (row.available) {
+                var chk = document.createElement('input');
+                chk.type = 'checkbox';
+                chk.className = 'avail-row-chk';
+                chk.dataset.itemtype = row.itemtype;
+                chk.dataset.itemsId  = row.items_id;
+                chk.dataset.name     = row.name;
+                if (avSelected[row.itemtype + '|' + row.items_id]) chk.checked = true;
+                chk.addEventListener('change', avUpdateSelection);
+                tdChk.appendChild(chk);
+            }
+            tr.appendChild(tdChk);
+
             var tdType = document.createElement('td');
             tdType.textContent = row.type_label || row.itemtype;
             tr.appendChild(tdType);
@@ -400,6 +467,214 @@ if ($tab === 'prestamos') {
 
     // Auto-search on page load with default dates
     document.getElementById('avail-form').dispatchEvent(new Event('submit'));
+
+    // ── Bulk selection ───────────────────────────────────────────────────────
+    var avSelected = {}; // key: "itemtype|items_id" → {itemtype, items_id, name}
+
+    // ── Custom searchable loan picker ──────────────────────────────────────
+    (function() {
+        var searchInput = document.getElementById('bulk-loan-search');
+        var dropdown    = document.getElementById('bulk-loan-dropdown');
+        var hiddenSel   = document.getElementById('bulk-loan-select');
+        var selectedId  = '';
+        var selectedLabel = '';
+
+        function itemStyle(el, hover) {
+            el.style.padding        = '6px 12px';
+            el.style.cursor         = 'pointer';
+            el.style.color          = hover ? '#fff' : '#212529';
+            el.style.backgroundColor = hover ? '#0d6efd' : '#fff';
+            el.style.fontSize       = '.875rem';
+        }
+
+        function buildDropdown(filter) {
+            dropdown.innerHTML = '';
+            var q = (filter || '').toLowerCase();
+            var matches = BULK_LOANS.filter(function(l) {
+                return q === '' || l.label.toLowerCase().indexOf(q) !== -1;
+            });
+            if (matches.length === 0) {
+                var empty = document.createElement('div');
+                empty.textContent = 'Sin resultados';
+                itemStyle(empty, false);
+                empty.style.color = '#6c757d';
+                dropdown.appendChild(empty);
+            } else {
+                matches.forEach(function(l) {
+                    var row = document.createElement('div');
+                    row.textContent = l.label;
+                    row.dataset.id  = l.id;
+                    itemStyle(row, false);
+                    row.addEventListener('mouseenter', function() { itemStyle(this, true); });
+                    row.addEventListener('mouseleave', function() { itemStyle(this, this.dataset.id === selectedId); });
+                    row.addEventListener('mousedown', function(e) {
+                        e.preventDefault(); // don't blur input first
+                        selectedId    = l.id;
+                        selectedLabel = l.label;
+                        searchInput.value    = l.label;
+                        hiddenSel.value      = l.id;
+                        hiddenSel.dispatchEvent(new Event('change'));
+                        dropdown.style.display = 'none';
+                    });
+                    dropdown.appendChild(row);
+                });
+            }
+        }
+
+        searchInput.addEventListener('focus', function() {
+            buildDropdown(this.value);
+            dropdown.style.display = 'block';
+        });
+        searchInput.addEventListener('input', function() {
+            selectedId = ''; selectedLabel = '';
+            hiddenSel.value = '';
+            hiddenSel.dispatchEvent(new Event('change'));
+            buildDropdown(this.value);
+            dropdown.style.display = 'block';
+        });
+        searchInput.addEventListener('blur', function() {
+            // restore label if selection exists, else clear
+            setTimeout(function() {
+                dropdown.style.display = 'none';
+                if (!selectedId) { searchInput.value = ''; }
+            }, 150);
+        });
+        // build initially (hidden until focus)
+        buildDropdown('');
+    })();
+
+    function avUpdateSelection() {
+        // Rebuild from all visible checkboxes
+        avSelected = {};
+        document.querySelectorAll('.avail-row-chk:checked').forEach(function(chk) {
+            var key = chk.dataset.itemtype + '|' + chk.dataset.itemsId;
+            avSelected[key] = { itemtype: chk.dataset.itemtype, items_id: chk.dataset.itemsId, name: chk.dataset.name };
+        });
+        avRefreshBulkBar();
+    }
+
+    function avRefreshBulkBar() {
+        var count  = Object.keys(avSelected).length;
+        var bar    = document.getElementById('bulk-bar');
+        var countEl = document.getElementById('bulk-count');
+        if (count > 0) {
+            bar.style.removeProperty('display'); // show (override !important)
+            bar.style.display = 'flex';
+            countEl.textContent = count + ' activo' + (count !== 1 ? 's' : '') + ' seleccionado' + (count !== 1 ? 's' : '');
+            document.getElementById('bulk-add-btn').disabled =
+                !document.getElementById('bulk-loan-select').value;
+        } else {
+            bar.style.display = 'none';
+        }
+        // Sync select-all checkbox state
+        var pageChks = document.querySelectorAll('.avail-row-chk');
+        var allChked = pageChks.length > 0 &&
+            Array.from(pageChks).every(function(c) { return c.checked; });
+        var checkAll = document.getElementById('avail-check-all');
+        if (checkAll) {
+            checkAll.checked = allChked;
+            checkAll.indeterminate = !allChked && count > 0;
+        }
+    }
+
+    document.getElementById('bulk-loan-select').addEventListener('change', function() {
+        document.getElementById('bulk-add-btn').disabled = !this.value;
+        avRefreshBulkBar(); // sync button state
+    });
+
+    document.getElementById('avail-check-all').addEventListener('change', function() {
+        var checked = this.checked;
+        document.querySelectorAll('.avail-row-chk').forEach(function(chk) {
+            chk.checked = checked;
+        });
+        avUpdateSelection();
+    });
+
+    document.getElementById('bulk-clear-btn').addEventListener('click', function() {
+        document.querySelectorAll('.avail-row-chk').forEach(function(chk) { chk.checked = false; });
+        avSelected = {};
+        avRefreshBulkBar();
+    });
+
+    document.getElementById('bulk-add-btn').addEventListener('click', function() {
+        var loans_id = document.getElementById('bulk-loan-select').value;
+        if (!loans_id) return;
+
+        var items = Object.values(avSelected);
+        var start = document.getElementById('avail-start').value;
+        var end   = document.getElementById('avail-end').value;
+
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Añadiendo…';
+
+        var body = new URLSearchParams();
+        body.append('loans_id',     loans_id);
+        body.append('items',        JSON.stringify(items));
+        body.append('fecha_inicio', start);
+        body.append('fecha_fin',    end);
+
+        fetch(BULK_ADD_URL, {
+            method: 'POST',
+            body: body,
+            headers: { 'X-Glpi-Csrf-Token': BULK_CSRF }
+        })
+            .then(function(r) {
+                return r.text().then(function(text) {
+                    if (!text.trim()) throw new Error('Respuesta vacía (HTTP ' + r.status + ')');
+                    try { return JSON.parse(text); }
+                    catch(e) { throw new Error('HTTP ' + r.status + ': ' + text.substring(0, 300)); }
+                });
+            })
+            .then(function(data) {
+                document.getElementById('bulk-add-btn').disabled = false;
+                document.getElementById('bulk-add-btn').innerHTML =
+                    '<i class="fas fa-plus me-1"></i>Añadir al préstamo';
+
+                if (data.error) {
+                    avShowBulkResult('danger', '<i class="fas fa-times-circle me-1"></i>' + data.error);
+                    return;
+                }
+
+                var msg = '';
+                if (data.added > 0) {
+                    msg += '<span class="text-success"><i class="fas fa-check-circle me-1"></i>'
+                         + data.added + ' activo' + (data.added !== 1 ? 's' : '')
+                         + ' añadido' + (data.added !== 1 ? 's' : '')
+                         + ' correctamente.</span>';
+                }
+                if (data.conflicts && data.conflicts.length > 0) {
+                    msg += (msg ? '<br>' : '') + '<span class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i>'
+                         + data.conflicts.length + ' con conflicto: '
+                         + data.conflicts.map(function(c) { return '<strong>' + c.name + '</strong>'; }).join(', ')
+                         + '</span>';
+                }
+                if (data.already && data.already.length > 0) {
+                    msg += (msg ? '<br>' : '') + '<span class="text-muted"><i class="fas fa-info-circle me-1"></i>'
+                         + 'Ya estaban en el préstamo: ' + data.already.join(', ') + '</span>';
+                }
+                if (!msg) msg = '<span class="text-muted">Sin cambios.</span>';
+
+                avShowBulkResult(data.added > 0 ? 'success' : 'warning', msg);
+
+                // Clear selection and re-search to update availability
+                document.querySelectorAll('.avail-row-chk').forEach(function(c) { c.checked = false; });
+                avSelected = {};
+                avRefreshBulkBar();
+                document.getElementById('avail-form').dispatchEvent(new Event('submit'));
+            })
+            .catch(function(err) {
+                document.getElementById('bulk-add-btn').disabled = false;
+                document.getElementById('bulk-add-btn').innerHTML = '<i class="fas fa-plus me-1"></i>Añadir al préstamo';
+                avShowBulkResult('danger', err && err.message ? err.message : 'Error al comunicarse con el servidor.');
+            });
+    });
+
+    function avShowBulkResult(type, html) {
+        var el = document.getElementById('bulk-result');
+        el.className = 'alert alert-' + type + ' py-2 mb-2';
+        el.innerHTML = html;
+        el.style.display = '';
+    }
     </script>
     <?php
 }
