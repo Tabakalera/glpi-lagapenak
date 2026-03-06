@@ -41,6 +41,61 @@ $fc_locale = $CFG_GLPI['root_doc'] . '/public/lib/fullcalendar/core/locales/es.m
             <a href="<?= $list_url ?>" class="btn btn-sm btn-outline-secondary">
                 <i class="fas fa-list me-1"></i>Lista
             </a>
+            <button class="btn btn-sm btn-outline-primary" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#ics-panel">
+                <i class="fas fa-calendar-plus me-1"></i>Suscribir calendario
+            </button>
+        </div>
+    </div>
+
+    <!-- iCal subscription panel -->
+    <?php
+    $cfg = Config::getConfigurationValues('plugin:lagapenak');
+    $ics_token = $cfg['ics_token'] ?? '';
+    if (!$ics_token) {
+        $ics_token = bin2hex(random_bytes(20));
+        Config::setConfigurationValues('plugin:lagapenak', ['ics_token' => $ics_token]);
+    }
+    // Use url_base explicitly to guarantee absolute URL for calendar clients
+    $url_base   = rtrim($CFG_GLPI['url_base'] ?? '', '/');
+    $ics_path   = '/' . ltrim(Plugin::getWebDir('lagapenak', false), '/') . '/front/loan.ics.php?token=' . urlencode($ics_token);
+    $url_loans  = $url_base . $ics_path . '&type=loans';
+    $url_assets = $url_base . $ics_path . '&type=assets';
+    ?>
+    <div class="collapse mb-3" id="ics-panel">
+        <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:16px 20px;">
+            <p class="mb-2" style="font-size:.875rem;font-weight:600;">
+                Copia la URL y pégala en tu cliente de calendario:
+            </p>
+            <p class="mb-3" style="font-size:.8rem;color:#6c757d;">
+                Google Calendar → «Otras agendas» (+) → «Añadir por URL»<br>
+                Outlook → «Agregar calendario» → «Desde Internet»
+            </p>
+            <div class="mb-3">
+                <div style="font-size:.8rem;font-weight:600;margin-bottom:4px;">Por préstamo:</div>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <input type="text" style="flex:1;font-family:monospace;font-size:.75rem;padding:4px 8px;border:1px solid #ced4da;border-radius:4px;background:#fff;"
+                           id="ics-url-loans" value="<?= htmlspecialchars($url_loans) ?>" readonly>
+                    <button style="white-space:nowrap;padding:4px 10px;border:1px solid #ced4da;border-radius:4px;background:#fff;cursor:pointer;font-size:.8rem;"
+                            onclick="navigator.clipboard.writeText(document.getElementById('ics-url-loans').value);this.textContent='✓ Copiado'">
+                        Copiar
+                    </button>
+                </div>
+            </div>
+            <div>
+                <div style="font-size:.8rem;font-weight:600;margin-bottom:4px;">Por activo:</div>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <input type="text" style="flex:1;font-family:monospace;font-size:.75rem;padding:4px 8px;border:1px solid #ced4da;border-radius:4px;background:#fff;"
+                           id="ics-url-assets" value="<?= htmlspecialchars($url_assets) ?>" readonly>
+                    <button style="white-space:nowrap;padding:4px 10px;border:1px solid #ced4da;border-radius:4px;background:#fff;cursor:pointer;font-size:.8rem;"
+                            onclick="navigator.clipboard.writeText(document.getElementById('ics-url-assets').value);this.textContent='✓ Copiado'">
+                        Copiar
+                    </button>
+                </div>
+            </div>
+            <p style="margin-top:10px;margin-bottom:0;font-size:.75rem;color:#6c757d;">
+                <i class="fas fa-lock me-1"></i>La URL incluye un token secreto. No la compartas públicamente.
+            </p>
         </div>
     </div>
 

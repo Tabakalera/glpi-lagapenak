@@ -361,9 +361,9 @@ class PluginLagapenakLoan extends CommonDBTM {
         echo '<div class="col-md-6">';
         echo '<label class="form-label fw-bold">Destinatario</label>';
         User::dropdown([
-            'name'   => 'users_id_destinatario',
-            'value'  => $loan['users_id_destinatario'] ?? 0,
-            'entity' => $_SESSION['glpiactive_entity'] ?? 0,
+            'name'  => 'users_id_destinatario',
+            'value' => $loan['users_id_destinatario'] ?? 0,
+            'right' => 'all',
         ]);
         echo '</div>';
 

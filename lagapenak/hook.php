@@ -56,10 +56,12 @@ function plugin_lagapenak_install() {
 
     // Upgrade: add signature + albaran columns if not present
     foreach ([
-        'signature_data' => "LONGTEXT NULL DEFAULT NULL",
-        'signature_name' => "VARCHAR(255) NOT NULL DEFAULT ''",
-        'signature_date' => "TIMESTAMP NULL DEFAULT NULL",
-        'has_albaran'    => "TINYINT(1) NOT NULL DEFAULT 0",
+        'signature_data'   => "LONGTEXT NULL DEFAULT NULL",
+        'signature_name'   => "VARCHAR(255) NOT NULL DEFAULT ''",
+        'signature_date'   => "TIMESTAMP NULL DEFAULT NULL",
+        'has_albaran'      => "TINYINT(1) NOT NULL DEFAULT 0",
+        'albaran_passport' => "VARCHAR(100) NOT NULL DEFAULT ''",
+        'albaran_project'  => "VARCHAR(255) NOT NULL DEFAULT ''",
     ] as $col => $def) {
         if (!$DB->fieldExists('glpi_plugin_lagapenak_loans', $col)) {
             $DB->queryOrDie(
@@ -74,6 +76,14 @@ function plugin_lagapenak_install() {
     // Default display columns for loan list (users_id=0 = global default)
     // 3=Estado, 4=Solicitante, 5=Destinatario, 6=F.Inicio, 7=F.Fin
     plugin_lagapenak_set_display_prefs();
+
+    // Generate iCal secret token if not yet created
+    $cfg = Config::getConfigurationValues('plugin:lagapenak');
+    if (empty($cfg['ics_token'])) {
+        Config::setConfigurationValues('plugin:lagapenak', [
+            'ics_token' => bin2hex(random_bytes(20)),
+        ]);
+    }
 
     return true;
 }

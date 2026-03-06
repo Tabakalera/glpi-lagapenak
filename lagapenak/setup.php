@@ -42,4 +42,11 @@ function plugin_lagapenak_check_config() {
 function plugin_init_lagapenak() {
     Plugin::registerClass('PluginLagapenakLoan');
     Plugin::registerClass('PluginLagapenakProfile', ['addtabon' => ['Profile']]);
+
+    include_once __DIR__ . '/inc/notification.php';
+
+    global $PLUGIN_HOOKS;
+    $PLUGIN_HOOKS['item_add']['lagapenak'] = [
+        'PluginLagapenakLoan' => 'plugin_lagapenak_notify_loan_created',
+    ];
 }
