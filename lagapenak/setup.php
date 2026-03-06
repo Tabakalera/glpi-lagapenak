@@ -7,7 +7,7 @@ global $PLUGIN_HOOKS;
 $PLUGIN_HOOKS['csrf_compliant']['lagapenak'] = true;
 $PLUGIN_HOOKS['menu_toadd']['lagapenak'] = ['tools' => 'PluginLagapenakLoan'];
 define('PLUGIN_LAGAPENAK_MIN_GLPI', '10.0.0');
-define('PLUGIN_LAGAPENAK_MAX_GLPI', '10.1.0');
+define('PLUGIN_LAGAPENAK_MAX_GLPI', '10.99.99');
 
 function plugin_version_lagapenak() {
     return [
