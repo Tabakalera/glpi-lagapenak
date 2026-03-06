@@ -5,7 +5,7 @@ include('../../../inc/includes.php');
 Session::checkLoginUser();
 
 // Bootstrap default display columns once (no-op if already set)
-$needed = [3, 4, 5, 6, 7, 20];
+$needed = [3, 4, 5, 6, 7, 20, 21];
 foreach ($needed as $rank => $num) {
     if (!countElementsInTable('glpi_displaypreferences', [
         'itemtype' => 'PluginLagapenakLoan',

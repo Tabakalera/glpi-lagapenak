@@ -192,6 +192,18 @@ class PluginLagapenakLoan extends CommonDBTM {
             ];
         }
 
+        $t = $this->getTable();
+        $tab[] = [
+            'id'            => 21,
+            'table'         => $this->getTable(),
+            'field'         => '_albaran',
+            'name'          => 'Albarán',
+            'computation'   => "IF(`{$t}`.`has_albaran` = 1, `{$t}`.`id`, NULL)",
+            'datatype'      => 'specific',
+            'nosort'        => true,
+            'massiveaction' => false,
+        ];
+
         // Activos: subquery returns "Tipo~Nombre||Tipo~Nombre" → LIKE search works on real names
         $tab[] = [
             'id'            => 20,
@@ -228,6 +240,16 @@ class PluginLagapenakLoan extends CommonDBTM {
 
         if ($field === 'status') {
             return self::getStatusBadge($values[$field] ?? 0);
+        }
+
+        if ($field === '_albaran') {
+            $loan_id = (int) ($values[$field] ?? 0);
+            if ($loan_id > 0) {
+                $url = Plugin::getWebDir('lagapenak', true) . '/front/albaran.php?id=' . $loan_id;
+                return '<a href="' . $url . '" target="_blank" title="Ver albarán firmado">'
+                     . '<i class="fas fa-check-circle text-success fa-lg"></i></a>';
+            }
+            return '';
         }
 
         if ($field === '_activos') {

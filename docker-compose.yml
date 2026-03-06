@@ -18,6 +18,7 @@ services:
     volumes:
       - glpi_config:/var/www/html/glpi/config
       - glpi_files:/var/www/html/glpi/files
+      - ./lagapenak:/var/www/html/glpi/plugins/lagapenak
     depends_on:
       - mariadb
 
