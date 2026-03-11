@@ -3,6 +3,7 @@
     <name>Lagapenak - Asset Loan Manager</name>
     <key>lagapenak</key>
     <state>stable</state>
+    <logo>https://raw.githubusercontent.com/Tabakalera/glpi-lagapenak/main/lagapenak/pics/logo.png</logo>
     <description>
         <short>
             <en>Asset loan manager with delivery note, digital signature, calendar and email notifications.</en>
