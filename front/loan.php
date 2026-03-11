@@ -176,8 +176,68 @@ if ($tab === 'prestamos') {
     $default_start = date('Y-m-d') . 'T12:00';
     $default_end   = date('Y-m-d', strtotime('+1 day')) . 'T12:00';
     $asset_types   = PluginLagapenakLoanItem::getAssetTypes();
+
+    // Device types for filter dropdowns
+    $device_type_tables = [
+        'Computer'         => 'glpi_computertypes',
+        'Monitor'          => 'glpi_monitortypes',
+        'Peripheral'       => 'glpi_peripheraltypes',
+        'Phone'            => 'glpi_phonetypes',
+        'Printer'          => 'glpi_printertypes',
+        'NetworkEquipment' => 'glpi_networkequipmenttypes',
+    ];
+    $all_device_types = [];
+    foreach ($device_type_tables as $itemtype => $dttable) {
+        $dtr = $DB->query("SELECT `id`, `name` FROM `{$dttable}` WHERE `name` != '' AND `name` IS NOT NULL ORDER BY `name`");
+        if ($dtr) {
+            while ($dr = $DB->fetchAssoc($dtr)) {
+                $all_device_types[] = [
+                    'key'      => $itemtype . ':' . $dr['id'],
+                    'name'     => $dr['name'],
+                    'itemtype' => $itemtype,
+                ];
+            }
+        }
+    }
+
+    // Loans for the "fill from loan" dropdown (active + pending, with dates)
+    $loans_res = $DB->query(
+        "SELECT `id`, `name`, `fecha_inicio`, `fecha_fin`
+         FROM `glpi_plugin_lagapenak_loans`
+         WHERE `status` IN ({$s1},{$s5})
+           AND `fecha_inicio` IS NOT NULL AND `fecha_fin` IS NOT NULL
+           {$entity_sql}
+         ORDER BY `fecha_inicio` ASC"
+    );
+    $loans_for_select = [];
+    if ($loans_res) {
+        while ($row = $DB->fetchAssoc($loans_res)) {
+            $loans_for_select[] = $row;
+        }
+    }
     ?>
     <div class="container-fluid mt-3">
+
+        <!-- ── Fill from loan ── -->
+        <?php if (!empty($loans_for_select)): ?>
+        <div class="row g-2 align-items-end mb-2">
+            <div class="col-auto">
+                <label class="form-label mb-1 text-muted" style="font-size:.85rem;">Rellenar fechas desde préstamo</label>
+                <select id="avail-loan-select" class="form-select form-select-sm" style="min-width:260px;">
+                    <option value="">— Selecciona un préstamo —</option>
+                    <?php foreach ($loans_for_select as $ln): ?>
+                    <option value="<?= htmlspecialchars($ln['fecha_inicio']) ?>"
+                            data-fin="<?= htmlspecialchars($ln['fecha_fin']) ?>"
+                            data-id="<?= (int)$ln['id'] ?>"
+                            data-name="<?= htmlspecialchars($ln['name']) ?>">
+                        <?= htmlspecialchars($ln['name']) ?>
+                        (<?= date('d/m/Y', strtotime($ln['fecha_inicio'])) ?> – <?= date('d/m/Y', strtotime($ln['fecha_fin'])) ?>)
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- ── Search form ── -->
         <form id="avail-form" class="row g-2 align-items-end mb-3">
@@ -214,7 +274,7 @@ if ($tab === 'prestamos') {
             <div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
                 <span id="avail-summary" class="text-muted me-auto" style="font-size:.875rem;"></span>
 
-                <label class="mb-0 fw-bold" style="font-size:.875rem;">Tipo:</label>
+                <label class="mb-0 fw-bold" style="font-size:.875rem;">Categoría:</label>
                 <select id="avail-filter-tipo" class="form-select form-select-sm" style="width:auto;">
                     <option value="">Todos</option>
                     <?php foreach ($asset_types as $key => $label): ?>
@@ -227,6 +287,17 @@ if ($tab === 'prestamos') {
                     <option value="">Todos</option>
                     <option value="free">Solo libres</option>
                     <option value="occupied">Solo ocupados</option>
+                </select>
+
+                <label class="mb-0 fw-bold" style="font-size:.875rem;">Tipo dispositivo:</label>
+                <select id="avail-filter-device" class="form-select form-select-sm" style="width:auto;">
+                    <option value="">Todos</option>
+                    <?php foreach ($all_device_types as $dt): ?>
+                    <option value="<?= htmlspecialchars($dt['key']) ?>"
+                            data-itemtype="<?= htmlspecialchars($dt['itemtype']) ?>">
+                        <?= htmlspecialchars($dt['name']) ?>
+                    </option>
+                    <?php endforeach; ?>
                 </select>
 
                 <label class="mb-0 fw-bold" style="font-size:.875rem;">Por página:</label>
@@ -373,6 +444,7 @@ if ($tab === 'prestamos') {
                 // Reset secondary filters
                 document.getElementById('avail-filter-tipo').value   = '';
                 document.getElementById('avail-filter-estado').value = '';
+                document.getElementById('avail-filter-device').value = '';
 
                 var free  = avAllRows.filter(function(r) { return r.available; }).length;
                 var total = avAllRows.length;
@@ -399,9 +471,41 @@ if ($tab === 'prestamos') {
         avDoSearch();
     });
 
+    // ── Tipo filter → filter device type options ─────────────────────────────
+    document.getElementById('avail-filter-tipo').addEventListener('change', function() {
+        var it     = this.value;
+        var devSel = document.getElementById('avail-filter-device');
+        devSel.value = '';
+        Array.from(devSel.options).forEach(function(opt) {
+            if (!opt.value) return;
+            opt.hidden = (it !== '' && opt.dataset.itemtype !== it);
+        });
+        avPage = 1; avApplyFilters();
+    });
+
+    // ── Fill dates from loan dropdown ─────────────────────────────────────────
+    var loanSel = document.getElementById('avail-loan-select');
+    if (loanSel) {
+        loanSel.addEventListener('change', function() {
+            if (!this.value) return;
+            var opt = this.options[this.selectedIndex];
+            var toLocal = function(s) { return s ? s.slice(0,16).replace(' ','T') : ''; };
+            document.getElementById('avail-start').value = toLocal(this.value);
+            document.getElementById('avail-end').value   = toLocal(opt.dataset.fin);
+            // Also fill the "add to loan" picker
+            var loanId   = opt.dataset.id;
+            var loanName = opt.dataset.name;
+            if (loanId) {
+                document.getElementById('bulk-loan-search').value = loanName;
+                document.getElementById('bulk-loan-select').value = loanId;
+                document.getElementById('bulk-add-btn').disabled  = false;
+            }
+        });
+    }
+
     // ── Secondary filters ────────────────────────────────────────────────────
-    document.getElementById('avail-filter-tipo').addEventListener('change',   function() { avPage = 1; avApplyFilters(); });
     document.getElementById('avail-filter-estado').addEventListener('change', function() { avPage = 1; avApplyFilters(); });
+    document.getElementById('avail-filter-device').addEventListener('change', function() { avPage = 1; avApplyFilters(); });
     document.getElementById('avail-per-page').addEventListener('change', function() {
         avPerPage = parseInt(this.value) || 0;
         avPage = 1;
@@ -411,10 +515,12 @@ if ($tab === 'prestamos') {
     function avApplyFilters() {
         var tipo   = document.getElementById('avail-filter-tipo').value;
         var estado = document.getElementById('avail-filter-estado').value;
+        var device = document.getElementById('avail-filter-device').value;
         avFiltered = avAllRows.filter(function(r) {
-            if (tipo   && r.itemtype !== tipo)            return false;
-            if (estado === 'free'     && !r.available)   return false;
-            if (estado === 'occupied' && r.available)    return false;
+            if (tipo   && r.itemtype !== tipo)                                       return false;
+            if (estado === 'free'     && !r.available)                               return false;
+            if (estado === 'occupied' && r.available)                                return false;
+            if (device && (r.itemtype + ':' + r.device_type_id) !== device)         return false;
             return true;
         });
         avSort();
