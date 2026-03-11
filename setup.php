@@ -15,9 +15,9 @@ function plugin_version_lagapenak() {
     return [
         'name'         => 'Lagapenak - Gestor de Préstamos',
         'version'      => PLUGIN_LAGAPENAK_VERSION,
-        'author'       => 'TBK',
+        'author'       => 'Tabakalera',
         'license'      => 'GPL v2+',
-        'homepage'     => '',
+        'homepage'     => 'https://github.com/Tabakalera/glpi-lagapenak',
         'requirements' => [
             'glpi' => [
                 'min' => PLUGIN_LAGAPENAK_MIN_GLPI,

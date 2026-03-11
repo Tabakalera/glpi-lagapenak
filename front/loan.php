@@ -15,7 +15,29 @@ $avail_url  = $plugin_web . '/ajax/availability.php';
 $loan_form  = $plugin_web . '/front/loan.form.php';
 $cal_url    = $plugin_web . '/front/calendar.php';
 
-Html::header('Lagapenak - Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
+$is_helpdesk = (Session::getCurrentInterface() === 'helpdesk');
+if ($is_helpdesk) {
+    Html::helpHeader('Lagapenak - Préstamos');
+} else {
+    Html::header('Lagapenak - Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
+}
+
+// Firefox fix: GLPI dispatches an untrusted 'submit' on its search form when no
+// pre-rendered results exist. Firefox (unlike Chrome) treats it as real navigation.
+// Intercept in capture phase to block it on the disponibilidad tab.
+echo '<script>
+if(typeof window.hotkeys==="undefined"){window.hotkeys=function(){};window.hotkeys.unbind=function(){};}
+if(typeof window.GLPI==="undefined"){window.GLPI={Search:{ResultsView:function(){},Table:{}}};}
+else if(typeof window.GLPI.Search==="undefined"){window.GLPI.Search={ResultsView:function(){},Table:{}};}
+if(window.location.search.indexOf("tab=disponibilidad")!==-1){
+    window.initFluidSearch=function(){};
+    document.addEventListener("submit",function(e){
+        if(e.target&&e.target.name==="searchformPluginLagapenakLoan"&&!e.isTrusted){
+            e.preventDefault();e.stopImmediatePropagation();
+        }
+    },true);
+}
+</script>';
 
 // ── Summary banner (native GLPI card component) ────────────────────────────────
 {
@@ -63,7 +85,12 @@ Html::header('Lagapenak - Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLag
     ]);
     $url_delivered = $f([['link' => 'AND', 'field' => 3, 'searchtype' => 'equals', 'value' => $s2]]);
     $url_returned  = $f([['link' => 'AND', 'field' => 3, 'searchtype' => 'equals', 'value' => $s3]]);
-    $url_overdue   = $url_active;
+    $url_overdue   = $f([
+        ['link' => 'AND', 'field' => 3,  'searchtype' => 'notequals', 'value' => $s2],
+        ['link' => 'AND', 'field' => 3,  'searchtype' => 'notequals', 'value' => $s3],
+        ['link' => 'AND', 'field' => 3,  'searchtype' => 'notequals', 'value' => $s4],
+        ['link' => 'AND', 'field' => 7,  'searchtype' => 'lessthan',  'value' => date('Y-m-d H:i:s')],
+    ]);
 
     // Same colors as GLPI's native mini_tickets dashboard
     $tile_defs = [
@@ -136,7 +163,12 @@ if ($tab === 'prestamos') {
     Search::show('PluginLagapenakLoanItem');
 
 // ── TAB 3: Disponibilidad ─────────────────────────────────────────────────────
+// Search::show() must run to prevent GLPI's search JS from auto-navigating away.
+// The search output is hidden; only our custom availability form is visible.
 } elseif ($tab === 'disponibilidad') {
+    echo '<div style="display:none" aria-hidden="true">';
+    Search::show('PluginLagapenakLoan');
+    echo '</div>';
     $default_start = date('Y-m-d') . 'T12:00';
     $default_end   = date('Y-m-d', strtotime('+1 day')) . 'T12:00';
     $asset_types   = PluginLagapenakLoanItem::getAssetTypes();
@@ -753,4 +785,8 @@ if ($tab === 'prestamos') {
     <?php
 }
 
-Html::footer();
+if ($is_helpdesk) {
+    Html::helpFooter();
+} else {
+    Html::footer();
+}
