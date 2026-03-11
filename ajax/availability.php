@@ -76,7 +76,7 @@ while ($row = $DB->fetchAssoc($result)) {
 $rows = [];
 
 // getEntitiesRestrictRequest returns "AND (...)" fragment ready for raw SQL
-$loan_entity_condition = getEntitiesRestrictRequest('AND', 'glpi_plugin_lagapenak_loans', 'entities_id', '', false);
+$loan_entity_condition = getEntitiesRestrictRequest('AND', 'l', 'entities_id', '', false);
 
 foreach ($all_assets as $asset) {
     $it  = $DB->escape($asset['itemtype']);
