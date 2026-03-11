@@ -24,11 +24,12 @@
         <version>
             <num>1.1.0</num>
             <compatibility>~10.0.0</compatibility>
-            <download>https://github.com/Tabakalera/glpi-lagapenak/archive/refs/tags/v1.1.0.zip</download>
+            <download_url>https://github.com/Tabakalera/glpi-lagapenak/archive/refs/tags/v1.1.0.zip</download_url>
         </version>
     </versions>
     <langs>
         <lang>es_ES</lang>
+        <lang>en_GB</lang>
     </langs>
     <license>GPL v2+</license>
     <tags>
