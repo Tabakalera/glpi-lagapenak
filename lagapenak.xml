@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<root>
+    <name>Lagapenak - Asset Loan Manager</name>
+    <key>lagapenak</key>
+    <state>stable</state>
+    <description>
+        <short>
+            <en>Asset loan manager with delivery note, digital signature, calendar and email notifications.</en>
+            <es>Gestor de préstamos de activos con albarán, firma digital, calendario y notificaciones.</es>
+        </short>
+        <long>
+            <en>Plugin for GLPI 10.0.x to manage asset loans (computers, peripherals, monitors, etc.) with delivery notes, digital signatures, calendar views and email notifications. Features include conflict detection, bulk asset assignment, iCal subscription, availability checker, profile-based permissions and Self-Service interface support.</en>
+            <es>Plugin para GLPI 10.0.x para gestionar préstamos de activos (ordenadores, periféricos, monitores, etc.) con albarán de entrega, firma digital, calendario y notificaciones por email. Incluye detección de conflictos, asignación masiva de activos, suscripción iCal, comprobador de disponibilidad, permisos por perfil y soporte para la interfaz Self-Service.</es>
+        </long>
+    </description>
+    <homepage>https://github.com/Tabakalera/glpi-lagapenak</homepage>
+    <download>https://github.com/Tabakalera/glpi-lagapenak/releases</download>
+    <issues>https://github.com/Tabakalera/glpi-lagapenak/issues</issues>
+    <readme>https://github.com/Tabakalera/glpi-lagapenak/blob/main/README.md</readme>
+    <authors>
+        <author>Tabakalera</author>
+    </authors>
+    <versions>
+        <version>
+            <num>1.1.0</num>
+            <compatibility>~10.0.0</compatibility>
+            <download>https://github.com/Tabakalera/glpi-lagapenak/archive/refs/tags/v1.1.0.zip</download>
+        </version>
+    </versions>
+    <langs>
+        <lang>es_ES</lang>
+    </langs>
+    <license>GPL v2+</license>
+    <tags>
+        <en>
+            <tag>loan</tag>
+            <tag>asset</tag>
+            <tag>equipment</tag>
+        </en>
+    </tags>
+</root>
