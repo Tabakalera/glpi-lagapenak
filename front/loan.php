@@ -22,17 +22,21 @@ if ($is_helpdesk) {
     Html::header('Lagapenak - Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
 }
 
-// Firefox fix: GLPI dispatches an untrusted 'submit' on its search form when no
-// pre-rendered results exist. Firefox (unlike Chrome) treats it as real navigation.
-// Intercept in capture phase to block it on the disponibilidad tab.
+// Firefox fix: GLPI calls form.submit() programmatically (not via a submit event)
+// when its ResultsView finds no pre-rendered results. Programmatic form.submit()
+// bypasses all event listeners, so the only reliable intercept is overriding
+// HTMLFormElement.prototype.submit before any GLPI module scripts run.
 echo '<script>
 if(typeof window.hotkeys==="undefined"){window.hotkeys=function(){};window.hotkeys.unbind=function(){};}
-if(typeof window.GLPI==="undefined"){window.GLPI={Search:{ResultsView:function(){},Table:{}}};}
-else if(typeof window.GLPI.Search==="undefined"){window.GLPI.Search={ResultsView:function(){},Table:{}};}
 if(window.location.search.indexOf("tab=disponibilidad")!==-1){
     window.initFluidSearch=function(){};
+    var _origSubmit=HTMLFormElement.prototype.submit;
+    HTMLFormElement.prototype.submit=function(){
+        if(this.name==="searchformPluginLagapenakLoan")return;
+        return _origSubmit.apply(this,arguments);
+    };
     document.addEventListener("submit",function(e){
-        if(e.target&&e.target.name==="searchformPluginLagapenakLoan"&&!e.isTrusted){
+        if(e.target&&e.target.name==="searchformPluginLagapenakLoan"){
             e.preventDefault();e.stopImmediatePropagation();
         }
     },true);
@@ -340,8 +344,7 @@ if ($tab === 'prestamos') {
     }
 
     // ── Fetch ────────────────────────────────────────────────────────────────
-    document.getElementById('avail-form').addEventListener('submit', function(e) {
-        e.preventDefault();
+    function avDoSearch() {
         var start = document.getElementById('avail-start').value;
         var end   = document.getElementById('avail-end').value;
         var asset = document.getElementById('avail-asset').value.trim();
@@ -390,6 +393,10 @@ if ($tab === 'prestamos') {
                 document.getElementById('avail-error').textContent = 'Error al consultar disponibilidad.';
                 document.getElementById('avail-error').style.display = '';
             });
+    }
+    document.getElementById('avail-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        avDoSearch();
     });
 
     // ── Secondary filters ────────────────────────────────────────────────────
@@ -570,9 +577,6 @@ if ($tab === 'prestamos') {
         if (winEnd < pages)   { if (winEnd < pages - 1) mkLi('…', null, true, false); mkLi(pages, pages, false, false); }
         mkLi('&raquo;', avPage + 1, avPage === pages, false);
     }
-
-    // Auto-search on page load with default dates
-    document.getElementById('avail-form').dispatchEvent(new Event('submit'));
 
     // ── Bulk selection ───────────────────────────────────────────────────────
     var avSelected = {}; // key: "itemtype|items_id" → {itemtype, items_id, name}
@@ -766,7 +770,7 @@ if ($tab === 'prestamos') {
                 document.querySelectorAll('.avail-row-chk').forEach(function(c) { c.checked = false; });
                 avSelected = {};
                 avRefreshBulkBar();
-                document.getElementById('avail-form').dispatchEvent(new Event('submit'));
+                avDoSearch();
             })
             .catch(function(err) {
                 document.getElementById('bulk-add-btn').disabled = false;
