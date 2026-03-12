@@ -217,6 +217,14 @@ if ($form_error) {
     echo '<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>' . htmlspecialchars($form_error) . '</div>';
 }
 
+// Albarán access — computed here so it's available in both edit and read-only views
+$_lf_uid     = (int)($_SESSION['glpiID'] ?? 0);
+$_lf_is_req  = (int)($loan->fields['users_id'] ?? 0) === $_lf_uid;
+$_lf_is_dest = (int)($loan->fields['users_id_destinatario'] ?? 0) === $_lf_uid;
+$can_albaran = $can_supervise
+    || (PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_albaran', READ)
+        && ($_lf_is_req || $_lf_is_dest));
+
 if ($can_supervise || $ID == 0) {
     // ── Editable form ────────────────────────────────────────────────────────
     echo '<form method="POST" action="' . htmlspecialchars($_SERVER['PHP_SELF'])
@@ -232,12 +240,6 @@ if ($can_supervise || $ID == 0) {
     echo '<a href="' . Plugin::getWebDir('lagapenak') . '/front/loan.php" class="btn btn-secondary">';
     echo '<i class="fas fa-arrow-left me-1"></i>Volver';
     echo '</a>';
-    $_lf_uid     = (int)($_SESSION['glpiID'] ?? 0);
-    $_lf_is_req  = (int)($loan->fields['users_id'] ?? 0) === $_lf_uid;
-    $_lf_is_dest = (int)($loan->fields['users_id_destinatario'] ?? 0) === $_lf_uid;
-    $can_albaran = $can_supervise
-        || (PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_albaran', READ)
-            && ($_lf_is_req || $_lf_is_dest));
     if ($ID > 0 && $can_albaran) {
         $albaran_url = Plugin::getWebDir('lagapenak', true) . '/front/albaran.php?id=' . $ID;
         echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
@@ -253,16 +255,21 @@ if ($can_supervise || $ID == 0) {
     echo '</form>';
 
 } else {
-    // ── Read-only view (requester with existing loan) ─────────────────────────
+    // ── Read-only view (non-supervisor viewing existing loan) ─────────────────
     echo '<div class="alert alert-info py-2 mb-3">';
     echo '<i class="fas fa-info-circle me-2"></i>';
     echo 'Su solicitud ha sido registrada. El supervisor gestionará los activos y el estado del préstamo.';
     echo '</div>';
     $loan->renderReadOnly($ID);
-    echo '<div class="mt-3">';
+    echo '<div class="d-flex gap-2 mt-3">';
     echo '<a href="' . Plugin::getWebDir('lagapenak') . '/front/loan.php" class="btn btn-secondary">';
     echo '<i class="fas fa-arrow-left me-1"></i>Volver';
     echo '</a>';
+    if ($can_albaran) {
+        $albaran_url = Plugin::getWebDir('lagapenak', true) . '/front/albaran.php?id=' . $ID;
+        echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
+        echo '<i class="fas fa-file-signature me-1"></i>Albarán</a>';
+    }
     echo '</div>';
 }
 
