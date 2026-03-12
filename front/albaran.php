@@ -14,7 +14,10 @@ $loan = new PluginLagapenakLoan();
 if (!$loan->getFromDB($ID) || !$loan->can($ID, READ)) {
     Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
 }
-$can_albaran = PluginLagapenakLoan::canSupervise() || Session::haveRight('plugin_lagapenak_albaran', READ);
+$_lag_iface_alb = $_SESSION['glpiactiveprofile']['interface'] ?? 'central';
+$can_albaran = PluginLagapenakLoan::canSupervise()
+    || ($_lag_iface_alb === 'helpdesk')
+    || Session::haveRight('plugin_lagapenak_albaran', READ);
 if (!$can_albaran) {
     Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
 }

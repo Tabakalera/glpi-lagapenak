@@ -17,11 +17,6 @@ class PluginLagapenakProfile extends CommonGLPI {
                 'label'    => PluginLagapenakLoan::getTypeName(2),
                 'field'    => 'plugin_lagapenak_loan',
             ],
-        ];
-    }
-
-    static function getAllAlbaranRights() {
-        return [
             [
                 'itemtype' => 'PluginLagapenakLoan',
                 'label'    => 'Albarán',
@@ -58,12 +53,6 @@ class PluginLagapenakProfile extends CommonGLPI {
             'canedit'       => $canedit,
             'default_class' => 'tab_bg_2',
             'title'         => self::getTypeName(2),
-        ]);
-
-        $profile->displayRightsChoiceMatrix(self::getAllAlbaranRights(), [
-            'canedit'       => $canedit,
-            'default_class' => 'tab_bg_2',
-            'rights'        => [READ => 'Acceso'],
         ]);
 
         if ($canedit) {

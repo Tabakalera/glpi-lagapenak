@@ -224,7 +224,10 @@ if ($can_supervise || $ID == 0) {
     echo '<a href="' . Plugin::getWebDir('lagapenak') . '/front/loan.php" class="btn btn-secondary">';
     echo '<i class="fas fa-arrow-left me-1"></i>Volver';
     echo '</a>';
-    $can_albaran = $can_supervise || Session::haveRight('plugin_lagapenak_albaran', READ);
+    $_lag_iface_form = $_SESSION['glpiactiveprofile']['interface'] ?? 'central';
+    $can_albaran = $can_supervise
+        || ($_lag_iface_form === 'helpdesk')
+        || Session::haveRight('plugin_lagapenak_albaran', READ);
     if ($ID > 0 && $can_albaran) {
         $albaran_url = Plugin::getWebDir('lagapenak', true) . '/front/albaran.php?id=' . $ID;
         echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
