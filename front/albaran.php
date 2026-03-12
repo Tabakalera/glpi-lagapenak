@@ -14,6 +14,10 @@ $loan = new PluginLagapenakLoan();
 if (!$loan->getFromDB($ID) || !$loan->can($ID, READ)) {
     Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
 }
+$can_albaran = PluginLagapenakLoan::canSupervise() || Session::haveRight('plugin_lagapenak_albaran', READ);
+if (!$can_albaran) {
+    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
+}
 
 // ── CONDICIONES ─────────────────────────────────────────────────────────────────
 // Para personalizar el texto edita este array. Ver README.md → "Condiciones albarán"

@@ -224,10 +224,13 @@ if ($can_supervise || $ID == 0) {
     echo '<a href="' . Plugin::getWebDir('lagapenak') . '/front/loan.php" class="btn btn-secondary">';
     echo '<i class="fas fa-arrow-left me-1"></i>Volver';
     echo '</a>';
-    if ($ID > 0 && $can_supervise) {
+    $can_albaran = $can_supervise || Session::haveRight('plugin_lagapenak_albaran', READ);
+    if ($ID > 0 && $can_albaran) {
         $albaran_url = Plugin::getWebDir('lagapenak', true) . '/front/albaran.php?id=' . $ID;
         echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
         echo '<i class="fas fa-file-signature me-1"></i>Albarán</a>';
+    }
+    if ($ID > 0 && $can_supervise) {
         echo '<button type="submit" name="delete_loan" class="btn btn-danger ms-auto"
                       onclick="return confirm(\'¿Eliminar este préstamo?\')">';
         echo '<i class="fas fa-trash me-1"></i>Eliminar';
