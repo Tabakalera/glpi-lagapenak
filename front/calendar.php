@@ -6,12 +6,7 @@ Session::checkLoginUser();
 
 Html::requireJs('fullcalendar');
 
-$is_helpdesk_cal = (Session::getCurrentInterface() === 'helpdesk');
-if ($is_helpdesk_cal) {
-    Html::helpHeader('Lagapenak - Calendario de Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
-} else {
-    Html::header('Lagapenak - Calendario de Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
-}
+Html::header('Lagapenak - Calendario de Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
 
 $plugin_web      = Plugin::getWebDir('lagapenak', true);
 $ajax_events_url = $plugin_web . '/ajax/calendar_events.php';
@@ -387,8 +382,4 @@ function fmtDt(d) {
 </script>
 
 <?php
-if ($is_helpdesk_cal) {
-    Html::helpFooter();
-} else {
-    Html::footer();
-}
+Html::footer();
