@@ -5,7 +5,15 @@ include('../../../inc/includes.php');
 Session::checkLoginUser();
 
 $can_supervise = PluginLagapenakLoan::canSupervise();
-$tab           = isset($_GET['tab']) ? $_GET['tab'] : 'prestamos';
+
+// Gate: requires at least READ or supervisor right to access the loan list
+if (!PluginLagapenakLoan::canView() && !$can_supervise) {
+    Html::displayRightError();
+    Html::footer();
+    exit;
+}
+
+$tab = isset($_GET['tab']) ? $_GET['tab'] : 'prestamos';
 // Non-supervisors cannot access the activos tab
 if ($tab === 'activos' && !$can_supervise) {
     $tab = 'prestamos';
@@ -15,12 +23,7 @@ $avail_url  = $plugin_web . '/ajax/availability.php';
 $loan_form  = $plugin_web . '/front/loan.form.php';
 $cal_url    = $plugin_web . '/front/calendar.php';
 
-$is_helpdesk = (Session::getCurrentInterface() === 'helpdesk');
-if ($is_helpdesk) {
-    Html::helpHeader('Lagapenak - Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
-} else {
-    Html::header('Lagapenak - Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
-}
+Html::header('Lagapenak - Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
 
 // Firefox fix: GLPI calls form.submit() programmatically (not via a submit event)
 // when its ResultsView finds no pre-rendered results. Programmatic form.submit()
@@ -895,8 +898,4 @@ if ($tab === 'prestamos') {
     <?php
 }
 
-if ($is_helpdesk) {
-    Html::helpFooter();
-} else {
-    Html::footer();
-}
+Html::footer();

@@ -18,12 +18,35 @@ class PluginLagapenakLoan extends CommonDBTM {
         return 'Lagapenak';
     }
 
+    /**
+     * Check a plugin right for the current user's active profile.
+     * Queries glpi_profilerights directly to avoid stale session data —
+     * GLPI's Session::haveRight() filters plugin rights for helpdesk users,
+     * and the session is only refreshed on login/profile switch, so profile
+     * changes made after login would not be reflected without a DB query.
+     *
+     * @param string $right_name  e.g. 'plugin_lagapenak_loan', 'plugin_lagapenak_albaran'
+     * @param int    $flag        e.g. READ, CREATE, UPDATE
+     */
+    static function hasPluginRight(string $right_name, int $flag): bool {
+        global $DB;
+        $profile_id = (int)($_SESSION['glpiactiveprofile']['id'] ?? 0);
+        if (!$profile_id) return false;
+        foreach ($DB->request(['SELECT' => ['rights'], 'FROM' => 'glpi_profilerights',
+            'WHERE' => ['profiles_id' => $profile_id, 'name' => $right_name]]) as $r) {
+            return ((int)$r['rights'] & $flag) > 0;
+        }
+        return false;
+    }
+
     static function getMenuContent() {
         $menu = [];
         $menu['title'] = 'Lagapenak - Préstamos';
         $menu['page']  = '/plugins/lagapenak/front/loan.php';
         $menu['icon']  = 'fas fa-box-open';
-        $menu['links']['add']    = '/plugins/lagapenak/front/loan.form.php';
+        if (self::hasPluginRight(self::$rightname, CREATE)) {
+            $menu['links']['add'] = '/plugins/lagapenak/front/loan.form.php';
+        }
         $menu['links']['search'] = '/plugins/lagapenak/front/loan.php';
         $menu['links']['lists']  = '/front/savedsearch.php?action=search&itemtype=PluginLagapenakLoan';
         $menu['links']['<i class="fas fa-calendar-alt"></i>'] = '/plugins/lagapenak/front/calendar.php';
@@ -35,15 +58,15 @@ class PluginLagapenakLoan extends CommonDBTM {
     }
 
     static function canView() {
-        return Session::haveRight(self::$rightname, READ);
+        return self::hasPluginRight(self::$rightname, READ);
     }
 
     static function canCreate() {
-        return Session::haveRight(self::$rightname, CREATE);
+        return self::hasPluginRight(self::$rightname, CREATE);
     }
 
     static function canSupervise() {
-        return Session::haveRight(self::$rightname, UPDATE);
+        return self::hasPluginRight(self::$rightname, UPDATE);
     }
 
     /**

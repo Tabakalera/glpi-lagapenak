@@ -13,6 +13,14 @@ $ID            = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $form_error    = '';
 $can_supervise = PluginLagapenakLoan::canSupervise();
 
+// Gate: creating a new loan requires CREATE right; viewing an existing one requires READ.
+if ($ID === 0 && !PluginLagapenakLoan::canCreate()) {
+    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
+}
+if ($ID > 0 && !PluginLagapenakLoan::canView() && !$can_supervise) {
+    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
+}
+
 // ── Handle loan CRUD ────────────────────────────────────────────────────────
 if (isset($_POST['save_loan'])) {
     $is_new = ($ID == 0);
@@ -224,10 +232,12 @@ if ($can_supervise || $ID == 0) {
     echo '<a href="' . Plugin::getWebDir('lagapenak') . '/front/loan.php" class="btn btn-secondary">';
     echo '<i class="fas fa-arrow-left me-1"></i>Volver';
     echo '</a>';
-    $_lag_iface_form = $_SESSION['glpiactiveprofile']['interface'] ?? 'central';
+    $_lf_uid     = (int)($_SESSION['glpiID'] ?? 0);
+    $_lf_is_req  = (int)($loan->fields['users_id'] ?? 0) === $_lf_uid;
+    $_lf_is_dest = (int)($loan->fields['users_id_destinatario'] ?? 0) === $_lf_uid;
     $can_albaran = $can_supervise
-        || ($_lag_iface_form === 'helpdesk')
-        || Session::haveRight('plugin_lagapenak_albaran', READ);
+        || (PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_albaran', READ)
+            && ($_lf_is_req || $_lf_is_dest));
     if ($ID > 0 && $can_albaran) {
         $albaran_url = Plugin::getWebDir('lagapenak', true) . '/front/albaran.php?id=' . $ID;
         echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';

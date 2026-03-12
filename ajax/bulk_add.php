@@ -35,6 +35,19 @@ if (!$loan->getFromDB($loans_id)) {
     exit;
 }
 
+// Permission check: supervisor can add to any loan;
+// non-supervisors only to their own loan while still PENDING.
+$_ba_uid         = (int)($_SESSION['glpiID'] ?? 0);
+$_ba_can_sup     = PluginLagapenakLoan::canSupervise();
+$_ba_is_owner    = (int)($loan->fields['users_id'] ?? 0) === $_ba_uid;
+$_ba_loan_status = (int)($loan->fields['status'] ?? 0);
+if (!$_ba_can_sup
+    && !($_ba_is_owner && $_ba_loan_status === PluginLagapenakLoan::STATUS_PENDING)
+) {
+    echo json_encode(['error' => 'Sin permisos para modificar este préstamo']);
+    exit;
+}
+
 $added     = 0;
 $conflicts = [];
 $already   = [];

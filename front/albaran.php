@@ -11,13 +11,21 @@ if ($ID <= 0) {
 }
 
 $loan = new PluginLagapenakLoan();
-if (!$loan->getFromDB($ID) || !$loan->can($ID, READ)) {
+if (!$loan->getFromDB($ID)) {
     Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
 }
-$_lag_iface_alb = $_SESSION['glpiactiveprofile']['interface'] ?? 'central';
-$can_albaran = PluginLagapenakLoan::canSupervise()
-    || ($_lag_iface_alb === 'helpdesk')
-    || Session::haveRight('plugin_lagapenak_albaran', READ);
+
+// Permission check — no hardcoding, everything from glpi_profilerights via DB query:
+// Supervisors (loan UPDATE) can always access any albarán.
+// Other users need the albaran READ right AND must be the requester or destinatario.
+$_alb_uid          = (int)($_SESSION['glpiID'] ?? 0);
+$_alb_is_requester = (int)($loan->fields['users_id'] ?? 0) === $_alb_uid;
+$_alb_is_destinat  = (int)($loan->fields['users_id_destinatario'] ?? 0) === $_alb_uid;
+$_alb_can_supervise = PluginLagapenakLoan::canSupervise();
+$_alb_has_right     = PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_albaran', READ);
+
+$can_albaran = $_alb_can_supervise
+    || ($_alb_has_right && ($_alb_is_requester || $_alb_is_destinat));
 if (!$can_albaran) {
     Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
 }
