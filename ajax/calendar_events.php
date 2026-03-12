@@ -14,8 +14,16 @@ $range_end   = isset($_GET['end'])      ? $_GET['end']      : null;
 $filter_itemtype = isset($_GET['itemtype'])  ? $_GET['itemtype']  : '';
 $filter_items_id = isset($_GET['items_id']) ? (int)$_GET['items_id'] : 0;
 
+$can_supervise   = PluginLagapenakLoan::canSupervise();
+$current_user_id = (int)($_SESSION['glpiID'] ?? 0);
+
 $entity_restrict = getEntitiesRestrictCriteria('glpi_plugin_lagapenak_loans', '', '', false);
 $where = array_merge([['status' => ['!=', PluginLagapenakLoan::STATUS_CANCELLED]]], $entity_restrict);
+
+// Non-supervisors in loan view see only their own loans
+if (!$filter_itemtype && !$can_supervise && $current_user_id) {
+    $where[] = ['users_id' => $current_user_id];
+}
 
 if ($range_start) {
     $where[] = ['OR' => [
@@ -133,19 +141,23 @@ foreach ($loans as $loan) {
     }
     $requester = $uid ? ($user_cache[$uid] ?? '') : '';
 
+    // In asset view, non-supervisors see occupancy without details of other users' loans
+    $is_own_loan = ((int)($loan['users_id'] ?? 0) === $current_user_id);
+    $redact      = ($filter_itemtype && $filter_items_id) && !$can_supervise && !$is_own_loan;
+
     $events[] = [
         'id'            => $id,
-        'title'         => $loan['name'] ?: ('Préstamo #' . $id),
+        'title'         => $redact ? 'Ocupado' : ($loan['name'] ?: ('Préstamo #' . $id)),
         'start'         => $start,
         'end'           => $end,
         'allDay'        => $all_day,
         'color'         => $colors[$status] ?? '#6c757d',
         'textColor'     => in_array($status, $dark_text) ? '#000' : '#fff',
-        'url'           => Plugin::getWebDir('lagapenak', true) . '/front/loan.form.php?id=' . $id,
+        'url'           => $redact ? null : (Plugin::getWebDir('lagapenak', true) . '/front/loan.form.php?id=' . $id),
         'extendedProps' => [
-            'status'    => PluginLagapenakLoan::getStatusName($status),
-            'requester' => $requester,
-            'assets'    => implode(', ', $asset_names),
+            'status'    => $redact ? '' : PluginLagapenakLoan::getStatusName($status),
+            'requester' => $redact ? '' : $requester,
+            'assets'    => $redact ? '' : implode(', ', $asset_names),
         ],
     ];
 }

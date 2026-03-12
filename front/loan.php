@@ -17,7 +17,7 @@ $cal_url    = $plugin_web . '/front/calendar.php';
 
 $is_helpdesk = (Session::getCurrentInterface() === 'helpdesk');
 if ($is_helpdesk) {
-    Html::helpHeader('Lagapenak - Préstamos');
+    Html::helpHeader('Lagapenak - Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
 } else {
     Html::header('Lagapenak - Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
 }
