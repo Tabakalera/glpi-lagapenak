@@ -266,6 +266,30 @@ class PluginLagapenakLoan extends CommonDBTM {
             ];
         }
 
+        $tab[] = [
+            'id'       => 22,
+            'table'    => $this->getTable(),
+            'field'    => 'beneficiary_name',
+            'name'     => __('Full name', 'lagapenak'),
+            'datatype' => 'string',
+        ];
+
+        $tab[] = [
+            'id'       => 23,
+            'table'    => $this->getTable(),
+            'field'    => 'beneficiary_dni',
+            'name'     => __('Passport / ID', 'lagapenak'),
+            'datatype' => 'string',
+        ];
+
+        $tab[] = [
+            'id'       => 24,
+            'table'    => $this->getTable(),
+            'field'    => 'beneficiary_email',
+            'name'     => __('Email address', 'lagapenak'),
+            'datatype' => 'string',
+        ];
+
         $t = $this->getTable();
         $tab[] = [
             'id'            => 21,

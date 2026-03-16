@@ -29,7 +29,8 @@ Para desinstalar, pulsa **Desactivar** y luego **Desinstalar** desde el mismo me
 - Fechas de entrega/devolución por activo (anulan las fechas globales del préstamo)
 - Detección de conflictos al añadir activos (préstamos solapados)
 - Añadir activos en bloque con comprobación de conflictos
-- **Albarán de entrega** con firma digital en pantalla (tablet y móvil)
+- **Datos del beneficiario**: nombre, email y DNI/pasaporte de la persona que recoge el material, con pre-relleno desde los datos del solicitante en GLPI
+- **Albarán de entrega** con firma digital en pantalla (tablet y móvil), descarga como PDF real y envío por correo electrónico
 - Notificación por email al destinatario al crear un préstamo
 - Recordatorio automático por cron 2 días antes de la fecha de devolución
 - **Calendario mensual** (FullCalendar) con colores por estado y filtro por activo
@@ -66,13 +67,34 @@ static function getFieldLabels() {
         'field_1' => 'Convocatoria',
         'field_2' => 'Proyecto',
         'field_3' => 'Ubicación',
-        'field_4' => 'Referencia',
-        'field_5' => 'Sortzailearen izena',
+        'field_4' => 'Arloa',
+        'field_5' => 'Departamentua',
     ];
 }
 ```
 
 Estos campos aparecen en el formulario, el listado y el albarán.
+
+---
+
+## Datos del beneficiario
+
+El formulario de préstamo incluye una sección **Beneficiario** con tres campos:
+
+| Campo              | Columna BD          | Descripción                                    |
+|--------------------|---------------------|------------------------------------------------|
+| Nombre completo    | `beneficiary_name`  | Pre-relleno con el nombre del solicitante GLPI |
+| Correo electrónico | `beneficiary_email` | Pre-relleno con el email del solicitante GLPI  |
+| Pasaporte / DNI    | `beneficiary_dni`   | Vacío por defecto, editable                    |
+
+Todos los campos son editables: sirve para el caso en que A solicita material en nombre de B (se rellenan los datos de B).
+
+Estos datos se usan en el albarán:
+- El formulario de firma se pre-rellena con nombre y DNI del beneficiario.
+- El correo modal de envío usa por defecto `beneficiary_email`.
+- El documento impreso y el PDF muestran email del beneficiario y los campos configurados en `$albaran_loan_fields`.
+
+Los tres campos también están disponibles como **columnas y filtros en el buscador** nativo de GLPI.
 
 ---
 
@@ -82,11 +104,21 @@ Estos campos aparecen en el formulario, el listado y el albarán.
 2. El destinatario revisa activos y condiciones
 3. Dibuja la firma con el dedo o el ratón
 4. Pulsa **Guardar firma** (se guarda en BD)
-5. Pulsa **Imprimir / Guardar PDF** para obtener el documento
+5. Pulsa **Descargar PDF** para obtener el documento como PDF real (A4, con cabecera y pie de página)
+6. O pulsa **Enviar por correo** para enviarlo como adjunto a cualquier dirección de email
 
 **Imagen corporativa:** Sustituye `pics/albaran_header.png` y `pics/albaran_footer.png`.
 
 **Condiciones de uso:** Edita el array `$condiciones` al inicio de `front/albaran.php`.
+
+**Campos adicionales en el albarán:** Edita `$albaran_loan_fields` al inicio de `front/albaran.php` para controlar qué campos `field_N` aparecen en el documento:
+
+```php
+// front/albaran.php
+$albaran_loan_fields = ['field_1', 'field_2']; // Convocatoria + Proyecto (por defecto)
+```
+
+Pon `[]` para no mostrar ninguno. Los labels se obtienen automáticamente de `getFieldLabels()`.
 
 ---
 
@@ -136,7 +168,8 @@ lagapenak/
 │   ├── profile.class.php          # Integración de permisos con perfiles GLPI
 │   └── notification.php           # Envío de emails y cron de recordatorios
 ├── locales/
-│   └── es_ES.php                  # Traducciones español
+│   ├── en_GB.po / en_GB.mo        # English translations
+│   └── es_ES.po / es_ES.mo        # Traducciones español
 └── pics/
     ├── albaran_header.png         # Imagen de cabecera del albarán (personalizar)
     └── albaran_footer.png         # Imagen de pie del albarán (personalizar)
@@ -182,7 +215,8 @@ To uninstall: click **Disable** then **Uninstall**. Database tables are removed 
 - Per-asset checkout/checkin dates (override global loan dates)
 - Conflict detection when adding assets (overlapping loans)
 - Bulk asset addition with conflict checking
-- **Delivery note** with on-screen digital signature (tablet and mobile compatible)
+- **Beneficiary fields**: name, email and ID/passport of the person collecting the equipment, pre-filled from the requester's GLPI data and fully editable
+- **Delivery note** with on-screen digital signature (tablet and mobile compatible), real PDF download and email sending
 - Email notification to recipient on loan creation
 - Automatic cron reminder 2 days before return date
 - **Monthly calendar** (FullCalendar) with status colors and asset filter
@@ -219,13 +253,34 @@ static function getFieldLabels() {
         'field_1' => 'Call',
         'field_2' => 'Project',
         'field_3' => 'Location',
-        'field_4' => 'Reference',
-        'field_5' => 'Custom label',
+        'field_4' => 'Area',
+        'field_5' => 'Department',
     ];
 }
 ```
 
 These fields appear in the form, the search list and the delivery note.
+
+---
+
+## Beneficiary fields
+
+The loan form includes a **Beneficiary** section with three fields:
+
+| Field        | DB column           | Description                                        |
+|--------------|---------------------|----------------------------------------------------|
+| Full name    | `beneficiary_name`  | Pre-filled from the requester's GLPI display name  |
+| Email        | `beneficiary_email` | Pre-filled from the requester's GLPI email address |
+| Passport/ID  | `beneficiary_dni`   | Empty by default, editable                         |
+
+All fields are editable — useful when person A requests equipment on behalf of person B (fill in B's details).
+
+These fields feed into the delivery note:
+- The signature form is pre-filled with the beneficiary's name and ID.
+- The email send modal defaults to `beneficiary_email`.
+- The printed document and PDF show the beneficiary's email and the fields configured in `$albaran_loan_fields`.
+
+All three fields are also available as **searchable / filterable columns** in the native GLPI search engine.
 
 ---
 
@@ -235,7 +290,8 @@ These fields appear in the form, the search list and the delivery note.
 2. The recipient reviews the assets and conditions
 3. Signs with finger or mouse on the signature pad
 4. Clicks **Save signature** (stored in the database)
-5. Clicks **Print / Save as PDF** to get the document
+5. Clicks **Download PDF** to get a real A4 PDF (header/footer images included on every page)
+6. Or clicks **Send by email** to deliver it as a PDF attachment to any email address
 
 **Corporate images:** Replace `pics/albaran_header.png` and `pics/albaran_footer.png` with your own (header recommended: 260×100 px max; footer: full width).
 
@@ -249,6 +305,15 @@ $condiciones = [
     // add, remove or modify lines as needed
 ];
 ```
+
+**Additional fields in the document:** Edit `$albaran_loan_fields` at the top of `front/albaran.php` to control which `field_N` columns appear in the delivery note and PDF:
+
+```php
+// front/albaran.php
+$albaran_loan_fields = ['field_1', 'field_2']; // shown in document and PDF (default)
+```
+
+Set to `[]` to show none. Labels are read automatically from `getFieldLabels()`.
 
 ---
 
@@ -303,7 +368,8 @@ lagapenak/
 │   ├── profile.class.php          # GLPI profile permissions integration
 │   └── notification.php           # Email notifications and cron reminders
 ├── locales/
-│   └── es_ES.php                  # Spanish translations
+│   ├── en_GB.po / en_GB.mo        # English translations
+│   └── es_ES.po / es_ES.mo        # Spanish translations
 └── pics/
     ├── albaran_header.png         # Delivery note header image (customise)
     └── albaran_footer.png         # Delivery note footer image (customise)
