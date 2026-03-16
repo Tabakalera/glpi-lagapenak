@@ -15,7 +15,7 @@ $avail_url  = $plugin_web . '/ajax/availability.php';
 $loan_form  = $plugin_web . '/front/loan.form.php';
 $cal_url    = $plugin_web . '/front/calendar.php';
 
-Html::header('Lagapenak - Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
+Html::header(__('Lagapenak - Loans', 'lagapenak'), $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
 
 // Firefox fix: GLPI calls form.submit() programmatically (not via a submit event)
 // when its ResultsView finds no pre-rendered results. Programmatic form.submit()
@@ -92,16 +92,16 @@ if(window.location.search.indexOf("tab=disponibilidad")!==-1){
 
     // Same colors as GLPI's native mini_tickets dashboard
     $tile_defs = [
-        [$cnt_total,     'Todas',                'fas fa-list',           '#ffd957', $url_all],
-        [$cnt_active,    'Pendiente / En curso', 'fas fa-hourglass-half', '#ffcb7d', $url_active],
-        [$cnt_delivered, 'Entregados',           'fas fa-truck',          '#6fd169', $url_delivered],
-        [$cnt_returned,  'Devueltos',            'fas fa-check-circle',   '#d7d7d7', $url_returned],
+        [$cnt_total,     __('All',                 'lagapenak'), 'fas fa-list',           '#ffd957', $url_all],
+        [$cnt_active,    __('Pending / In progress','lagapenak'), 'fas fa-hourglass-half', '#ffcb7d', $url_active],
+        [$cnt_delivered, __('Delivered',            'lagapenak'), 'fas fa-truck',          '#6fd169', $url_delivered],
+        [$cnt_returned,  __('Returned',             'lagapenak'), 'fas fa-check-circle',   '#d7d7d7', $url_returned],
     ];
-    // "Mis préstamos" only makes sense for supervisors who can see all loans
+    // "My loans" only makes sense for supervisors who can see all loans
     if ($can_supervise) {
-        array_splice($tile_defs, 1, 0, [[$cnt_mine, 'Mis préstamos', 'fas fa-user', '#6298d5', $url_mine]]);
+        array_splice($tile_defs, 1, 0, [[$cnt_mine, __('My loans', 'lagapenak'), 'fas fa-user', '#6298d5', $url_mine]]);
     }
-    $tile_defs[] = [$cnt_overdue, 'Vencidos', 'fas fa-exclamation-triangle', '#e74c3c', $url_overdue];
+    $tile_defs[] = [$cnt_overdue, __('Overdue', 'lagapenak'), 'fas fa-exclamation-triangle', '#e74c3c', $url_overdue];
 
     // Render summary tiles — same visual style as GLPI's mini_ticket dashboard tiles
     echo '<div class="d-none d-md-flex flex-wrap mb-2" style="gap:4px;padding:4px 0;">';
@@ -125,14 +125,14 @@ if(window.location.search.indexOf("tab=disponibilidad")!==-1){
 
 // ── Tab navigation ────────────────────────────────────────────────────────────
 $tabs = [
-    'prestamos'      => ['icon' => 'fa-list',        'label' => 'Préstamos'],
-    'disponibilidad' => ['icon' => 'fa-check-circle', 'label' => 'Disponibilidad'],
+    'prestamos'      => ['icon' => 'fa-list',        'label' => __('Loans',        'lagapenak')],
+    'disponibilidad' => ['icon' => 'fa-check-circle', 'label' => __('Availability', 'lagapenak')],
 ];
 if ($can_supervise) {
     $tabs = [
-        'prestamos'      => ['icon' => 'fa-list',        'label' => 'Préstamos'],
-        'activos'        => ['icon' => 'fa-box',          'label' => 'Listado por activos'],
-        'disponibilidad' => ['icon' => 'fa-check-circle', 'label' => 'Disponibilidad'],
+        'prestamos'      => ['icon' => 'fa-list',        'label' => __('Loans',        'lagapenak')],
+        'activos'        => ['icon' => 'fa-box',          'label' => __('Asset list',   'lagapenak')],
+        'disponibilidad' => ['icon' => 'fa-check-circle', 'label' => __('Availability', 'lagapenak')],
     ];
 }
 echo '<ul class="nav nav-tabs px-3 mt-2 mb-0">';
@@ -145,8 +145,8 @@ foreach ($tabs as $key => $info) {
 }
 // Calendar shortcut
 echo '<li class="nav-item ms-auto">';
-echo '<a class="nav-link text-secondary" href="' . $cal_url . '" title="Vista Calendario">';
-echo '<i class="fas fa-calendar-alt me-1"></i>Calendario</a>';
+echo '<a class="nav-link text-secondary" href="' . $cal_url . '" title="' . __('Calendar view', 'lagapenak') . '">';
+echo '<i class="fas fa-calendar-alt me-1"></i>' . __('Calendar', 'lagapenak') . '</a>';
 echo '</li>';
 echo '</ul>';
 

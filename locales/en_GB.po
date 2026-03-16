@@ -333,3 +333,144 @@ msgstr "Number"
 
 msgid "Project name"
 msgstr "Project name"
+
+# ── loan.php tiles & tabs ─────────────────────────────────────────────────────
+
+msgid "All"
+msgstr "All"
+
+msgid "Pending / In progress"
+msgstr "Pending / In progress"
+
+msgid "My loans"
+msgstr "My loans"
+
+msgid "Overdue"
+msgstr "Overdue"
+
+msgid "Loans"
+msgstr "Loans"
+
+msgid "Availability"
+msgstr "Availability"
+
+msgid "Asset list"
+msgstr "Asset list"
+
+msgid "Calendar"
+msgstr "Calendar"
+
+msgid "Calendar view"
+msgstr "Calendar view"
+
+# ── albaran.php ───────────────────────────────────────────────────────────────
+
+msgid "Download PDF"
+msgstr "Download PDF"
+
+msgid "Send by email"
+msgstr "Send by email"
+
+msgid "Delivery note sent successfully by email."
+msgstr "Delivery note sent successfully by email."
+
+msgid "Error sending email. Please check the email settings in GLPI."
+msgstr "Error sending email. Please check the email settings in GLPI."
+
+msgid "MATERIAL HANDOVER"
+msgstr "MATERIAL HANDOVER"
+
+msgid "The material user agrees to comply with the following rules of use:"
+msgstr "The material user agrees to comply with the following rules of use:"
+
+msgid "The material user confirms acceptance of these rules,"
+msgstr "The material user confirms acceptance of these rules,"
+
+msgid "Send delivery note by email"
+msgstr "Send delivery note by email"
+
+msgid "Email address"
+msgstr "Email address"
+
+msgid "The delivery note will be attached as a PDF."
+msgstr "The delivery note will be attached as a PDF."
+
+msgid "Cancel"
+msgstr "Cancel"
+
+msgid "Send"
+msgstr "Send"
+
+msgid "Delivery note — %s"
+msgstr "Delivery note — %s"
+
+msgid "Please find attached the delivery note for loan <strong>%s</strong>."
+msgstr "Please find attached the delivery note for loan <strong>%s</strong>."
+
+# ── calendar.php ──────────────────────────────────────────────────────────────
+
+msgid "Lagapenak - Loan Calendar"
+msgstr "Lagapenak - Loan Calendar"
+
+msgid "Loan Calendar"
+msgstr "Loan Calendar"
+
+msgid "List"
+msgstr "List"
+
+msgid "Subscribe to calendar"
+msgstr "Subscribe to calendar"
+
+msgid "Copy the URL and paste it into your calendar client:"
+msgstr "Copy the URL and paste it into your calendar client:"
+
+msgid "Google Calendar → \"Other calendars\" (+) → \"Add by URL\""
+msgstr "Google Calendar → \"Other calendars\" (+) → \"Add by URL\""
+
+msgid "Outlook → \"Add calendar\" → \"From Internet\""
+msgstr "Outlook → \"Add calendar\" → \"From Internet\""
+
+msgid "By loan:"
+msgstr "By loan:"
+
+msgid "By asset:"
+msgstr "By asset:"
+
+msgid "Copy"
+msgstr "Copy"
+
+msgid "✓ Copied"
+msgstr "✓ Copied"
+
+msgid "The URL includes a secret token. Do not share it publicly."
+msgstr "The URL includes a secret token. Do not share it publicly."
+
+msgid "By loan"
+msgstr "By loan"
+
+msgid "By asset"
+msgstr "By asset"
+
+msgid "Asset:"
+msgstr "Asset:"
+
+msgid "— Loading assets… —"
+msgstr "— Loading assets… —"
+
+msgid "Select an asset to view its availability"
+msgstr "Select an asset to view its availability"
+
+msgid "Select an asset to view its bookings."
+msgstr "Select an asset to view its bookings."
+
+msgid "Error loading events."
+msgstr "Error loading events."
+
+msgid "— Select an asset —"
+msgstr "— Select an asset —"
+
+msgid "No assets with loans"
+msgstr "No assets with loans"
+
+msgid "Error loading assets"
+msgstr "Error loading assets"

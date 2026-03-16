@@ -192,22 +192,22 @@ function plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $hea
 
     $lbl = 'font-weight:bold;width:48mm;';
     $html = '
-<h3 style="font-size:12pt;letter-spacing:1px;text-transform:uppercase;margin:0 0 8px 0;">CESIÓN DE MATERIAL</h3>
+<h3 style="font-size:12pt;letter-spacing:1px;text-transform:uppercase;margin:0 0 8px 0;">' . __('MATERIAL HANDOVER', 'lagapenak') . '</h3>
 <table style="width:100%;font-size:10pt;margin-bottom:5px;">
-  <tr><td style="' . $lbl . '">Nombre completo:</td><td>' . htmlspecialchars($name) . '</td></tr>
-  <tr><td style="' . $lbl . '">DNI / Pasaporte:</td><td>' . htmlspecialchars($passport) . '</td></tr>
-  <tr><td style="' . $lbl . '">Proyecto:</td><td>' . htmlspecialchars($project) . '</td></tr>
+  <tr><td style="' . $lbl . '">' . __('Full name', 'lagapenak') . ':</td><td>' . htmlspecialchars($name) . '</td></tr>
+  <tr><td style="' . $lbl . '">' . __('Passport / ID', 'lagapenak') . ':</td><td>' . htmlspecialchars($passport) . '</td></tr>
+  <tr><td style="' . $lbl . '">' . __('Project', 'lagapenak') . ':</td><td>' . htmlspecialchars($project) . '</td></tr>
 </table>
-<p style="font-weight:bold;margin:5px 0 2px;font-size:10pt;">Material / equipos:</p>
+<p style="font-weight:bold;margin:5px 0 2px;font-size:10pt;">' . __('Material / equipment', 'lagapenak') . ':</p>
 <ul style="font-size:10pt;margin:0 0 5px 0;">' . $items_li . '</ul>
 <table style="width:100%;font-size:10pt;margin-bottom:5px;">
-  <tr><td style="' . $lbl . '">Fecha de recogida:</td><td>' . htmlspecialchars($fecha_rec) . '</td></tr>
-  <tr><td style="' . $lbl . '">Fecha de devolución:</td><td>' . htmlspecialchars($fecha_dev) . '</td></tr>
+  <tr><td style="' . $lbl . '">' . __('Pickup date', 'lagapenak') . ':</td><td>' . htmlspecialchars($fecha_rec) . '</td></tr>
+  <tr><td style="' . $lbl . '">' . __('Return date', 'lagapenak') . ':</td><td>' . htmlspecialchars($fecha_dev) . '</td></tr>
 </table>
 <hr/>
-<p style="font-size:8.5pt;">El usuario del material se compromete a cumplir las siguientes normas de uso y funcionamiento de Tabakalera:</p>
+<p style="font-size:8.5pt;">' . __('The material user agrees to comply with the following rules of use:', 'lagapenak') . '</p>
 <ol style="font-size:8.5pt;">' . $cond_li . '</ol>
-<p style="font-size:8.5pt;">El usuario del material confirma aceptar estas normas,</p>';
+<p style="font-size:8.5pt;">' . __('The material user confirms acceptance of these rules,', 'lagapenak') . '</p>';
 
     // $reseth=false so GetY() returns position AFTER the rendered content
     $pdf->writeHTML($html, true, false, false, false, '');
@@ -373,11 +373,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
         </a>
         <?php if ($already_signed): ?>
         <a href="?action=pdf&id=<?= $ID ?>" class="btn btn-sm btn-outline-success">
-            <i class="fas fa-file-pdf me-1"></i>Descargar PDF
+            <i class="fas fa-file-pdf me-1"></i><?= __('Download PDF', 'lagapenak') ?>
         </a>
         <button type="button" class="btn btn-sm btn-outline-primary"
                 data-bs-toggle="modal" data-bs-target="#emailModal">
-            <i class="fas fa-envelope me-1"></i>Enviar por correo
+            <i class="fas fa-envelope me-1"></i><?= __('Send by email', 'lagapenak') ?>
         </button>
         <?php endif; ?>
     </div>
@@ -388,11 +388,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
     </div>
     <?php elseif (isset($_GET['email_sent'])): ?>
     <div class="alert alert-success no-print">
-        <i class="fas fa-check-circle me-2"></i>Albarán enviado correctamente por correo.
+        <i class="fas fa-check-circle me-2"></i><?= __('Delivery note sent successfully by email.', 'lagapenak') ?>
     </div>
     <?php elseif (isset($_GET['email_error'])): ?>
     <div class="alert alert-danger no-print">
-        <i class="fas fa-exclamation-circle me-2"></i>Error al enviar el correo. Revisa la configuración de email en GLPI.
+        <i class="fas fa-exclamation-circle me-2"></i><?= __('Error sending email. Please check the email settings in GLPI.', 'lagapenak') ?>
     </div>
     <?php endif; ?>
 
@@ -410,7 +410,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
 
             <!-- Title -->
             <h5 class="fw-bold text-uppercase mb-4" style="letter-spacing:.8px;font-size:1.05rem;">
-                CESIÓN DE MATERIAL
+                <?= __('MATERIAL HANDOVER', 'lagapenak') ?>
             </h5>
 
             <!-- ── SIGNED: show stored values ── -->
@@ -440,7 +440,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
 
             <!-- Conditions -->
             <p style="font-size:.9rem;">
-                El usuario del material se compromete a cumplir las siguientes normas de uso y funcionamiento de Tabakalera:
+                <?= __('The material user agrees to comply with the following rules of use:', 'lagapenak') ?>
             </p>
             <ul class="cond-list ps-4">
                 <?php foreach ($condiciones as $c): ?>
@@ -448,7 +448,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
                 <?php endforeach; ?>
             </ul>
 
-            <p class="mt-4" style="font-size:.9rem;">El usuario del material confirma aceptar estas normas,</p>
+            <p class="mt-4" style="font-size:.9rem;"><?= __('The material user confirms acceptance of these rules,', 'lagapenak') ?></p>
 
             <!-- ── SIGNED: show signature ── -->
             <?php if ($already_signed): ?>
@@ -540,7 +540,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="emailModalLabel">
-                    <i class="fas fa-envelope me-2"></i>Enviar albarán por correo
+                    <i class="fas fa-envelope me-2"></i><?= __('Send delivery note by email', 'lagapenak') ?>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -549,19 +549,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
                 <input type="hidden" name="action_email" value="1">
                 <div class="modal-body">
                     <label class="form-label fw-semibold">
-                        Correo electrónico <span class="text-danger">*</span>
+                        <?= __('Email address', 'lagapenak') ?> <span class="text-danger">*</span>
                     </label>
                     <input type="email" name="to_email" class="form-control" required
-                           placeholder="destinatario@ejemplo.com"
+                           placeholder="recipient@example.com"
                            value="<?= htmlspecialchars($dest_email_prefill) ?>">
                     <div class="form-text mt-2">
-                        <i class="fas fa-paperclip me-1"></i>El albarán se adjuntará como PDF al correo.
+                        <i class="fas fa-paperclip me-1"></i><?= __('The delivery note will be attached as a PDF.', 'lagapenak') ?>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('Cancel', 'lagapenak') ?></button>
                     <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-paper-plane me-1"></i>Enviar
+                        <i class="fas fa-paper-plane me-1"></i><?= __('Send', 'lagapenak') ?>
                     </button>
                 </div>
             </form>

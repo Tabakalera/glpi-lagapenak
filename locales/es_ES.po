@@ -355,3 +355,144 @@ msgstr "Número"
 
 msgid "Project name"
 msgstr "Nombre del proyecto"
+
+# ── loan.php tiles & tabs ─────────────────────────────────────────────────────
+
+msgid "All"
+msgstr "Todas"
+
+msgid "Pending / In progress"
+msgstr "Pendiente / En curso"
+
+msgid "My loans"
+msgstr "Mis préstamos"
+
+msgid "Overdue"
+msgstr "Vencidos"
+
+msgid "Loans"
+msgstr "Préstamos"
+
+msgid "Availability"
+msgstr "Disponibilidad"
+
+msgid "Asset list"
+msgstr "Listado por activos"
+
+msgid "Calendar"
+msgstr "Calendario"
+
+msgid "Calendar view"
+msgstr "Vista Calendario"
+
+# ── albaran.php ───────────────────────────────────────────────────────────────
+
+msgid "Download PDF"
+msgstr "Descargar PDF"
+
+msgid "Send by email"
+msgstr "Enviar por correo"
+
+msgid "Delivery note sent successfully by email."
+msgstr "Albarán enviado correctamente por correo."
+
+msgid "Error sending email. Please check the email settings in GLPI."
+msgstr "Error al enviar el correo. Revisa la configuración de email en GLPI."
+
+msgid "MATERIAL HANDOVER"
+msgstr "CESIÓN DE MATERIAL"
+
+msgid "The material user agrees to comply with the following rules of use:"
+msgstr "El usuario del material se compromete a cumplir las siguientes normas de uso y funcionamiento de Tabakalera:"
+
+msgid "The material user confirms acceptance of these rules,"
+msgstr "El usuario del material confirma aceptar estas normas,"
+
+msgid "Send delivery note by email"
+msgstr "Enviar albarán por correo"
+
+msgid "Email address"
+msgstr "Correo electrónico"
+
+msgid "The delivery note will be attached as a PDF."
+msgstr "El albarán se adjuntará como PDF al correo."
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Send"
+msgstr "Enviar"
+
+msgid "Delivery note — %s"
+msgstr "Albarán — %s"
+
+msgid "Please find attached the delivery note for loan <strong>%s</strong>."
+msgstr "Adjunto encontrarás el albarán del préstamo <strong>%s</strong>."
+
+# ── calendar.php ──────────────────────────────────────────────────────────────
+
+msgid "Lagapenak - Loan Calendar"
+msgstr "Lagapenak - Calendario de Préstamos"
+
+msgid "Loan Calendar"
+msgstr "Calendario de Préstamos"
+
+msgid "List"
+msgstr "Lista"
+
+msgid "Subscribe to calendar"
+msgstr "Suscribir calendario"
+
+msgid "Copy the URL and paste it into your calendar client:"
+msgstr "Copia la URL y pégala en tu cliente de calendario:"
+
+msgid "Google Calendar → \"Other calendars\" (+) → \"Add by URL\""
+msgstr "Google Calendar → «Otras agendas» (+) → «Añadir por URL»"
+
+msgid "Outlook → \"Add calendar\" → \"From Internet\""
+msgstr "Outlook → «Agregar calendario» → «Desde Internet»"
+
+msgid "By loan:"
+msgstr "Por préstamo:"
+
+msgid "By asset:"
+msgstr "Por activo:"
+
+msgid "Copy"
+msgstr "Copiar"
+
+msgid "✓ Copied"
+msgstr "✓ Copiado"
+
+msgid "The URL includes a secret token. Do not share it publicly."
+msgstr "La URL incluye un token secreto. No la compartas públicamente."
+
+msgid "By loan"
+msgstr "Por préstamo"
+
+msgid "By asset"
+msgstr "Por activo"
+
+msgid "Asset:"
+msgstr "Activo:"
+
+msgid "— Loading assets… —"
+msgstr "— Cargando activos… —"
+
+msgid "Select an asset to view its availability"
+msgstr "Selecciona un activo para ver su disponibilidad"
+
+msgid "Select an asset to view its bookings."
+msgstr "Selecciona un activo para ver sus reservas."
+
+msgid "Error loading events."
+msgstr "Error al cargar los eventos."
+
+msgid "— Select an asset —"
+msgstr "— Selecciona un activo —"
+
+msgid "No assets with loans"
+msgstr "No hay activos con préstamos"
+
+msgid "Error loading assets"
+msgstr "Error al cargar activos"

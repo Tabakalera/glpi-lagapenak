@@ -6,7 +6,7 @@ Session::checkLoginUser();
 
 Html::requireJs('fullcalendar');
 
-Html::header('Lagapenak - Calendario de Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
+Html::header(__('Lagapenak - Loan Calendar', 'lagapenak'), $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
 
 $plugin_web      = Plugin::getWebDir('lagapenak', true);
 $ajax_events_url = $plugin_web . '/ajax/calendar_events.php';
@@ -29,21 +29,21 @@ $fc_locale = $CFG_GLPI['root_doc'] . '/public/lib/fullcalendar/core/locales/es.m
     <!-- Toolbar -->
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <h3 class="mb-0">
-            <i class="fas fa-calendar-alt me-2"></i>Calendario de Préstamos
+            <i class="fas fa-calendar-alt me-2"></i><?= __('Loan Calendar', 'lagapenak') ?>
         </h3>
         <div class="d-flex gap-2 flex-wrap align-items-center">
             <div class="d-flex gap-1 flex-wrap">
-                <span class="badge" style="background:#ffc107;color:#000;">Pendiente</span>
-                <span class="badge" style="background:#0dcaf0;color:#000;">En curso</span>
-                <span class="badge" style="background:#0d6efd;color:#fff;">Entregado</span>
-                <span class="badge" style="background:#198754;color:#fff;">Devuelto</span>
+                <span class="badge" style="background:#ffc107;color:#000;"><?= __('Pending',     'lagapenak') ?></span>
+                <span class="badge" style="background:#0dcaf0;color:#000;"><?= __('In progress', 'lagapenak') ?></span>
+                <span class="badge" style="background:#0d6efd;color:#fff;"><?= __('Delivered',   'lagapenak') ?></span>
+                <span class="badge" style="background:#198754;color:#fff;"><?= __('Returned',    'lagapenak') ?></span>
             </div>
             <a href="<?= $list_url ?>" class="btn btn-sm btn-outline-secondary">
-                <i class="fas fa-list me-1"></i>Lista
+                <i class="fas fa-list me-1"></i><?= __('List', 'lagapenak') ?>
             </a>
             <button class="btn btn-sm btn-outline-primary" type="button"
                     data-bs-toggle="collapse" data-bs-target="#ics-panel">
-                <i class="fas fa-calendar-plus me-1"></i>Suscribir calendario
+                <i class="fas fa-calendar-plus me-1"></i><?= __('Subscribe to calendar', 'lagapenak') ?>
             </button>
         </div>
     </div>
@@ -65,36 +65,38 @@ $fc_locale = $CFG_GLPI['root_doc'] . '/public/lib/fullcalendar/core/locales/es.m
     <div class="collapse mb-3" id="ics-panel">
         <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:16px 20px;">
             <p class="mb-2" style="font-size:.875rem;font-weight:600;">
-                Copia la URL y pégala en tu cliente de calendario:
+                <?= __('Copy the URL and paste it into your calendar client:', 'lagapenak') ?>
             </p>
             <p class="mb-3" style="font-size:.8rem;color:#6c757d;">
-                Google Calendar → «Otras agendas» (+) → «Añadir por URL»<br>
-                Outlook → «Agregar calendario» → «Desde Internet»
+                <?= __('Google Calendar → "Other calendars" (+) → "Add by URL"', 'lagapenak') ?><br>
+                <?= __('Outlook → "Add calendar" → "From Internet"', 'lagapenak') ?>
             </p>
             <div class="mb-3">
-                <div style="font-size:.8rem;font-weight:600;margin-bottom:4px;">Por préstamo:</div>
+                <div style="font-size:.8rem;font-weight:600;margin-bottom:4px;"><?= __('By loan:', 'lagapenak') ?></div>
                 <div style="display:flex;gap:6px;align-items:center;">
                     <input type="text" style="flex:1;font-family:monospace;font-size:.75rem;padding:4px 8px;border:1px solid #ced4da;border-radius:4px;background:#fff;"
                            id="ics-url-loans" value="<?= htmlspecialchars($url_loans) ?>" readonly>
                     <button style="white-space:nowrap;padding:4px 10px;border:1px solid #ced4da;border-radius:4px;background:#fff;cursor:pointer;font-size:.8rem;"
-                            onclick="navigator.clipboard.writeText(document.getElementById('ics-url-loans').value);this.textContent='✓ Copiado'">
-                        Copiar
+                            data-copied="<?= __('✓ Copied', 'lagapenak') ?>"
+                            onclick="navigator.clipboard.writeText(document.getElementById('ics-url-loans').value);this.textContent=this.dataset.copied">
+                        <?= __('Copy', 'lagapenak') ?>
                     </button>
                 </div>
             </div>
             <div>
-                <div style="font-size:.8rem;font-weight:600;margin-bottom:4px;">Por activo:</div>
+                <div style="font-size:.8rem;font-weight:600;margin-bottom:4px;"><?= __('By asset:', 'lagapenak') ?></div>
                 <div style="display:flex;gap:6px;align-items:center;">
                     <input type="text" style="flex:1;font-family:monospace;font-size:.75rem;padding:4px 8px;border:1px solid #ced4da;border-radius:4px;background:#fff;"
                            id="ics-url-assets" value="<?= htmlspecialchars($url_assets) ?>" readonly>
                     <button style="white-space:nowrap;padding:4px 10px;border:1px solid #ced4da;border-radius:4px;background:#fff;cursor:pointer;font-size:.8rem;"
-                            onclick="navigator.clipboard.writeText(document.getElementById('ics-url-assets').value);this.textContent='✓ Copiado'">
-                        Copiar
+                            data-copied="<?= __('✓ Copied', 'lagapenak') ?>"
+                            onclick="navigator.clipboard.writeText(document.getElementById('ics-url-assets').value);this.textContent=this.dataset.copied">
+                        <?= __('Copy', 'lagapenak') ?>
                     </button>
                 </div>
             </div>
             <p style="margin-top:10px;margin-bottom:0;font-size:.75rem;color:#6c757d;">
-                <i class="fas fa-lock me-1"></i>La URL incluye un token secreto. No la compartas públicamente.
+                <i class="fas fa-lock me-1"></i><?= __('The URL includes a secret token. Do not share it publicly.', 'lagapenak') ?>
             </p>
         </div>
     </div>
@@ -103,12 +105,12 @@ $fc_locale = $CFG_GLPI['root_doc'] . '/public/lib/fullcalendar/core/locales/es.m
     <ul class="nav nav-tabs mb-3" id="cal-tabs">
         <li class="nav-item">
             <button class="nav-link active" data-tab="by-loan">
-                <i class="fas fa-calendar me-1"></i>Por préstamo
+                <i class="fas fa-calendar me-1"></i><?= __('By loan', 'lagapenak') ?>
             </button>
         </li>
         <li class="nav-item">
             <button class="nav-link" data-tab="by-asset">
-                <i class="fas fa-box me-1"></i>Por activo
+                <i class="fas fa-box me-1"></i><?= __('By asset', 'lagapenak') ?>
             </button>
         </li>
     </ul>
@@ -129,20 +131,20 @@ $fc_locale = $CFG_GLPI['root_doc'] . '/public/lib/fullcalendar/core/locales/es.m
                 <!-- Asset selector -->
                 <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
                     <label class="fw-bold mb-0">
-                        <i class="fas fa-box me-1"></i>Activo:
+                        <i class="fas fa-box me-1"></i><?= __('Asset:', 'lagapenak') ?>
                     </label>
                     <div id="asset-select-wrapper">
                         <select id="asset-select" class="form-select form-select-sm">
-                            <option value="">— Cargando activos… —</option>
+                            <option value=""><?= __('— Loading assets… —', 'lagapenak') ?></option>
                         </select>
                     </div>
                     <span class="text-muted" style="font-size:.82rem;">
-                        <i class="fas fa-info-circle me-1"></i>Selecciona un activo para ver su disponibilidad
+                        <i class="fas fa-info-circle me-1"></i><?= __('Select an asset to view its availability', 'lagapenak') ?>
                     </span>
                 </div>
                 <!-- Calendar for selected asset -->
                 <div id="cal-asset-empty" class="text-center text-muted py-4" style="display:none;">
-                    Selecciona un activo para ver sus reservas.
+                    <?= __('Select an asset to view its bookings.', 'lagapenak') ?>
                 </div>
                 <div id="cal-asset"></div>
             </div>
@@ -160,6 +162,15 @@ $fc_locale = $CFG_GLPI['root_doc'] . '/public/lib/fullcalendar/core/locales/es.m
 </div>
 
 <script src="<?= $fc_locale ?>"></script>
+<script>
+/* i18n strings from PHP */
+var I18N = {
+    errorLoadingEvents: <?= json_encode(__('Error loading events.', 'lagapenak')) ?>,
+    selectAsset:        <?= json_encode(__('— Select an asset —', 'lagapenak')) ?>,
+    noAssetsWithLoans:  <?= json_encode(__('No assets with loans', 'lagapenak')) ?>,
+    errorLoadingAssets: <?= json_encode(__('Error loading assets', 'lagapenak')) ?>
+};
+</script>
 <script>
 /* ============================================================
    TOOLTIP
@@ -240,7 +251,7 @@ function initLoanCalendar() {
     var opts = makeCalendarOptions({
         url:    BASE_URL,
         method: 'GET',
-        failure: function() { alert('Error al cargar los eventos.'); }
+        failure: function() { alert(I18N.errorLoadingEvents); }
     }, false);
     loanCalendar = new FullCalendar.Calendar(document.getElementById('cal-loan'), opts);
     loanCalendar.render();
@@ -303,7 +314,7 @@ function loadAssetList() {
         .then(function(r) { return r.json(); })
         .then(function(assets) {
             var sel = document.getElementById('asset-select');
-            sel.innerHTML = '<option value="">— Selecciona un activo —</option>';
+            sel.innerHTML = '<option value="">' + I18N.selectAsset + '</option>';
             assets.forEach(function(a) {
                 var opt = document.createElement('option');
                 opt.value       = a.itemtype + '::' + a.items_id;
@@ -311,12 +322,12 @@ function loadAssetList() {
                 sel.appendChild(opt);
             });
             if (assets.length === 0) {
-                sel.innerHTML = '<option value="">No hay activos con préstamos</option>';
+                sel.innerHTML = '<option value="">' + I18N.noAssetsWithLoans + '</option>';
             }
         })
         .catch(function() {
             document.getElementById('asset-select').innerHTML =
-                '<option value="">Error al cargar activos</option>';
+                '<option value="">' + I18N.errorLoadingAssets + '</option>';
         });
 }
 
