@@ -11,42 +11,19 @@ class PluginLagapenakLoan extends CommonDBTM {
     const STATUS_CANCELLED   = 4;  // Cancelado
 
     static function getTypeName($nb = 0) {
-        return _n('Préstamo', 'Préstamos', $nb, 'lagapenak');
+        return _n('Loan', 'Loans', $nb, 'lagapenak');
     }
 
     static function getMenuName() {
         return 'Lagapenak';
     }
 
-    /**
-     * Check a plugin right for the current user's active profile.
-     * Queries glpi_profilerights directly to avoid stale session data —
-     * GLPI's Session::haveRight() filters plugin rights for helpdesk users,
-     * and the session is only refreshed on login/profile switch, so profile
-     * changes made after login would not be reflected without a DB query.
-     *
-     * @param string $right_name  e.g. 'plugin_lagapenak_loan', 'plugin_lagapenak_albaran'
-     * @param int    $flag        e.g. READ, CREATE, UPDATE
-     */
-    static function hasPluginRight(string $right_name, int $flag): bool {
-        global $DB;
-        $profile_id = (int)($_SESSION['glpiactiveprofile']['id'] ?? 0);
-        if (!$profile_id) return false;
-        foreach ($DB->request(['SELECT' => ['rights'], 'FROM' => 'glpi_profilerights',
-            'WHERE' => ['profiles_id' => $profile_id, 'name' => $right_name]]) as $r) {
-            return ((int)$r['rights'] & $flag) > 0;
-        }
-        return false;
-    }
-
     static function getMenuContent() {
         $menu = [];
-        $menu['title'] = 'Lagapenak - Préstamos';
+        $menu['title'] = __('Lagapenak - Loans', 'lagapenak');
         $menu['page']  = '/plugins/lagapenak/front/loan.php';
         $menu['icon']  = 'fas fa-box-open';
-        if (self::hasPluginRight(self::$rightname, CREATE)) {
-            $menu['links']['add'] = '/plugins/lagapenak/front/loan.form.php';
-        }
+        $menu['links']['add']    = '/plugins/lagapenak/front/loan.form.php';
         $menu['links']['search'] = '/plugins/lagapenak/front/loan.php';
         $menu['links']['lists']  = '/front/savedsearch.php?action=search&itemtype=PluginLagapenakLoan';
         $menu['links']['<i class="fas fa-calendar-alt"></i>'] = '/plugins/lagapenak/front/calendar.php';
@@ -58,15 +35,15 @@ class PluginLagapenakLoan extends CommonDBTM {
     }
 
     static function canView() {
-        return self::hasPluginRight(self::$rightname, READ);
+        return Session::haveRight(self::$rightname, READ);
     }
 
     static function canCreate() {
-        return self::hasPluginRight(self::$rightname, CREATE);
+        return Session::haveRight(self::$rightname, CREATE);
     }
 
     static function canSupervise() {
-        return self::hasPluginRight(self::$rightname, UPDATE);
+        return Session::haveRight(self::$rightname, UPDATE);
     }
 
     /**
@@ -152,13 +129,13 @@ class PluginLagapenakLoan extends CommonDBTM {
 
     static function getStatusName($status) {
         $statuses = [
-            self::STATUS_PENDING     => 'Pendiente',
-            self::STATUS_IN_PROGRESS => 'En curso',
-            self::STATUS_DELIVERED   => 'Entregado',
-            self::STATUS_RETURNED    => 'Devuelto',
-            self::STATUS_CANCELLED   => 'Cancelado',
+            self::STATUS_PENDING     => __('Pending', 'lagapenak'),
+            self::STATUS_IN_PROGRESS => __('In progress', 'lagapenak'),
+            self::STATUS_DELIVERED   => __('Delivered', 'lagapenak'),
+            self::STATUS_RETURNED    => __('Returned', 'lagapenak'),
+            self::STATUS_CANCELLED   => __('Cancelled', 'lagapenak'),
         ];
-        return $statuses[$status] ?? 'Desconocido';
+        return $statuses[$status] ?? __('Unknown', 'lagapenak');
     }
 
     static function getStatusBadge($status) {
@@ -184,7 +161,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'id'            => 1,
             'table'         => $this->getTable(),
             'field'         => 'name',
-            'name'          => 'Nombre / Referencia',
+            'name'          => __('Name / Reference', 'lagapenak'),
             'datatype'      => 'itemlink',
             'massiveaction' => false,
         ];
@@ -202,7 +179,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'id'            => 3,
             'table'         => $this->getTable(),
             'field'         => 'status',
-            'name'          => 'Estado',
+            'name'          => __('Status', 'lagapenak'),
             'datatype'      => 'specific',
             'searchtype'    => ['equals', 'notequals'],
             'massiveaction' => false,
@@ -213,7 +190,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'table'     => 'glpi_entities',
             'field'     => 'completename',
             'linkfield' => 'entities_id',
-            'name'      => 'Entidad',
+            'name'      => __('Entity', 'lagapenak'),
             'datatype'  => 'dropdown',
         ];
 
@@ -222,7 +199,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'table'     => 'glpi_users',
             'field'     => 'name',
             'linkfield' => 'users_id',
-            'name'      => 'Solicitante',
+            'name'      => __('Requester', 'lagapenak'),
             'datatype'  => 'dropdown',
         ];
 
@@ -231,7 +208,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'table'     => 'glpi_users',
             'field'     => 'name',
             'linkfield' => 'users_id_destinatario',
-            'name'      => 'Destinatario',
+            'name'      => __('Recipient', 'lagapenak'),
             'datatype'  => 'dropdown',
         ];
 
@@ -239,7 +216,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'id'       => 6,
             'table'    => $this->getTable(),
             'field'    => 'fecha_inicio',
-            'name'     => 'Fecha inicio',
+            'name'     => __('Start date', 'lagapenak'),
             'datatype' => 'datetime',
         ];
 
@@ -247,7 +224,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'id'       => 7,
             'table'    => $this->getTable(),
             'field'    => 'fecha_fin',
-            'name'     => 'Fecha fin',
+            'name'     => __('End date', 'lagapenak'),
             'datatype' => 'datetime',
         ];
 
@@ -255,7 +232,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'id'       => 8,
             'table'    => $this->getTable(),
             'field'    => 'observaciones',
-            'name'     => 'Observaciones',
+            'name'     => __('Notes', 'lagapenak'),
             'datatype' => 'text',
         ];
 
@@ -275,19 +252,19 @@ class PluginLagapenakLoan extends CommonDBTM {
             'id'            => 21,
             'table'         => $this->getTable(),
             'field'         => '_albaran',
-            'name'          => 'Albarán',
+            'name'          => __('Delivery note', 'lagapenak'),
             'computation'   => "IF(`{$t}`.`has_albaran` = 1, `{$t}`.`id`, NULL)",
             'datatype'      => 'specific',
             'nosort'        => true,
             'massiveaction' => false,
         ];
 
-        // Activos: subquery returns "Tipo~Nombre||Tipo~Nombre" → LIKE search works on real names
+        // Assets: subquery returns "Tipo~Nombre||Tipo~Nombre" → LIKE search works on real names
         $tab[] = [
             'id'            => 20,
             'table'         => $this->getTable(),
             'field'         => '_activos',
-            'name'          => 'Activos',
+            'name'          => __('Assets', 'lagapenak'),
             'computation'   => '(SELECT GROUP_CONCAT(
                                      CONCAT(li.itemtype, \'~\',
                                          COALESCE(
@@ -324,7 +301,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             $loan_id = (int) ($values[$field] ?? 0);
             if ($loan_id > 0) {
                 $url = Plugin::getWebDir('lagapenak', true) . '/front/albaran.php?id=' . $loan_id;
-                return '<a href="' . $url . '" target="_blank" title="Ver albarán firmado">'
+                return '<a href="' . $url . '" target="_blank" title="' . __('View signed delivery note', 'lagapenak') . '">'
                      . '<i class="fas fa-check-circle text-success fa-lg"></i></a>';
             }
             return '';
@@ -351,11 +328,11 @@ class PluginLagapenakLoan extends CommonDBTM {
         if ($field === 'status') {
             $options['display'] = false;
             return Dropdown::showFromArray($name, [
-                self::STATUS_PENDING     => 'Pendiente',
-                self::STATUS_IN_PROGRESS => 'En curso',
-                self::STATUS_DELIVERED   => 'Entregado',
-                self::STATUS_RETURNED    => 'Devuelto',
-                self::STATUS_CANCELLED   => 'Cancelado',
+                self::STATUS_PENDING     => __('Pending', 'lagapenak'),
+                self::STATUS_IN_PROGRESS => __('In progress', 'lagapenak'),
+                self::STATUS_DELIVERED   => __('Delivered', 'lagapenak'),
+                self::STATUS_RETURNED    => __('Returned', 'lagapenak'),
+                self::STATUS_CANCELLED   => __('Cancelled', 'lagapenak'),
             ], $options);
         }
         return parent::getSpecificValueToSelect($field, $name, $values, $options);
@@ -369,31 +346,31 @@ class PluginLagapenakLoan extends CommonDBTM {
         $loan   = ($ID > 0) ? $this->fields : [];
         $labels = self::getFieldLabels();
 
-        // ── Row 1: Nombre + Estado ──────────────────────────────────────
+        // ── Row 1: Name + Status ───────────────────────────────────────
         echo '<div class="row g-3 mb-3">';
 
         echo '<div class="col-md-8">';
-        echo '<label class="form-label fw-bold">Nombre / Referencia <span class="text-danger">*</span></label>';
+        echo '<label class="form-label fw-bold">' . __('Name / Reference', 'lagapenak') . ' <span class="text-danger">*</span></label>';
         echo '<input type="text" class="form-control" name="name"
                      value="' . htmlspecialchars($loan['name'] ?? '') . '">';
         echo '</div>';
 
         echo '<div class="col-md-4">';
-        echo '<label class="form-label fw-bold">Estado</label>';
+        echo '<label class="form-label fw-bold">' . __('Status', 'lagapenak') . '</label>';
         $cur_status = (int) ($loan['status'] ?? self::STATUS_PENDING);
         echo '<div class="d-flex align-items-center gap-2 mt-1">';
         echo self::getStatusBadge($cur_status);
-        echo '<small class="text-muted"><i class="fas fa-sync-alt me-1"></i>Automático</small>';
+        echo '<small class="text-muted"><i class="fas fa-sync-alt me-1"></i>' . __('Automatic', 'lagapenak') . '</small>';
         echo '</div>';
         echo '</div>';
 
         echo '</div>';
 
-        // ── Row 1b: Entidad ─────────────────────────────────────────────
+        // ── Row 1b: Entity ──────────────────────────────────────────────
         $supervisor_url = Plugin::getWebDir('lagapenak', true) . '/ajax/entity_supervisor.php';
         echo '<div class="row g-3 mb-3">';
         echo '<div class="col-md-6">';
-        echo '<label class="form-label fw-bold">Entidad <span class="text-danger">*</span></label>';
+        echo '<label class="form-label fw-bold">' . __('Entity', 'lagapenak') . ' <span class="text-danger">*</span></label>';
         Entity::dropdown([
             'name'  => 'entities_id',
             'value' => $loan['entities_id'] ?? ($_SESSION['glpiactive_entity'] ?? 0),
@@ -439,14 +416,14 @@ class PluginLagapenakLoan extends CommonDBTM {
 })();
 </script>';
 
-        // ── Row 2: Solicitante + Destinatario ───────────────────────────
+        // ── Row 2: Requester + Recipient ────────────────────────────────
         echo '<div class="row g-3 mb-3">';
 
         $sol_id = (int)($ID > 0 ? ($loan['users_id'] ?? 0) : ($_SESSION['glpiID'] ?? 0));
         $sol_user = new User();
         $sol_name = $sol_user->getFromDB($sol_id) ? htmlspecialchars($sol_user->getName()) : '—';
         echo '<div class="col-md-6">';
-        echo '<label class="form-label fw-bold">Solicitante</label>';
+        echo '<label class="form-label fw-bold">' . __('Requester', 'lagapenak') . '</label>';
         echo '<input type="hidden" name="users_id" value="' . $sol_id . '">';
         echo '<p class="form-control-plaintext mb-0">' . $sol_name . '</p>';
         echo '</div>';
@@ -455,7 +432,7 @@ class PluginLagapenakLoan extends CommonDBTM {
         $supervisors  = self::getSupervisorsForEntity($dest_entity);
         $current_dest = (int)($loan['users_id_destinatario'] ?? 0);
         echo '<div class="col-md-6">';
-        echo '<label class="form-label fw-bold">Destinatario <span class="text-danger">*</span></label>';
+        echo '<label class="form-label fw-bold">' . __('Recipient', 'lagapenak') . ' <span class="text-danger">*</span></label>';
         echo '<select name="users_id_destinatario" id="dest_select" class="form-select">';
         echo '<option value="">-----</option>';
         foreach ($supervisors as $sup) {
@@ -467,11 +444,11 @@ class PluginLagapenakLoan extends CommonDBTM {
 
         echo '</div>';
 
-        // ── Row 3: Fecha inicio + Fecha fin ─────────────────────────────
+        // ── Row 3: Start date + End date ────────────────────────────────
         echo '<div class="row g-3 mb-3">';
 
         echo '<div class="col-md-6">';
-        echo '<label class="form-label fw-bold">Fecha inicio <span class="text-danger">*</span></label>';
+        echo '<label class="form-label fw-bold">' . __('Start date', 'lagapenak') . ' <span class="text-danger">*</span></label>';
         Html::showDateTimeField('fecha_inicio', [
             'value'      => $loan['fecha_inicio'] ?? '',
             'maybeempty' => true,
@@ -479,7 +456,7 @@ class PluginLagapenakLoan extends CommonDBTM {
         echo '</div>';
 
         echo '<div class="col-md-6">';
-        echo '<label class="form-label fw-bold">Fecha fin <span class="text-danger">*</span></label>';
+        echo '<label class="form-label fw-bold">' . __('End date', 'lagapenak') . ' <span class="text-danger">*</span></label>';
         Html::showDateTimeField('fecha_fin', [
             'value'      => $loan['fecha_fin'] ?? '',
             'maybeempty' => true,
@@ -500,7 +477,7 @@ class PluginLagapenakLoan extends CommonDBTM {
         echo '<button type="button" class="btn btn-sm btn-outline-secondary"
                       data-bs-toggle="collapse" data-bs-target="#extra-fields"
                       aria-expanded="' . ($has_extra ? 'true' : 'false') . '">';
-        echo '<i class="fas ' . $chevron_class . ' me-1" id="extra-fields-icon"></i>Campos adicionales';
+        echo '<i class="fas ' . $chevron_class . ' me-1" id="extra-fields-icon"></i>' . __('Additional fields', 'lagapenak');
         echo '</button>';
         echo '</div>';
 
@@ -542,7 +519,7 @@ class PluginLagapenakLoan extends CommonDBTM {
 
         echo '<div class="row g-3 mb-3">';
         echo '<div class="col-md-12">';
-        echo '<label class="form-label fw-bold">Observaciones</label>';
+        echo '<label class="form-label fw-bold">' . __('Notes', 'lagapenak') . '</label>';
         echo '<textarea class="form-control" name="observaciones" rows="3">'
             . htmlspecialchars($loan['observaciones'] ?? '') . '</textarea>';
         echo '</div>';
@@ -570,33 +547,33 @@ class PluginLagapenakLoan extends CommonDBTM {
         };
 
         echo '<div class="row g-3 mb-3">';
-        echo '<div class="col-md-8"><label class="form-label fw-bold">Nombre / Referencia</label>';
+        echo '<div class="col-md-8"><label class="form-label fw-bold">' . __('Name / Reference', 'lagapenak') . '</label>';
         echo '<p class="form-control-plaintext">' . $str('name') . '</p></div>';
-        echo '<div class="col-md-4"><label class="form-label fw-bold">Estado</label>';
+        echo '<div class="col-md-4"><label class="form-label fw-bold">' . __('Status', 'lagapenak') . '</label>';
         echo '<p class="mt-1">' . self::getStatusBadge((int)($loan['status'] ?? self::STATUS_PENDING)) . '</p></div>';
         echo '</div>';
 
         echo '<div class="row g-3 mb-3">';
         $eid = (int)($loan['entities_id'] ?? 0);
         $entity_name = Dropdown::getDropdownName('glpi_entities', $eid);
-        echo '<div class="col-md-6"><label class="form-label fw-bold">Entidad</label>';
+        echo '<div class="col-md-6"><label class="form-label fw-bold">' . __('Entity', 'lagapenak') . '</label>';
         // getDropdownName already returns HTML-ready content (uses &#62; for >)
         echo '<p class="form-control-plaintext">' . $entity_name . '</p></div>';
         echo '</div>';
 
         echo '<div class="row g-3 mb-3">';
-        echo '<div class="col-md-6"><label class="form-label fw-bold">Solicitante</label>';
+        echo '<div class="col-md-6"><label class="form-label fw-bold">' . __('Requester', 'lagapenak') . '</label>';
         echo '<p class="form-control-plaintext">' . $user_name($loan['users_id'] ?? 0) . '</p></div>';
-        echo '<div class="col-md-6"><label class="form-label fw-bold">Destinatario</label>';
+        echo '<div class="col-md-6"><label class="form-label fw-bold">' . __('Recipient', 'lagapenak') . '</label>';
         echo '<p class="form-control-plaintext">' . $user_name($loan['users_id_destinatario'] ?? 0) . '</p></div>';
         echo '</div>';
 
         $fi = Html::convDateTime($loan['fecha_inicio'] ?? '') ?: '<span class="text-muted">—</span>';
         $ff = Html::convDateTime($loan['fecha_fin']    ?? '') ?: '<span class="text-muted">—</span>';
         echo '<div class="row g-3 mb-3">';
-        echo '<div class="col-md-6"><label class="form-label fw-bold">Fecha inicio</label>';
+        echo '<div class="col-md-6"><label class="form-label fw-bold">' . __('Start date', 'lagapenak') . '</label>';
         echo '<p class="form-control-plaintext">' . $fi . '</p></div>';
-        echo '<div class="col-md-6"><label class="form-label fw-bold">Fecha fin</label>';
+        echo '<div class="col-md-6"><label class="form-label fw-bold">' . __('End date', 'lagapenak') . '</label>';
         echo '<p class="form-control-plaintext">' . $ff . '</p></div>';
         echo '</div>';
 
@@ -620,7 +597,7 @@ class PluginLagapenakLoan extends CommonDBTM {
         echo '</div>';
 
         echo '<div class="row g-3 mb-3">';
-        echo '<div class="col-md-12"><label class="form-label fw-bold">Observaciones</label>';
+        echo '<div class="col-md-12"><label class="form-label fw-bold">' . __('Notes', 'lagapenak') . '</label>';
         $obs = trim($loan['observaciones'] ?? '');
         echo '<p class="form-control-plaintext">'
             . (empty($obs) ? '<span class="text-muted">—</span>' : nl2br(htmlspecialchars($obs)))
@@ -631,7 +608,7 @@ class PluginLagapenakLoan extends CommonDBTM {
     // ── Cron: recordatorio de devolución ─────────────────────────────────────
 
     public static function cronInfo(string $name): array {
-        return ['description' => 'Envía recordatorios de devolución de préstamos próximos a vencer (2 días antes)'];
+        return ['description' => __('Sends return reminders for loans due in 2 days', 'lagapenak')];
     }
 
     /**

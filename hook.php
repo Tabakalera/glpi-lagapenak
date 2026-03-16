@@ -71,7 +71,7 @@ function plugin_lagapenak_install() {
         }
     }
 
-    ProfileRight::addProfileRights(['plugin_lagapenak_loan', 'plugin_lagapenak_albaran']);
+    ProfileRight::addProfileRights(['plugin_lagapenak_loan']);
 
     // Default display columns for loan list (users_id=0 = global default)
     // 3=Estado, 4=Solicitante, 5=Destinatario, 6=F.Inicio, 7=F.Fin

@@ -23,12 +23,12 @@ class PluginLagapenakLoanItem extends CommonDBTM {
 
     static function getStatusName($status) {
         $statuses = [
-            self::STATUS_PENDING   => 'Pendiente',
-            self::STATUS_DELIVERED => 'Entregado',
-            self::STATUS_RETURNED  => 'Devuelto',
-            self::STATUS_INCIDENT  => 'Incidencia',
+            self::STATUS_PENDING   => __('Pending', 'lagapenak'),
+            self::STATUS_DELIVERED => __('Delivered', 'lagapenak'),
+            self::STATUS_RETURNED  => __('Returned', 'lagapenak'),
+            self::STATUS_INCIDENT  => __('Incident', 'lagapenak'),
         ];
-        return $statuses[$status] ?? 'Desconocido';
+        return $statuses[$status] ?? __('Unknown', 'lagapenak');
     }
 
     static function getStatusBadge($status) {
@@ -46,12 +46,12 @@ class PluginLagapenakLoanItem extends CommonDBTM {
 
     static function getAssetTypes() {
         return [
-            'Computer'         => 'Ordenador',
-            'Monitor'          => 'Monitor',
-            'NetworkEquipment' => 'Equip. de red',
-            'Peripheral'       => 'Periférico',
-            'Phone'            => 'Teléfono',
-            'Printer'          => 'Impresora',
+            'Computer'         => __('Computer', 'lagapenak'),
+            'Monitor'          => __('Monitor', 'lagapenak'),
+            'NetworkEquipment' => __('Network Equipment', 'lagapenak'),
+            'Peripheral'       => __('Peripheral', 'lagapenak'),
+            'Phone'            => __('Phone', 'lagapenak'),
+            'Printer'          => __('Printer', 'lagapenak'),
         ];
     }
 
@@ -318,11 +318,11 @@ class PluginLagapenakLoanItem extends CommonDBTM {
     // ── Native GLPI search support ───────────────────────────────────────────
 
     static function canView() {
-        return PluginLagapenakLoan::hasPluginRight(PluginLagapenakLoan::$rightname, READ);
+        return Session::haveRight(self::$rightname, READ);
     }
 
     static function getTypeName($nb = 0) {
-        return 'Activos en préstamo';
+        return _n('Loan asset', 'Loan assets', $nb, 'lagapenak');
     }
 
     function rawSearchOptions() {
@@ -345,7 +345,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
             'id'            => 1,
             'table'         => self::getTable(),
             'field'         => 'items_id',
-            'name'          => 'Activo',
+            'name'          => __('Asset', 'lagapenak'),
             'datatype'      => 'string',
             'computation'   => $name_sql,
             'massiveaction' => false,
@@ -355,7 +355,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
             'id'            => 2,
             'table'         => self::getTable(),
             'field'         => 'itemtype',
-            'name'          => 'Tipo',
+            'name'          => __('Type', 'lagapenak'),
             'datatype'      => 'specific',
             'massiveaction' => false,
         ];
@@ -364,7 +364,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
             'id'            => 3,
             'table'         => self::getTable(),
             'field'         => 'status',
-            'name'          => 'Estado',
+            'name'          => __('Status', 'lagapenak'),
             'datatype'      => 'specific',
             'massiveaction' => false,
         ];
@@ -373,7 +373,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
             'id'            => 4,
             'table'         => self::getTable(),
             'field'         => 'date_checkout',
-            'name'          => 'Fecha entrega',
+            'name'          => __('Delivery date', 'lagapenak'),
             'datatype'      => 'datetime',
             'massiveaction' => false,
         ];
@@ -382,7 +382,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
             'id'            => 5,
             'table'         => self::getTable(),
             'field'         => 'date_checkin',
-            'name'          => 'Fecha devolución',
+            'name'          => __('Return date', 'lagapenak'),
             'datatype'      => 'datetime',
             'massiveaction' => false,
         ];
@@ -395,7 +395,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
             'table'         => 'glpi_plugin_lagapenak_loans',
             'field'         => 'name',
             'linkfield'     => 'loans_id',
-            'name'          => 'Préstamo',
+            'name'          => __('Loan', 'lagapenak'),
             'datatype'      => 'string',
             'massiveaction' => false,
             'joinparams'    => $loan_join,
@@ -406,7 +406,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
             'table'         => 'glpi_plugin_lagapenak_loans',
             'field'         => 'fecha_inicio',
             'linkfield'     => 'loans_id',
-            'name'          => 'Inicio préstamo',
+            'name'          => __('Loan start', 'lagapenak'),
             'datatype'      => 'datetime',
             'massiveaction' => false,
             'joinparams'    => $loan_join,
@@ -417,7 +417,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
             'table'         => 'glpi_plugin_lagapenak_loans',
             'field'         => 'fecha_fin',
             'linkfield'     => 'loans_id',
-            'name'          => 'Fin préstamo',
+            'name'          => __('Loan end', 'lagapenak'),
             'datatype'      => 'datetime',
             'massiveaction' => false,
             'joinparams'    => $loan_join,
@@ -428,7 +428,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
             'table'         => 'glpi_plugin_lagapenak_loans',
             'field'         => 'status',
             'linkfield'     => 'loans_id',
-            'name'          => 'Estado préstamo',
+            'name'          => __('Loan status', 'lagapenak'),
             'datatype'      => 'specific',
             'massiveaction' => false,
             'joinparams'    => $loan_join,
@@ -466,10 +466,10 @@ class PluginLagapenakLoanItem extends CommonDBTM {
                 return Dropdown::showFromArray(
                     $name,
                     [
-                        self::STATUS_PENDING   => 'Pendiente',
-                        self::STATUS_DELIVERED => 'Entregado',
-                        self::STATUS_RETURNED  => 'Devuelto',
-                        self::STATUS_INCIDENT  => 'Incidencia',
+                        self::STATUS_PENDING   => __('Pending', 'lagapenak'),
+                        self::STATUS_DELIVERED => __('Delivered', 'lagapenak'),
+                        self::STATUS_RETURNED  => __('Returned', 'lagapenak'),
+                        self::STATUS_INCIDENT  => __('Incident', 'lagapenak'),
                     ],
                     array_merge($options, ['value' => $values[$field] ?? ''])
                 );

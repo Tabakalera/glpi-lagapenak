@@ -13,7 +13,7 @@ define('PLUGIN_LAGAPENAK_MAX_GLPI', '10.99.99');
 
 function plugin_version_lagapenak() {
     return [
-        'name'         => 'Lagapenak - Gestor de Préstamos',
+        'name'         => 'Lagapenak - Asset Loan Manager',
         'version'      => PLUGIN_LAGAPENAK_VERSION,
         'author'       => 'Tabakalera',
         'license'      => 'GPL v2+',
@@ -31,7 +31,7 @@ function plugin_version_lagapenak() {
 function plugin_lagapenak_check_prerequisites() {
     if (version_compare(GLPI_VERSION, PLUGIN_LAGAPENAK_MIN_GLPI, 'lt')
         || version_compare(GLPI_VERSION, PLUGIN_LAGAPENAK_MAX_GLPI, 'gt')) {
-        echo 'Este plugin requiere GLPI >= ' . PLUGIN_LAGAPENAK_MIN_GLPI;
+        echo 'This plugin requires GLPI >= ' . PLUGIN_LAGAPENAK_MIN_GLPI;
         return false;
     }
     return true;
@@ -53,6 +53,8 @@ function plugin_lagapenak_addDefaultWhere($itemtype) {
 }
 
 function plugin_init_lagapenak() {
+    Plugin::loadLang('lagapenak');
+
     Plugin::registerClass('PluginLagapenakLoan');
     Plugin::registerClass('PluginLagapenakProfile', ['addtabon' => ['Profile']]);
 
@@ -60,7 +62,7 @@ function plugin_init_lagapenak() {
 
     // Register daily cron for return reminders (runs once, safe to call repeatedly)
     CronTask::register('PluginLagapenakLoan', 'LoanReminder', DAY_TIMESTAMP, [
-        'comment' => 'Recordatorio de devolución de préstamos próximos a vencer',
+        'comment' => 'Send return reminders for loans due in 2 days',
         'state'   => CronTask::STATE_WAITING,
         'mode'    => CronTask::MODE_INTERNAL,
     ]);

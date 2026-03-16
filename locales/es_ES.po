@@ -1,0 +1,357 @@
+# Spanish (Spain) translations for Lagapenak GLPI plugin
+# Copyright (C) 2024 Tabakalera
+# License: GPL v2+
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: lagapenak 1.1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-03-16 00:00+0000\n"
+"PO-Revision-Date: 2026-03-16 00:00+0000\n"
+"Last-Translator: \n"
+"Language-Team: Spanish (Spain)\n"
+"Language: es_ES\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+# ── Type names ───────────────────────────────────────────────────────────────
+
+msgid "Loan"
+msgid_plural "Loans"
+msgstr[0] "Préstamo"
+msgstr[1] "Préstamos"
+
+msgid "Loan asset"
+msgid_plural "Loan assets"
+msgstr[0] "Activo en préstamo"
+msgstr[1] "Activos en préstamo"
+
+msgid "asset"
+msgid_plural "assets"
+msgstr[0] "activo"
+msgstr[1] "activos"
+
+# ── Menu ─────────────────────────────────────────────────────────────────────
+
+msgid "Lagapenak - Loans"
+msgstr "Lagapenak - Préstamos"
+
+# ── Loan statuses ─────────────────────────────────────────────────────────────
+
+msgid "Pending"
+msgstr "Pendiente"
+
+msgid "In progress"
+msgstr "En curso"
+
+msgid "Delivered"
+msgstr "Entregado"
+
+msgid "Returned"
+msgstr "Devuelto"
+
+msgid "Cancelled"
+msgstr "Cancelado"
+
+msgid "Unknown"
+msgstr "Desconocido"
+
+# ── Item statuses ─────────────────────────────────────────────────────────────
+
+msgid "Incident"
+msgstr "Incidencia"
+
+# ── Asset types ───────────────────────────────────────────────────────────────
+
+msgid "Computer"
+msgstr "Ordenador"
+
+msgid "Monitor"
+msgstr "Monitor"
+
+msgid "Network Equipment"
+msgstr "Equip. de red"
+
+msgid "Peripheral"
+msgstr "Periférico"
+
+msgid "Phone"
+msgstr "Teléfono"
+
+msgid "Printer"
+msgstr "Impresora"
+
+# ── Search options ────────────────────────────────────────────────────────────
+
+msgid "Name / Reference"
+msgstr "Nombre / Referencia"
+
+msgid "Status"
+msgstr "Estado"
+
+msgid "Entity"
+msgstr "Entidad"
+
+msgid "Requester"
+msgstr "Solicitante"
+
+msgid "Recipient"
+msgstr "Destinatario"
+
+msgid "Start date"
+msgstr "Fecha inicio"
+
+msgid "End date"
+msgstr "Fecha fin"
+
+msgid "Notes"
+msgstr "Observaciones"
+
+msgid "Delivery note"
+msgstr "Albarán"
+
+msgid "Assets"
+msgstr "Activos"
+
+msgid "Asset"
+msgstr "Activo"
+
+msgid "Type"
+msgstr "Tipo"
+
+msgid "Delivery date"
+msgstr "Fecha entrega"
+
+msgid "Return date"
+msgstr "Fecha devolución"
+
+msgid "Loan start"
+msgstr "Inicio préstamo"
+
+msgid "Loan end"
+msgstr "Fin préstamo"
+
+msgid "Loan status"
+msgstr "Estado préstamo"
+
+msgid "View signed delivery note"
+msgstr "Ver albarán firmado"
+
+# ── Form labels ───────────────────────────────────────────────────────────────
+
+msgid "Automatic"
+msgstr "Automático"
+
+msgid "Additional fields"
+msgstr "Campos adicionales"
+
+# ── Cron ─────────────────────────────────────────────────────────────────────
+
+msgid "Sends return reminders for loans due in 2 days"
+msgstr "Envía recordatorios de devolución de préstamos próximos a vencer (2 días)"
+
+# ── Notifications ─────────────────────────────────────────────────────────────
+
+msgid "Loan #"
+msgstr "Préstamo #"
+
+msgid "New material loan — %s"
+msgstr "Nuevo préstamo de material — %s"
+
+msgid "Return reminder — %s"
+msgstr "Recordatorio de devolución — %s"
+
+msgid "Hello, %s,"
+msgstr "Hola, %s,"
+
+msgid "Hello,"
+msgstr "Hola,"
+
+msgid "A new material loan has been registered in your name."
+msgstr "Se ha registrado un nuevo préstamo de material a tu nombre."
+
+msgid "This is a reminder that the following material loan is due soon. Please prepare the return of the items."
+msgstr "Te recordamos que el siguiente préstamo de material vence próximamente. Por favor, prepara la devolución del material."
+
+msgid "Pickup date"
+msgstr "Fecha de recogida"
+
+msgid "View loan"
+msgstr "Ver préstamo"
+
+msgid "This message was generated automatically by the %s loan management system."
+msgstr "Este mensaje ha sido generado automáticamente por el sistema de gestión de préstamos de %s."
+
+# ── loan.form.php ─────────────────────────────────────────────────────────────
+
+msgid "The Name / Reference field is required."
+msgstr "El campo Nombre / Referencia es obligatorio."
+
+msgid "The Entity is required."
+msgstr "La Entidad es obligatoria."
+
+msgid "The Recipient is required."
+msgstr "El Destinatario es obligatorio."
+
+msgid "The start and end dates are required."
+msgstr "Las fechas de inicio y fin son obligatorias."
+
+msgid "This asset is already booked in another loan with overlapping dates: "
+msgstr "El activo ya está reservado en otro préstamo con fechas solapadas: "
+
+msgid "This asset is already added to this loan. To change its dates use the edit button."
+msgstr "Este activo ya está añadido a este préstamo. Para cambiar sus fechas usa el botón de edición."
+
+msgid "Loan #%d"
+msgstr "Préstamo #%d"
+
+msgid "New request"
+msgstr "Nueva solicitud"
+
+msgid "Edit loan #%d"
+msgstr "Editar préstamo #%d"
+
+msgid "New loan"
+msgstr "Nuevo préstamo"
+
+msgid "My request #%d"
+msgstr "Mi solicitud #%d"
+
+msgid "Save changes"
+msgstr "Guardar cambios"
+
+msgid "Submit request"
+msgstr "Enviar solicitud"
+
+msgid "Back"
+msgstr "Volver"
+
+msgid "Delete this loan?"
+msgstr "¿Eliminar este préstamo?"
+
+msgid "Delete"
+msgstr "Eliminar"
+
+msgid "Your request has been registered. The supervisor will manage the assets and loan status."
+msgstr "Su solicitud ha sido registrada. El supervisor gestionará los activos y el estado del préstamo."
+
+msgid "Loan assets"
+msgstr "Activos del préstamo"
+
+msgid "Mark all pending assets as Delivered?"
+msgstr "¿Marcar todos los activos pendientes como Entregado?"
+
+msgid "All delivered"
+msgstr "Todo entregado"
+
+msgid "Mark all delivered assets as Returned?"
+msgstr "¿Marcar todos los activos entregados como Devuelto?"
+
+msgid "All returned"
+msgstr "Todo devuelto"
+
+msgid "Delivery"
+msgstr "Entrega"
+
+msgid "Return"
+msgstr "Devolución"
+
+msgid "No assets assigned yet."
+msgstr "No hay activos asignados todavía."
+
+msgid "Mark as Delivered"
+msgstr "Marcar como Entregado"
+
+msgid "Mark as Returned"
+msgstr "Marcar como Devuelto"
+
+msgid "Log incident"
+msgstr "Registrar incidencia"
+
+msgid "Remove"
+msgstr "Quitar"
+
+msgid "Remove this asset?"
+msgstr "¿Quitar este activo?"
+
+msgid "Edit dates"
+msgstr "Editar fechas"
+
+msgid "Close"
+msgstr "Cerrar"
+
+msgid "Save dates"
+msgstr "Guardar fechas"
+
+msgid "Add asset"
+msgstr "Añadir activo"
+
+msgid "Asset type"
+msgstr "Tipo de activo"
+
+msgid "Only assets with \"Allow reservations\" enabled are shown."
+msgstr "Solo se muestran activos con \"Autorizar reservas\" activado."
+
+msgid "No assets of type <strong>%s</strong> are authorized for loan."
+msgstr "No hay activos de tipo <strong>%s</strong> autorizados para préstamo."
+
+msgid "To authorize: open the asset → Reservations tab → enable Allow reservations."
+msgstr "Para autorizar: abre el activo → pestaña Reservas → activa Autorizar las reservas."
+
+msgid "Add"
+msgstr "Añadir"
+
+msgid "Save the loan first to add assets."
+msgstr "Guarda el préstamo primero para poder añadir activos."
+
+# ── albaran.php ───────────────────────────────────────────────────────────────
+
+msgid "Back to loan"
+msgstr "Volver al préstamo"
+
+msgid "Print / Save PDF"
+msgstr "Imprimir / Guardar PDF"
+
+msgid "Signature saved successfully."
+msgstr "Firma guardada correctamente."
+
+msgid "Full name"
+msgstr "Nombre y apellidos"
+
+msgid "Passport / ID"
+msgstr "Pasaporte / DNI"
+
+msgid "Project"
+msgstr "Proyecto"
+
+msgid "Material / equipment"
+msgstr "Material/equipo"
+
+msgid "No assets"
+msgstr "Sin activos"
+
+msgid "Signature"
+msgstr "Firma"
+
+msgid "draw with your finger or mouse"
+msgstr "dibuja con el dedo o el ratón"
+
+msgid "Clear"
+msgstr "Borrar"
+
+msgid "Save signature and generate PDF"
+msgstr "Guardar firma y generar PDF"
+
+msgid "Sign again (overwrites existing)"
+msgstr "Volver a firmar (sobreescribe el PDF)"
+
+msgid "Please draw your signature before saving."
+msgstr "Por favor, dibuja tu firma antes de guardar."
+
+msgid "Number"
+msgstr "Número"
+
+msgid "Project name"
+msgstr "Nombre del proyecto"

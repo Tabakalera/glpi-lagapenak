@@ -13,14 +13,6 @@ $ID            = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $form_error    = '';
 $can_supervise = PluginLagapenakLoan::canSupervise();
 
-// Gate: creating a new loan requires CREATE right; viewing an existing one requires READ.
-if ($ID === 0 && !PluginLagapenakLoan::canCreate()) {
-    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
-}
-if ($ID > 0 && !PluginLagapenakLoan::canView() && !$can_supervise) {
-    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
-}
-
 // ── Handle loan CRUD ────────────────────────────────────────────────────────
 if (isset($_POST['save_loan'])) {
     $is_new = ($ID == 0);
@@ -28,13 +20,13 @@ if (isset($_POST['save_loan'])) {
         Html::back(); // only supervisor can edit existing loans
     } else {
         if (empty(trim($_POST['name'] ?? ''))) {
-            $form_error = 'El campo Nombre / Referencia es obligatorio.';
+            $form_error = __('The Name / Reference field is required.', 'lagapenak');
         } elseif (!isset($_POST['entities_id']) || $_POST['entities_id'] === '') {
-            $form_error = 'La Entidad es obligatoria.';
+            $form_error = __('The Entity is required.', 'lagapenak');
         } elseif (empty($_POST['users_id_destinatario']) || (int)$_POST['users_id_destinatario'] === 0) {
-            $form_error = 'El Destinatario es obligatorio.';
+            $form_error = __('The Recipient is required.', 'lagapenak');
         } elseif (empty($_POST['fecha_inicio']) || empty($_POST['fecha_fin'])) {
-            $form_error = 'Las fechas de inicio y fin son obligatorias.';
+            $form_error = __('The start and end dates are required.', 'lagapenak');
         } else {
             if ($ID > 0) {
                 $_POST['id'] = $ID;
@@ -89,7 +81,7 @@ if (isset($_POST['add_loanitem'])) {
                  . ' · ' . $fi . ' → ' . $ff;
         }, $conflicts));
         Session::addMessageAfterRedirect(
-            'El activo ya está reservado en otro préstamo con fechas solapadas: ' . $conflict_list,
+            __('This asset is already booked in another loan with overlapping dates: ', 'lagapenak') . $conflict_list,
             false,
             ERROR
         );
@@ -101,7 +93,7 @@ if (isset($_POST['add_loanitem'])) {
         );
         if ($added === false) {
             Session::addMessageAfterRedirect(
-                'Este activo ya está añadido a este préstamo. Para cambiar sus fechas usa el botón ✏️ de edición.',
+                __('This asset is already added to this loan. To change its dates use the edit button.', 'lagapenak'),
                 false,
                 WARNING
             );
@@ -187,7 +179,7 @@ if ($ID > 0) {
     }
 }
 
-$title     = $ID > 0 ? 'Préstamo #' . $ID : 'Nueva solicitud';
+$title     = $ID > 0 ? sprintf(__('Loan #%d', 'lagapenak'), $ID) : __('New request', 'lagapenak');
 $edit_item = isset($_GET['edit_item']) ? (int) $_GET['edit_item'] : 0;
 
 Html::header($title, $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
@@ -199,15 +191,15 @@ echo '<nav aria-label="breadcrumb" class="mb-3">';
 echo '<ol class="breadcrumb">';
 echo '<li class="breadcrumb-item">';
 echo '<a href="' . Plugin::getWebDir('lagapenak') . '/front/loan.php">';
-echo '<i class="fas fa-box-open me-1"></i>Préstamos</a></li>';
+echo '<i class="fas fa-box-open me-1"></i>' . __('Loans', 'lagapenak') . '</a></li>';
 echo '<li class="breadcrumb-item active">' . htmlspecialchars($title) . '</li>';
 echo '</ol>';
 echo '</nav>';
 
 // ── Main card ────────────────────────────────────────────────────────────────
 $card_title = $can_supervise
-    ? ($ID > 0 ? 'Editar préstamo #' . $ID : 'Nuevo préstamo')
-    : ($ID > 0 ? 'Mi solicitud #' . $ID   : 'Nueva solicitud');
+    ? ($ID > 0 ? sprintf(__('Edit loan #%d', 'lagapenak'), $ID) : __('New loan', 'lagapenak'))
+    : ($ID > 0 ? sprintf(__('My request #%d', 'lagapenak'), $ID) : __('New request', 'lagapenak'));
 
 echo '<div class="card">';
 echo '<div class="card-header"><h4 class="mb-0">' . htmlspecialchars($card_title) . '</h4></div>';
@@ -216,14 +208,6 @@ echo '<div class="card-body">';
 if ($form_error) {
     echo '<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>' . htmlspecialchars($form_error) . '</div>';
 }
-
-// Albarán access — computed here so it's available in both edit and read-only views
-$_lf_uid     = (int)($_SESSION['glpiID'] ?? 0);
-$_lf_is_req  = (int)($loan->fields['users_id'] ?? 0) === $_lf_uid;
-$_lf_is_dest = (int)($loan->fields['users_id_destinatario'] ?? 0) === $_lf_uid;
-$can_albaran = $can_supervise
-    || (PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_albaran', READ)
-        && ($_lf_is_req || $_lf_is_dest));
 
 if ($can_supervise || $ID == 0) {
     // ── Editable form ────────────────────────────────────────────────────────
@@ -235,41 +219,34 @@ if ($can_supervise || $ID == 0) {
 
     echo '<div class="d-flex gap-2 mt-3">';
     echo '<button type="submit" name="save_loan" class="btn btn-primary">';
-    echo '<i class="fas fa-save me-1"></i>' . ($ID > 0 ? 'Guardar cambios' : 'Enviar solicitud');
+    echo '<i class="fas fa-save me-1"></i>' . ($ID > 0 ? __('Save changes', 'lagapenak') : __('Submit request', 'lagapenak'));
     echo '</button>';
     echo '<a href="' . Plugin::getWebDir('lagapenak') . '/front/loan.php" class="btn btn-secondary">';
-    echo '<i class="fas fa-arrow-left me-1"></i>Volver';
+    echo '<i class="fas fa-arrow-left me-1"></i>' . __('Back', 'lagapenak');
     echo '</a>';
-    if ($ID > 0 && $can_albaran) {
+    if ($ID > 0 && $can_supervise) {
         $albaran_url = Plugin::getWebDir('lagapenak', true) . '/front/albaran.php?id=' . $ID;
         echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
-        echo '<i class="fas fa-file-signature me-1"></i>Albarán</a>';
-    }
-    if ($ID > 0 && $can_supervise) {
+        echo '<i class="fas fa-file-signature me-1"></i>' . __('Delivery note', 'lagapenak') . '</a>';
         echo '<button type="submit" name="delete_loan" class="btn btn-danger ms-auto"
-                      onclick="return confirm(\'¿Eliminar este préstamo?\')">';
-        echo '<i class="fas fa-trash me-1"></i>Eliminar';
+                      onclick="return confirm(\'' . __('Delete this loan?', 'lagapenak') . '\')">';
+        echo '<i class="fas fa-trash me-1"></i>' . __('Delete', 'lagapenak');
         echo '</button>';
     }
     echo '</div>';
     echo '</form>';
 
 } else {
-    // ── Read-only view (non-supervisor viewing existing loan) ─────────────────
+    // ── Read-only view (requester with existing loan) ─────────────────────────
     echo '<div class="alert alert-info py-2 mb-3">';
     echo '<i class="fas fa-info-circle me-2"></i>';
-    echo 'Su solicitud ha sido registrada. El supervisor gestionará los activos y el estado del préstamo.';
+    echo __('Your request has been registered. The supervisor will manage the assets and loan status.', 'lagapenak');
     echo '</div>';
     $loan->renderReadOnly($ID);
-    echo '<div class="d-flex gap-2 mt-3">';
+    echo '<div class="mt-3">';
     echo '<a href="' . Plugin::getWebDir('lagapenak') . '/front/loan.php" class="btn btn-secondary">';
-    echo '<i class="fas fa-arrow-left me-1"></i>Volver';
+    echo '<i class="fas fa-arrow-left me-1"></i>' . __('Back', 'lagapenak');
     echo '</a>';
-    if ($can_albaran) {
-        $albaran_url = Plugin::getWebDir('lagapenak', true) . '/front/albaran.php?id=' . $ID;
-        echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
-        echo '<i class="fas fa-file-signature me-1"></i>Albarán</a>';
-    }
     echo '</div>';
 }
 
@@ -301,16 +278,16 @@ if ($ID > 0) {
 
     echo '<div class="card mt-4">';
     echo '<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">';
-    echo '<h5 class="mb-0"><i class="fas fa-boxes me-2"></i>Activos del préstamo</h5>';
+    echo '<h5 class="mb-0"><i class="fas fa-boxes me-2"></i>' . __('Loan assets', 'lagapenak') . '</h5>';
     echo '<div class="d-flex align-items-center gap-2">';
-    echo '<span class="badge bg-primary">' . count($current_items) . ' activo(s)</span>';
+    echo '<span class="badge bg-primary">' . count($current_items) . ' ' . _n('asset', 'assets', count($current_items), 'lagapenak') . '</span>';
     if ($has_pending) {
         echo '<form method="POST" action="' . $base_url . '" class="d-inline">';
         echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
         echo '<input type="hidden" name="bulk_update_items" value="1">';
         echo '<input type="hidden" name="bulk_status" value="' . PluginLagapenakLoanItem::STATUS_DELIVERED . '">';
-        echo '<button type="submit" class="btn btn-sm btn-success" onclick="return confirm(\'¿Marcar todos los activos pendientes como Entregado?\')">';
-        echo '<i class="fas fa-arrow-right me-1"></i>Todo entregado</button>';
+        echo '<button type="submit" class="btn btn-sm btn-success" onclick="return confirm(\'' . __('Mark all pending assets as Delivered?', 'lagapenak') . '\')">';
+        echo '<i class="fas fa-arrow-right me-1"></i>' . __('All delivered', 'lagapenak') . '</button>';
         echo '</form>';
     }
     if ($has_delivered) {
@@ -318,8 +295,8 @@ if ($ID > 0) {
         echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
         echo '<input type="hidden" name="bulk_update_items" value="1">';
         echo '<input type="hidden" name="bulk_status" value="' . PluginLagapenakLoanItem::STATUS_RETURNED . '">';
-        echo '<button type="submit" class="btn btn-sm btn-primary" onclick="return confirm(\'¿Marcar todos los activos entregados como Devuelto?\')">';
-        echo '<i class="fas fa-arrow-left me-1"></i>Todo devuelto</button>';
+        echo '<button type="submit" class="btn btn-sm btn-primary" onclick="return confirm(\'' . __('Mark all delivered assets as Returned?', 'lagapenak') . '\')">';
+        echo '<i class="fas fa-arrow-left me-1"></i>' . __('All returned', 'lagapenak') . '</button>';
         echo '</form>';
     }
     echo '</div>';
@@ -331,10 +308,10 @@ if ($ID > 0) {
     echo '<table class="table table-sm table-bordered table-hover mb-3">';
     echo '<thead class="table-light"><tr>';
     echo '<th style="width:36px">#</th>';
-    echo '<th>Tipo</th><th>Activo</th>';
-    echo '<th>Entrega</th>';
-    echo '<th>Devolución</th>';
-    echo '<th>Estado</th>';
+    echo '<th>' . __('Type', 'lagapenak') . '</th><th>' . __('Asset', 'lagapenak') . '</th>';
+    echo '<th>' . __('Delivery', 'lagapenak') . '</th>';
+    echo '<th>' . __('Return', 'lagapenak') . '</th>';
+    echo '<th>' . __('Status', 'lagapenak') . '</th>';
     if ($show_actions_col) {
         echo '<th style="width:140px"></th>';
     }
@@ -343,7 +320,7 @@ if ($ID > 0) {
 
     if (empty($current_items)) {
         echo '<tr><td colspan="' . $colspan . '" class="text-center text-muted py-3">';
-        echo '<i class="fas fa-inbox me-1"></i>No hay activos asignados todavía.';
+        echo '<i class="fas fa-inbox me-1"></i>' . __('No assets assigned yet.', 'lagapenak');
         echo '</td></tr>';
     } else {
         foreach ($current_items as $item) {
@@ -376,7 +353,7 @@ if ($ID > 0) {
                     echo '<input type="hidden" name="item_date_checkout" value="' . htmlspecialchars($item['date_checkout'] ?? '') . '">';
                     echo '<input type="hidden" name="item_date_checkin"  value="' . htmlspecialchars($item['date_checkin']  ?? '') . '">';
                     echo '<button type="submit" name="item_status" value="' . PluginLagapenakLoanItem::STATUS_DELIVERED . '"'
-                       . ' class="btn btn-sm btn-success" title="Marcar como Entregado">'
+                       . ' class="btn btn-sm btn-success" title="' . __('Mark as Delivered', 'lagapenak') . '">'
                        . '<i class="fas fa-arrow-right"></i></button>';
                     echo '</form> ';
                 } elseif ($item_st === PluginLagapenakLoanItem::STATUS_DELIVERED) {
@@ -387,10 +364,10 @@ if ($ID > 0) {
                     echo '<input type="hidden" name="item_date_checkout" value="' . htmlspecialchars($item['date_checkout'] ?? '') . '">';
                     echo '<input type="hidden" name="item_date_checkin"  value="' . htmlspecialchars($item['date_checkin']  ?? '') . '">';
                     echo '<button type="submit" name="item_status" value="' . PluginLagapenakLoanItem::STATUS_RETURNED . '"'
-                       . ' class="btn btn-sm btn-primary" title="Marcar como Devuelto">'
+                       . ' class="btn btn-sm btn-primary" title="' . __('Mark as Returned', 'lagapenak') . '">'
                        . '<i class="fas fa-arrow-left"></i></button>';
                     echo ' <button type="submit" name="item_status" value="' . PluginLagapenakLoanItem::STATUS_INCIDENT . '"'
-                       . ' class="btn btn-sm btn-outline-danger" title="Registrar incidencia">'
+                       . ' class="btn btn-sm btn-outline-danger" title="' . __('Log incident', 'lagapenak') . '">'
                        . '<i class="fas fa-exclamation-triangle"></i></button>';
                     echo '</form> ';
                 }
@@ -405,18 +382,18 @@ if ($ID > 0) {
                 echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
                 echo '<input type="hidden" name="loanitem_id" value="' . $item['id'] . '">';
                 echo '<button type="submit" name="remove_loanitem" class="btn btn-sm btn-outline-danger"'
-                   . ' title="Quitar" onclick="return confirm(\'¿Quitar este activo?\')">'
+                   . ' title="' . __('Remove', 'lagapenak') . '" onclick="return confirm(\'' . __('Remove this asset?', 'lagapenak') . '\')">'
                    . '<i class="fas fa-times"></i></button>';
                 echo '</form>';
                 echo '</td>';
             } elseif ($is_requester_can_modify) {
-                // Requester can remove items while loan is Pendiente
+                // Requester can remove items while loan is Pending
                 echo '<td class="align-middle">';
                 echo '<form method="POST" action="' . $base_url . '" class="d-inline">';
                 echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
                 echo '<input type="hidden" name="loanitem_id" value="' . $item['id'] . '">';
                 echo '<button type="submit" name="remove_loanitem" class="btn btn-sm btn-outline-danger"'
-                   . ' title="Quitar" onclick="return confirm(\'¿Quitar este activo?\')">'
+                   . ' title="' . __('Remove', 'lagapenak') . '" onclick="return confirm(\'' . __('Remove this asset?', 'lagapenak') . '\')">'
                    . '<i class="fas fa-times"></i></button>';
                 echo '</form>';
                 echo '</td>';
@@ -439,8 +416,8 @@ if ($ID > 0) {
             $base_url = htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID;
             echo '<div class="card border-primary mb-3">';
             echo '<div class="card-header bg-primary text-white py-2 d-flex justify-content-between align-items-center">';
-            echo '<span><i class="fas fa-calendar-alt me-2"></i>Editar fechas: <strong>' . $ei_label . '</strong></span>';
-            echo '<a href="' . $base_url . '" class="btn btn-sm btn-outline-light"><i class="fas fa-times"></i> Cerrar</a>';
+            echo '<span><i class="fas fa-calendar-alt me-2"></i>' . __('Edit dates', 'lagapenak') . ': <strong>' . $ei_label . '</strong></span>';
+            echo '<a href="' . $base_url . '" class="btn btn-sm btn-outline-light"><i class="fas fa-times"></i> ' . __('Close', 'lagapenak') . '</a>';
             echo '</div>';
             echo '<div class="card-body">';
             echo '<form method="POST" action="' . $base_url . '" class="row g-3 align-items-end">';
@@ -448,14 +425,14 @@ if ($ID > 0) {
             echo '<input type="hidden" name="update_loanitem" value="1">';
             echo '<input type="hidden" name="loanitem_id" value="' . $editing_item['id'] . '">';
             echo '<input type="hidden" name="item_status" value="' . $editing_item['status'] . '">';
-            echo '<div class="col-md-4"><label class="form-label fw-bold">Fecha entrega</label>';
+            echo '<div class="col-md-4"><label class="form-label fw-bold">' . __('Delivery date', 'lagapenak') . '</label>';
             Html::showDateTimeField('item_date_checkout', ['value' => $editing_item['date_checkout'] ?? '', 'maybeempty' => true]);
             echo '</div>';
-            echo '<div class="col-md-4"><label class="form-label fw-bold">Fecha devolución</label>';
+            echo '<div class="col-md-4"><label class="form-label fw-bold">' . __('Return date', 'lagapenak') . '</label>';
             Html::showDateTimeField('item_date_checkin', ['value' => $editing_item['date_checkin'] ?? '', 'maybeempty' => true]);
             echo '</div>';
             echo '<div class="col-md-4 d-flex align-items-end">';
-            echo '<button type="submit" class="btn btn-primary w-100"><i class="fas fa-save me-1"></i>Guardar fechas</button>';
+            echo '<button type="submit" class="btn btn-primary w-100"><i class="fas fa-save me-1"></i>' . __('Save dates', 'lagapenak') . '</button>';
             echo '</div>';
             echo '</form>';
             echo '</div></div>';
@@ -465,7 +442,7 @@ if ($ID > 0) {
     // ── Add item (supervisor, or requester while loan is Pendiente) ────────────
     if ($can_supervise || $is_requester_can_modify) {
         echo '<hr>';
-        echo '<h6 class="mb-3"><i class="fas fa-plus-circle me-1"></i>Añadir activo</h6>';
+        echo '<h6 class="mb-3"><i class="fas fa-plus-circle me-1"></i>' . __('Add asset', 'lagapenak') . '</h6>';
 
         $default_checkout = $loan->fields['fecha_inicio'] ?? '';
         $default_checkin  = $loan->fields['fecha_fin']    ?? '';
@@ -473,7 +450,7 @@ if ($ID > 0) {
         // Type filter (GET — reloads page)
         echo '<div class="d-flex flex-wrap gap-3 align-items-end mb-2">';
         echo '<div>';
-        echo '<label class="form-label mb-1 fw-bold">Tipo de activo</label>';
+        echo '<label class="form-label mb-1 fw-bold">' . __('Asset type', 'lagapenak') . '</label>';
         echo '<form id="type_filter_form" method="GET" action="">';
         echo '<input type="hidden" name="id" value="' . $ID . '">';
         echo '<select name="add_type" class="form-select"
@@ -500,33 +477,33 @@ if ($ID > 0) {
             echo '<div class="row g-2 align-items-end">';
 
             echo '<div class="col-md-4">';
-            echo '<label class="form-label fw-bold">Activo</label>';
+            echo '<label class="form-label fw-bold">' . __('Asset', 'lagapenak') . '</label>';
             if ($reservable_ids === null || count($reservable_ids) > 0) {
                 $opts = ['name' => 'items_id', 'display_emptychoice' => true, 'entity' => $loan_entity];
                 if ($reservable_ids !== null) { $opts['condition'] = ['id' => $reservable_ids]; }
                 Dropdown::show($add_type, $opts);
-                echo '<small class="text-muted">Solo se muestran activos con "Autorizar reservas" activado.</small>';
+                echo '<small class="text-muted">' . __('Only assets with "Allow reservations" enabled are shown.', 'lagapenak') . '</small>';
             } else {
                 echo '<div class="alert alert-warning py-2 mb-0">';
                 echo '<i class="fas fa-exclamation-triangle me-1"></i>';
-                echo 'No hay activos de tipo <strong>' . PluginLagapenakLoanItem::getTypeLabel($add_type) . '</strong> autorizados para préstamo.';
-                echo '<br><small>Para autorizar: abre el activo → pestaña <em>Reservas</em> → activa <em>Autorizar las reservas</em>.</small>';
+                echo sprintf(__('No assets of type <strong>%s</strong> are authorized for loan.', 'lagapenak'), PluginLagapenakLoanItem::getTypeLabel($add_type));
+                echo '<br><small>' . __('To authorize: open the asset → Reservations tab → enable Allow reservations.', 'lagapenak') . '</small>';
                 echo '</div>';
             }
             echo '</div>';
 
-            echo '<div class="col-md-3"><label class="form-label fw-bold">Fecha entrega</label>';
+            echo '<div class="col-md-3"><label class="form-label fw-bold">' . __('Delivery date', 'lagapenak') . '</label>';
             Html::showDateTimeField('item_date_checkout', ['value' => $default_checkout, 'maybeempty' => true]);
             echo '</div>';
 
-            echo '<div class="col-md-3"><label class="form-label fw-bold">Fecha devolución</label>';
+            echo '<div class="col-md-3"><label class="form-label fw-bold">' . __('Return date', 'lagapenak') . '</label>';
             Html::showDateTimeField('item_date_checkin', ['value' => $default_checkin, 'maybeempty' => true]);
             echo '</div>';
 
             echo '<div class="col-md-2">';
             if ($reservable_ids === null || count($reservable_ids) > 0) {
                 echo '<button type="submit" name="add_loanitem" class="btn btn-success w-100">';
-                echo '<i class="fas fa-plus me-1"></i>Añadir</button>';
+                echo '<i class="fas fa-plus me-1"></i>' . __('Add', 'lagapenak') . '</button>';
             }
             echo '</div>';
 
@@ -536,17 +513,17 @@ if ($ID > 0) {
             echo '<div class="row g-2 align-items-end">';
 
             echo '<div class="col-md-6">';
-            echo '<label class="form-label fw-bold">Activo</label>';
+            echo '<label class="form-label fw-bold">' . __('Asset', 'lagapenak') . '</label>';
             if ($reservable_ids === null || count($reservable_ids) > 0) {
                 $opts = ['name' => 'items_id', 'display_emptychoice' => true, 'entity' => $loan_entity];
                 if ($reservable_ids !== null) { $opts['condition'] = ['id' => $reservable_ids]; }
                 Dropdown::show($add_type, $opts);
-                echo '<small class="text-muted">Solo se muestran activos con "Autorizar reservas" activado.</small>';
+                echo '<small class="text-muted">' . __('Only assets with "Allow reservations" enabled are shown.', 'lagapenak') . '</small>';
             } else {
                 echo '<div class="alert alert-warning py-2 mb-0">';
                 echo '<i class="fas fa-exclamation-triangle me-1"></i>';
-                echo 'No hay activos de tipo <strong>' . PluginLagapenakLoanItem::getTypeLabel($add_type) . '</strong> autorizados para préstamo.';
-                echo '<br><small>Para autorizar: abre el activo → pestaña <em>Reservas</em> → activa <em>Autorizar las reservas</em>.</small>';
+                echo sprintf(__('No assets of type <strong>%s</strong> are authorized for loan.', 'lagapenak'), PluginLagapenakLoanItem::getTypeLabel($add_type));
+                echo '<br><small>' . __('To authorize: open the asset → Reservations tab → enable Allow reservations.', 'lagapenak') . '</small>';
                 echo '</div>';
             }
             echo '</div>';
@@ -554,7 +531,7 @@ if ($ID > 0) {
             echo '<div class="col-md-2">';
             if ($reservable_ids === null || count($reservable_ids) > 0) {
                 echo '<button type="submit" name="add_loanitem" class="btn btn-success w-100">';
-                echo '<i class="fas fa-plus me-1"></i>Añadir</button>';
+                echo '<i class="fas fa-plus me-1"></i>' . __('Add', 'lagapenak') . '</button>';
             }
             echo '</div>';
 
@@ -570,7 +547,7 @@ if ($ID > 0) {
 } else {
     echo '<div class="alert alert-info mt-3">';
     echo '<i class="fas fa-info-circle me-2"></i>';
-    echo 'Guarda el préstamo primero para poder añadir activos.';
+    echo __('Save the loan first to add assets.', 'lagapenak');
     echo '</div>';
 }
 

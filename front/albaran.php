@@ -11,22 +11,7 @@ if ($ID <= 0) {
 }
 
 $loan = new PluginLagapenakLoan();
-if (!$loan->getFromDB($ID)) {
-    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
-}
-
-// Permission check — no hardcoding, everything from glpi_profilerights via DB query:
-// Supervisors (loan UPDATE) can always access any albarán.
-// Other users need the albaran READ right AND must be the requester or destinatario.
-$_alb_uid          = (int)($_SESSION['glpiID'] ?? 0);
-$_alb_is_requester = (int)($loan->fields['users_id'] ?? 0) === $_alb_uid;
-$_alb_is_destinat  = (int)($loan->fields['users_id_destinatario'] ?? 0) === $_alb_uid;
-$_alb_can_supervise = PluginLagapenakLoan::canSupervise();
-$_alb_has_right     = PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_albaran', READ);
-
-$can_albaran = $_alb_can_supervise
-    || ($_alb_has_right && ($_alb_is_requester || $_alb_is_destinat));
-if (!$can_albaran) {
+if (!$loan->getFromDB($ID) || !$loan->can($ID, READ)) {
     Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
 }
 
@@ -131,7 +116,7 @@ $fecha_devolucion = $loan->fields['fecha_fin']    ? Html::convDate($loan->fields
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Albarán — Préstamo #<?= $ID ?></title>
+    <title><?= __('Delivery note', 'lagapenak') ?> — <?= __('Loan', 'lagapenak') ?> #<?= $ID ?></title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="<?= htmlspecialchars($fa_css) ?>">
     <style>
@@ -153,18 +138,18 @@ $fecha_devolucion = $loan->fields['fecha_fin']    ? Html::convDate($loan->fields
     <!-- Toolbar -->
     <div class="d-flex gap-2 mb-3 flex-wrap no-print">
         <a href="<?= $plugin_web ?>/front/loan.form.php?id=<?= $ID ?>" class="btn btn-sm btn-outline-secondary">
-            <i class="fas fa-arrow-left me-1"></i>Volver al préstamo
+            <i class="fas fa-arrow-left me-1"></i><?= __('Back to loan', 'lagapenak') ?>
         </a>
         <?php if ($already_signed): ?>
         <button type="button" class="btn btn-sm btn-success" onclick="window.print()">
-            <i class="fas fa-print me-1"></i>Imprimir / Guardar PDF
+            <i class="fas fa-print me-1"></i><?= __('Print / Save PDF', 'lagapenak') ?>
         </button>
         <?php endif; ?>
     </div>
 
     <?php if (isset($_GET['saved'])): ?>
     <div class="alert alert-success no-print">
-        <i class="fas fa-check-circle me-2"></i>Firma guardada correctamente.
+        <i class="fas fa-check-circle me-2"></i><?= __('Signature saved successfully.', 'lagapenak') ?>
     </div>
     <?php endif; ?>
 
@@ -187,15 +172,15 @@ $fecha_devolucion = $loan->fields['fecha_fin']    ? Html::convDate($loan->fields
 
             <!-- ── SIGNED: show stored values ── -->
             <?php if ($already_signed): ?>
-            <div class="field-row"><span class="field-lbl">Nombre y apellidos:</span><span class="field-val"><?= $disp_name ?></span></div>
-            <div class="field-row"><span class="field-lbl">Pasaporte:</span><span class="field-val"><?= $disp_passport ?: '&nbsp;' ?></span></div>
-            <div class="field-row"><span class="field-lbl">Proyecto:</span><span class="field-val"><?= $disp_project ?: '&nbsp;' ?></span></div>
+            <div class="field-row"><span class="field-lbl"><?= __('Full name', 'lagapenak') ?>:</span><span class="field-val"><?= $disp_name ?></span></div>
+            <div class="field-row"><span class="field-lbl"><?= __('Passport / ID', 'lagapenak') ?>:</span><span class="field-val"><?= $disp_passport ?: '&nbsp;' ?></span></div>
+            <div class="field-row"><span class="field-lbl"><?= __('Project', 'lagapenak') ?>:</span><span class="field-val"><?= $disp_project ?: '&nbsp;' ?></span></div>
             <?php endif; ?>
 
             <!-- Material list (always shown) -->
-            <div class="field-row mt-1"><span class="field-lbl">Material/equipo:</span></div>
+            <div class="field-row mt-1"><span class="field-lbl"><?= __('Material / equipment', 'lagapenak') ?>:</span></div>
             <?php if (empty($items)): ?>
-            <div class="ms-3 text-muted small">— Sin activos —</div>
+            <div class="ms-3 text-muted small">— <?= __('No assets', 'lagapenak') ?> —</div>
             <?php else: foreach ($items as $item): ?>
             <div class="ms-3" style="font-size:.92rem;">
                 -1x <?= htmlspecialchars(PluginLagapenakLoanItem::getItemName($item['itemtype'], $item['items_id'])) ?>
@@ -204,8 +189,8 @@ $fecha_devolucion = $loan->fields['fecha_fin']    ? Html::convDate($loan->fields
 
             <!-- Dates (always shown) -->
             <div class="mt-3">
-                <div class="field-row"><span class="field-lbl">Fecha de recogida:</span><span class="field-val"><?= htmlspecialchars($fecha_recogida) ?></span></div>
-                <div class="field-row"><span class="field-lbl">Fecha de devolución:</span><span class="field-val"><?= htmlspecialchars($fecha_devolucion) ?></span></div>
+                <div class="field-row"><span class="field-lbl"><?= __('Pickup date', 'lagapenak') ?>:</span><span class="field-val"><?= htmlspecialchars($fecha_recogida) ?></span></div>
+                <div class="field-row"><span class="field-lbl"><?= __('Return date', 'lagapenak') ?>:</span><span class="field-val"><?= htmlspecialchars($fecha_devolucion) ?></span></div>
             </div>
 
             <hr class="my-4">
@@ -242,7 +227,7 @@ $fecha_devolucion = $loan->fields['fecha_fin']    ? Html::convDate($loan->fields
             </div>
             <div class="mt-3 no-print">
                 <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-resign">
-                    <i class="fas fa-redo me-1"></i>Volver a firmar (sobreescribe el PDF)
+                    <i class="fas fa-redo me-1"></i><?= __('Sign again (overwrites existing)', 'lagapenak') ?>
                 </button>
             </div>
             <div id="sign-form-wrapper" style="display:none">
@@ -258,37 +243,37 @@ $fecha_devolucion = $loan->fields['fecha_fin']    ? Html::convDate($loan->fields
 
                     <div class="row g-3 mb-3">
                         <div class="col-md-5">
-                            <label class="form-label fw-semibold">Nombre y apellidos <span class="text-danger">*</span></label>
+                            <label class="form-label fw-semibold"><?= __('Full name', 'lagapenak') ?> <span class="text-danger">*</span></label>
                             <input type="text" name="signature_name" class="form-control"
                                    value="<?= htmlspecialchars($destinatario !== '—' ? $destinatario : ($disp_name ?: '')) ?>"
-                                   required placeholder="Nombre y apellidos">
+                                   required placeholder="<?= __('Full name', 'lagapenak') ?>">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label fw-semibold">Pasaporte / DNI</label>
+                            <label class="form-label fw-semibold"><?= __('Passport / ID', 'lagapenak') ?></label>
                             <input type="text" name="albaran_passport" class="form-control"
-                                   value="<?= $disp_passport ?>" placeholder="Número">
+                                   value="<?= $disp_passport ?>" placeholder="<?= __('Number', 'lagapenak') ?>">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold">Proyecto</label>
+                            <label class="form-label fw-semibold"><?= __('Project', 'lagapenak') ?></label>
                             <input type="text" name="albaran_project" class="form-control"
-                                   value="<?= $disp_project ?>" placeholder="Nombre del proyecto">
+                                   value="<?= $disp_project ?>" placeholder="<?= __('Project name', 'lagapenak') ?>">
                         </div>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold">
-                            Firma <span class="text-muted fw-normal small">(dibuja con el dedo o el ratón)</span>
+                            <?= __('Signature', 'lagapenak') ?> <span class="text-muted fw-normal small">(<?= __('draw with your finger or mouse', 'lagapenak') ?>)</span>
                         </label>
                         <canvas id="sig-canvas" class="sig-canvas" style="max-width:420px;"></canvas>
                         <div class="mt-2">
                             <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-clear">
-                                <i class="fas fa-eraser me-1"></i>Borrar
+                                <i class="fas fa-eraser me-1"></i><?= __('Clear', 'lagapenak') ?>
                             </button>
                         </div>
                     </div>
 
                     <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save me-1"></i>Guardar firma y generar PDF
+                        <i class="fas fa-save me-1"></i><?= __('Save signature and generate PDF', 'lagapenak') ?>
                     </button>
                 </form>
 
@@ -346,7 +331,7 @@ $fecha_devolucion = $loan->fields['fecha_fin']    ? Html::convDate($loan->fields
         ctx.clearRect(0, 0, canvas.width, canvas.height); hasSigned = false;
     });
     document.getElementById('sign-form').addEventListener('submit', function (e) {
-        if (!hasSigned) { e.preventDefault(); alert('Por favor, dibuja tu firma antes de guardar.'); return; }
+        if (!hasSigned) { e.preventDefault(); alert('<?= __('Please draw your signature before saving.', 'lagapenak') ?>'); return; }
         document.getElementById('signature_data_input').value = canvas.toDataURL('image/png');
     });
 

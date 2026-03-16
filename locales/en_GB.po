@@ -1,0 +1,335 @@
+# English (United Kingdom) translations for Lagapenak GLPI plugin
+# Copyright (C) 2024 Tabakalera
+# License: GPL v2+
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: lagapenak 1.1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-03-16 00:00+0000\n"
+"PO-Revision-Date: 2026-03-16 00:00+0000\n"
+"Last-Translator: \n"
+"Language-Team: English (United Kingdom)\n"
+"Language: en_GB\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Loan"
+msgid_plural "Loans"
+msgstr[0] "Loan"
+msgstr[1] "Loans"
+
+msgid "Loan asset"
+msgid_plural "Loan assets"
+msgstr[0] "Loan asset"
+msgstr[1] "Loan assets"
+
+msgid "asset"
+msgid_plural "assets"
+msgstr[0] "asset"
+msgstr[1] "assets"
+
+msgid "Lagapenak - Loans"
+msgstr "Lagapenak - Loans"
+
+msgid "Pending"
+msgstr "Pending"
+
+msgid "In progress"
+msgstr "In progress"
+
+msgid "Delivered"
+msgstr "Delivered"
+
+msgid "Returned"
+msgstr "Returned"
+
+msgid "Cancelled"
+msgstr "Cancelled"
+
+msgid "Unknown"
+msgstr "Unknown"
+
+msgid "Incident"
+msgstr "Incident"
+
+msgid "Computer"
+msgstr "Computer"
+
+msgid "Monitor"
+msgstr "Monitor"
+
+msgid "Network Equipment"
+msgstr "Network Equipment"
+
+msgid "Peripheral"
+msgstr "Peripheral"
+
+msgid "Phone"
+msgstr "Phone"
+
+msgid "Printer"
+msgstr "Printer"
+
+msgid "Name / Reference"
+msgstr "Name / Reference"
+
+msgid "Status"
+msgstr "Status"
+
+msgid "Entity"
+msgstr "Entity"
+
+msgid "Requester"
+msgstr "Requester"
+
+msgid "Recipient"
+msgstr "Recipient"
+
+msgid "Start date"
+msgstr "Start date"
+
+msgid "End date"
+msgstr "End date"
+
+msgid "Notes"
+msgstr "Notes"
+
+msgid "Delivery note"
+msgstr "Delivery note"
+
+msgid "Assets"
+msgstr "Assets"
+
+msgid "Asset"
+msgstr "Asset"
+
+msgid "Type"
+msgstr "Type"
+
+msgid "Delivery date"
+msgstr "Delivery date"
+
+msgid "Return date"
+msgstr "Return date"
+
+msgid "Loan start"
+msgstr "Loan start"
+
+msgid "Loan end"
+msgstr "Loan end"
+
+msgid "Loan status"
+msgstr "Loan status"
+
+msgid "View signed delivery note"
+msgstr "View signed delivery note"
+
+msgid "Automatic"
+msgstr "Automatic"
+
+msgid "Additional fields"
+msgstr "Additional fields"
+
+msgid "Sends return reminders for loans due in 2 days"
+msgstr "Sends return reminders for loans due in 2 days"
+
+msgid "Loan #"
+msgstr "Loan #"
+
+msgid "New material loan — %s"
+msgstr "New material loan — %s"
+
+msgid "Return reminder — %s"
+msgstr "Return reminder — %s"
+
+msgid "Hello, %s,"
+msgstr "Hello, %s,"
+
+msgid "Hello,"
+msgstr "Hello,"
+
+msgid "A new material loan has been registered in your name."
+msgstr "A new material loan has been registered in your name."
+
+msgid "This is a reminder that the following material loan is due soon. Please prepare the return of the items."
+msgstr "This is a reminder that the following material loan is due soon. Please prepare the return of the items."
+
+msgid "Pickup date"
+msgstr "Pickup date"
+
+msgid "View loan"
+msgstr "View loan"
+
+msgid "This message was generated automatically by the %s loan management system."
+msgstr "This message was generated automatically by the %s loan management system."
+
+msgid "The Name / Reference field is required."
+msgstr "The Name / Reference field is required."
+
+msgid "The Entity is required."
+msgstr "The Entity is required."
+
+msgid "The Recipient is required."
+msgstr "The Recipient is required."
+
+msgid "The start and end dates are required."
+msgstr "The start and end dates are required."
+
+msgid "This asset is already booked in another loan with overlapping dates: "
+msgstr "This asset is already booked in another loan with overlapping dates: "
+
+msgid "This asset is already added to this loan. To change its dates use the edit button."
+msgstr "This asset is already added to this loan. To change its dates use the edit button."
+
+msgid "Loan #%d"
+msgstr "Loan #%d"
+
+msgid "New request"
+msgstr "New request"
+
+msgid "Edit loan #%d"
+msgstr "Edit loan #%d"
+
+msgid "New loan"
+msgstr "New loan"
+
+msgid "My request #%d"
+msgstr "My request #%d"
+
+msgid "Save changes"
+msgstr "Save changes"
+
+msgid "Submit request"
+msgstr "Submit request"
+
+msgid "Back"
+msgstr "Back"
+
+msgid "Delete this loan?"
+msgstr "Delete this loan?"
+
+msgid "Delete"
+msgstr "Delete"
+
+msgid "Your request has been registered. The supervisor will manage the assets and loan status."
+msgstr "Your request has been registered. The supervisor will manage the assets and loan status."
+
+msgid "Loan assets"
+msgstr "Loan assets"
+
+msgid "Mark all pending assets as Delivered?"
+msgstr "Mark all pending assets as Delivered?"
+
+msgid "All delivered"
+msgstr "All delivered"
+
+msgid "Mark all delivered assets as Returned?"
+msgstr "Mark all delivered assets as Returned?"
+
+msgid "All returned"
+msgstr "All returned"
+
+msgid "Delivery"
+msgstr "Delivery"
+
+msgid "Return"
+msgstr "Return"
+
+msgid "No assets assigned yet."
+msgstr "No assets assigned yet."
+
+msgid "Mark as Delivered"
+msgstr "Mark as Delivered"
+
+msgid "Mark as Returned"
+msgstr "Mark as Returned"
+
+msgid "Log incident"
+msgstr "Log incident"
+
+msgid "Remove"
+msgstr "Remove"
+
+msgid "Remove this asset?"
+msgstr "Remove this asset?"
+
+msgid "Edit dates"
+msgstr "Edit dates"
+
+msgid "Close"
+msgstr "Close"
+
+msgid "Save dates"
+msgstr "Save dates"
+
+msgid "Add asset"
+msgstr "Add asset"
+
+msgid "Asset type"
+msgstr "Asset type"
+
+msgid "Only assets with \"Allow reservations\" enabled are shown."
+msgstr "Only assets with \"Allow reservations\" enabled are shown."
+
+msgid "No assets of type <strong>%s</strong> are authorized for loan."
+msgstr "No assets of type <strong>%s</strong> are authorized for loan."
+
+msgid "To authorize: open the asset → Reservations tab → enable Allow reservations."
+msgstr "To authorize: open the asset → Reservations tab → enable Allow reservations."
+
+msgid "Add"
+msgstr "Add"
+
+msgid "Save the loan first to add assets."
+msgstr "Save the loan first to add assets."
+
+msgid "Back to loan"
+msgstr "Back to loan"
+
+msgid "Print / Save PDF"
+msgstr "Print / Save PDF"
+
+msgid "Signature saved successfully."
+msgstr "Signature saved successfully."
+
+msgid "Full name"
+msgstr "Full name"
+
+msgid "Passport / ID"
+msgstr "Passport / ID"
+
+msgid "Project"
+msgstr "Project"
+
+msgid "Material / equipment"
+msgstr "Material / equipment"
+
+msgid "No assets"
+msgstr "No assets"
+
+msgid "Signature"
+msgstr "Signature"
+
+msgid "draw with your finger or mouse"
+msgstr "draw with your finger or mouse"
+
+msgid "Clear"
+msgstr "Clear"
+
+msgid "Save signature and generate PDF"
+msgstr "Save signature and generate PDF"
+
+msgid "Sign again (overwrites existing)"
+msgstr "Sign again (overwrites existing)"
+
+msgid "Please draw your signature before saving."
+msgstr "Please draw your signature before saving."
+
+msgid "Number"
+msgstr "Number"
+
+msgid "Project name"
+msgstr "Project name"

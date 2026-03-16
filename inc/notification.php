@@ -1,8 +1,8 @@
 <?php
 
 /**
- * Envía un email al destinatario cuando se crea un nuevo préstamo.
- * Llamado desde el hook item_add de PluginLagapenakLoan.
+ * Sends an email to the recipient when a new loan is created.
+ * Called from the item_add hook of PluginLagapenakLoan.
  */
 function plugin_lagapenak_notify_loan_created($item) {
     $uid = $item->fields['users_id_destinatario'] ?? 0;
@@ -10,13 +10,13 @@ function plugin_lagapenak_notify_loan_created($item) {
         return;
     }
 
-    // Email del destinatario
+    // Recipient email
     $email = UserEmail::getDefaultForUser($uid);
     if (!$email) {
         return;
     }
 
-    // Nombre del destinatario
+    // Recipient name
     $user = new User();
     $display_name = '';
     if ($user->getFromDB($uid)) {
@@ -24,70 +24,78 @@ function plugin_lagapenak_notify_loan_created($item) {
         if (!$display_name) $display_name = $user->fields['name'];
     }
 
-    // Fechas
+    // Dates
     $fecha_rec = !empty($item->fields['fecha_inicio'])
         ? Html::convDate($item->fields['fecha_inicio']) : '—';
     $fecha_dev = !empty($item->fields['fecha_fin'])
         ? Html::convDate($item->fields['fecha_fin']) : '—';
 
-    // Enlace al préstamo
+    // Loan link
     $loan_url  = Plugin::getWebDir('lagapenak', true) . '/front/loan.form.php?id=' . (int) $item->getID();
-    $loan_name = $item->fields['name'] ?: 'Préstamo #' . $item->getID();
+    $loan_name = $item->fields['name'] ?: __('Loan #', 'lagapenak') . $item->getID();
 
-    // ── Asunto ──────────────────────────────────────────────────────────────
-    $subject = 'Nuevo préstamo de material — ' . $loan_name;
+    global $CFG_GLPI;
+    $from_email = $CFG_GLPI['admin_email']      ?? '';
+    $from_name  = $CFG_GLPI['admin_email_name'] ?? 'Lagapenak';
 
-    // ── Cuerpo HTML ─────────────────────────────────────────────────────────
-    $saludo = $display_name ? 'Hola, ' . htmlspecialchars($display_name) . ',' : 'Hola,';
+    // ── Subject ─────────────────────────────────────────────────────────────
+    $subject = sprintf(__('New material loan — %s', 'lagapenak'), $loan_name);
 
+    // ── Greeting ────────────────────────────────────────────────────────────
+    $saludo = $display_name
+        ? sprintf(__('Hello, %s,', 'lagapenak'), htmlspecialchars($display_name))
+        : __('Hello,', 'lagapenak');
+
+    $p1  = __('A new material loan has been registered in your name.', 'lagapenak');
+    $lbl_loan   = __('Loan', 'lagapenak');
+    $lbl_pickup = __('Pickup date', 'lagapenak');
+    $lbl_return = __('Return date', 'lagapenak');
+    $btn_view   = __('View loan', 'lagapenak');
+    $p_footer   = sprintf(__('This message was generated automatically by the %s loan management system.', 'lagapenak'), htmlspecialchars($from_name));
+
+    // ── HTML body ────────────────────────────────────────────────────────────
     $body = <<<HTML
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head><meta charset="UTF-8"></head>
 <body style="font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.6;">
   <p>{$saludo}</p>
-  <p>Se ha registrado un nuevo préstamo de material a tu nombre en Tabakalera.</p>
+  <p>{$p1}</p>
 
   <table style="border-collapse:collapse;margin:16px 0;">
     <tr>
-      <td style="font-weight:bold;padding:4px 16px 4px 0;">Préstamo:</td>
+      <td style="font-weight:bold;padding:4px 16px 4px 0;">{$lbl_loan}:</td>
       <td style="padding:4px 0;">{$loan_name}</td>
     </tr>
     <tr>
-      <td style="font-weight:bold;padding:4px 16px 4px 0;">Fecha de recogida:</td>
+      <td style="font-weight:bold;padding:4px 16px 4px 0;">{$lbl_pickup}:</td>
       <td style="padding:4px 0;">{$fecha_rec}</td>
     </tr>
     <tr>
-      <td style="font-weight:bold;padding:4px 16px 4px 0;">Fecha de devolución:</td>
+      <td style="font-weight:bold;padding:4px 16px 4px 0;">{$lbl_return}:</td>
       <td style="padding:4px 0;">{$fecha_dev}</td>
     </tr>
   </table>
 
-  <p>La recogida y entrega de materiales se realiza en las oficinas de Tabakalera de 9h a 15h.</p>
-
   <p style="margin-top:24px;">
     <a href="{$loan_url}" style="background:#1a73e8;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;">
-      Ver préstamo
+      {$btn_view}
     </a>
   </p>
 
   <p style="margin-top:32px;font-size:12px;color:#888;">
-    Este mensaje ha sido generado automáticamente por el sistema de gestión de préstamos de Tabakalera.
+    {$p_footer}
   </p>
 </body>
 </html>
 HTML;
 
-    // ── Envío ────────────────────────────────────────────────────────────────
+    // ── Send ─────────────────────────────────────────────────────────────────
     if (!class_exists('GLPIMailer')) {
         return;
     }
 
     try {
-        global $CFG_GLPI;
-        $from_email = $CFG_GLPI['admin_email']      ?? '';
-        $from_name  = $CFG_GLPI['admin_email_name'] ?? 'Tabakalera';
-
         $mail = new GLPIMailer();
         if ($from_email) {
             $mail->setFrom($from_email, $from_name);
@@ -102,13 +110,13 @@ HTML;
         $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
         $mail->send();
     } catch (\Exception $e) {
-        Toolbox::logError('[lagapenak] Error al enviar notificación de préstamo: ' . $e->getMessage());
+        Toolbox::logError('[lagapenak] Error sending loan notification: ' . $e->getMessage());
     }
 }
 
 /**
- * Envía un recordatorio de devolución al solicitante del préstamo.
- * Llamado desde el cron cronLoanReminder.
+ * Sends a return reminder to the loan requester.
+ * Called from the cronLoanReminder cron task.
  */
 function plugin_lagapenak_send_loan_reminder(array $loan_row): void {
     $uid = (int) ($loan_row['users_id'] ?? 0);
@@ -126,41 +134,51 @@ function plugin_lagapenak_send_loan_reminder(array $loan_row): void {
 
     $fecha_dev = !empty($loan_row['fecha_fin'])
         ? Html::convDateTime($loan_row['fecha_fin']) : '—';
-    $loan_name = $loan_row['name'] ?: 'Préstamo #' . $loan_row['id'];
+    $loan_name = $loan_row['name'] ?: __('Loan #', 'lagapenak') . $loan_row['id'];
     $loan_url  = Plugin::getWebDir('lagapenak', true) . '/front/loan.form.php?id=' . (int)$loan_row['id'];
 
-    $subject = 'Recordatorio de devolución — ' . $loan_name;
-    $saludo  = $display_name ? 'Hola, ' . htmlspecialchars($display_name) . ',' : 'Hola,';
+    global $CFG_GLPI;
+    $from_email = $CFG_GLPI['admin_email']      ?? '';
+    $from_name  = $CFG_GLPI['admin_email_name'] ?? 'Lagapenak';
+
+    $subject = sprintf(__('Return reminder — %s', 'lagapenak'), $loan_name);
+    $saludo  = $display_name
+        ? sprintf(__('Hello, %s,', 'lagapenak'), htmlspecialchars($display_name))
+        : __('Hello,', 'lagapenak');
+
+    $p1     = __('This is a reminder that the following material loan is due soon. Please prepare the return of the items.', 'lagapenak');
+    $lbl_loan   = __('Loan', 'lagapenak');
+    $lbl_return = __('Return date', 'lagapenak');
+    $btn_view   = __('View loan', 'lagapenak');
+    $p_footer   = sprintf(__('This message was generated automatically by the %s loan management system.', 'lagapenak'), htmlspecialchars($from_name));
 
     $body = <<<HTML
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head><meta charset="UTF-8"></head>
 <body style="font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.6;">
   <p>{$saludo}</p>
-  <p>Te recordamos que el siguiente préstamo de material vence próximamente. Por favor, prepara la devolución del material.</p>
+  <p>{$p1}</p>
 
   <table style="border-collapse:collapse;margin:16px 0;">
     <tr>
-      <td style="font-weight:bold;padding:4px 16px 4px 0;">Préstamo:</td>
+      <td style="font-weight:bold;padding:4px 16px 4px 0;">{$lbl_loan}:</td>
       <td style="padding:4px 0;">{$loan_name}</td>
     </tr>
     <tr>
-      <td style="font-weight:bold;padding:4px 16px 4px 0;">Fecha de devolución:</td>
+      <td style="font-weight:bold;padding:4px 16px 4px 0;">{$lbl_return}:</td>
       <td style="padding:4px 0;color:#c0392b;font-weight:bold;">{$fecha_dev}</td>
     </tr>
   </table>
 
-  <p>La entrega de materiales se realiza en las oficinas de Tabakalera de 9h a 15h.</p>
-
   <p style="margin-top:24px;">
     <a href="{$loan_url}" style="background:#1a73e8;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;">
-      Ver préstamo
+      {$btn_view}
     </a>
   </p>
 
   <p style="margin-top:32px;font-size:12px;color:#888;">
-    Este mensaje ha sido generado automáticamente por el sistema de gestión de préstamos de Tabakalera.
+    {$p_footer}
   </p>
 </body>
 </html>
@@ -169,10 +187,6 @@ HTML;
     if (!class_exists('GLPIMailer')) return;
 
     try {
-        global $CFG_GLPI;
-        $from_email = $CFG_GLPI['admin_email']      ?? '';
-        $from_name  = $CFG_GLPI['admin_email_name'] ?? 'Tabakalera';
-
         $mail = new GLPIMailer();
         if ($from_email) $mail->setFrom($from_email, $from_name);
         $mail->addAddress($email, $display_name);
@@ -185,6 +199,6 @@ HTML;
         $mail->AltBody  = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
         $mail->send();
     } catch (\Exception $e) {
-        Toolbox::logError('[lagapenak] Error al enviar recordatorio: ' . $e->getMessage());
+        Toolbox::logError('[lagapenak] Error sending return reminder: ' . $e->getMessage());
     }
 }
