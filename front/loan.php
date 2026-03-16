@@ -101,9 +101,7 @@ if(window.location.search.indexOf("tab=disponibilidad")!==-1){
     if ($can_supervise) {
         array_splice($tile_defs, 1, 0, [[$cnt_mine, 'Mis préstamos', 'fas fa-user', '#6298d5', $url_mine]]);
     }
-    if ($cnt_overdue > 0 || $can_supervise) {
-        $tile_defs[] = [$cnt_overdue, 'Vencidos', 'fas fa-exclamation-triangle', '#e74c3c', $url_overdue];
-    }
+    $tile_defs[] = [$cnt_overdue, 'Vencidos', 'fas fa-exclamation-triangle', '#e74c3c', $url_overdue];
 
     // Render summary tiles — same visual style as GLPI's mini_ticket dashboard tiles
     echo '<div class="d-none d-md-flex flex-wrap mb-2" style="gap:4px;padding:4px 0;">';
