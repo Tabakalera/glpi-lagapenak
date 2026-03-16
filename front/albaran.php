@@ -49,6 +49,12 @@ if (!$_alb_allowed) {
     Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
 }
 
+// ── CAMPOS ADICIONALES DEL ALBARÁN ──────────────────────────────────────────────
+// Configura qué campos field_N del préstamo aparecen en el albarán (HTML y PDF).
+// Los labels se obtienen automáticamente de PluginLagapenakLoan::getFieldLabels().
+// Pon [] para no mostrar ninguno.
+$albaran_loan_fields = ['field_1', 'field_2']; // Convocatoria + Proyecto
+
 // ── CONDICIONES ─────────────────────────────────────────────────────────────────
 // Para personalizar el texto edita este array. Ver README.md → "Condiciones albarán"
 $condiciones = [
@@ -108,7 +114,7 @@ function plugin_lagapenak_date_es($date_str) {
 }
 
 // ── PDF GENERATOR ────────────────────────────────────────────────────────────────
-function plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $header_fs, $footer_fs) {
+function plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $header_fs, $footer_fs, $albaran_loan_fields = []) {
 
     // Pre-compute footer height from image aspect ratio
     $footer_h_mm = 0;
@@ -190,6 +196,20 @@ function plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $hea
         $cond_li .= '<li style="margin-bottom:2px;">' . htmlspecialchars($c) . '</li>';
     }
 
+    // Build extra rows: beneficiary email + configured field_N values
+    $ben_email_pdf  = htmlspecialchars(trim($loan->fields['beneficiary_email'] ?? ''));
+    $field_labels   = PluginLagapenakLoan::getFieldLabels();
+    $extra_rows_pdf = '';
+    if ($ben_email_pdf) {
+        $extra_rows_pdf .= '  <tr><td style="' . 'font-weight:bold;width:48mm;' . '">' . __('Email address', 'lagapenak') . ':</td><td>' . $ben_email_pdf . '</td></tr>';
+    }
+    foreach ($albaran_loan_fields as $fkey) {
+        $fval = htmlspecialchars(trim($loan->fields[$fkey] ?? ''));
+        if (!$fval) continue;
+        $flabel = htmlspecialchars($field_labels[$fkey] ?? $fkey);
+        $extra_rows_pdf .= '  <tr><td style="' . 'font-weight:bold;width:48mm;' . '">' . $flabel . ':</td><td>' . $fval . '</td></tr>';
+    }
+
     $lbl = 'font-weight:bold;width:48mm;';
     $html = '
 <h3 style="font-size:12pt;letter-spacing:1px;text-transform:uppercase;margin:0 0 8px 0;">' . __('MATERIAL HANDOVER', 'lagapenak') . '</h3>
@@ -197,6 +217,7 @@ function plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $hea
   <tr><td style="' . $lbl . '">' . __('Full name', 'lagapenak') . ':</td><td>' . htmlspecialchars($name) . '</td></tr>
   <tr><td style="' . $lbl . '">' . __('Passport / ID', 'lagapenak') . ':</td><td>' . htmlspecialchars($passport) . '</td></tr>
   <tr><td style="' . $lbl . '">' . __('Project', 'lagapenak') . ':</td><td>' . htmlspecialchars($project) . '</td></tr>
+' . $extra_rows_pdf . '
 </table>
 <p style="font-weight:bold;margin:5px 0 2px;font-size:10pt;">' . __('Material / equipment', 'lagapenak') . ':</p>
 <ul style="font-size:10pt;margin:0 0 5px 0;">' . $items_li . '</ul>
@@ -283,18 +304,32 @@ $disp_sig_date = $loan->fields['signature_date']
 $fecha_recogida   = $loan->fields['fecha_inicio'] ? Html::convDate($loan->fields['fecha_inicio']) : '—';
 $fecha_devolucion = $loan->fields['fecha_fin']    ? Html::convDate($loan->fields['fecha_fin'])    : '—';
 
-// Pre-fill email modal with requester's email (editable)
-$dest_email_prefill = '';
-if ($loan->fields['users_id']) {
+// Beneficiary fields from loan (pre-filled when loan was created/edited)
+$ben_name  = htmlspecialchars(trim($loan->fields['beneficiary_name']  ?? ''));
+$ben_email_raw = trim($loan->fields['beneficiary_email'] ?? '');
+$ben_email = htmlspecialchars($ben_email_raw);
+$ben_dni   = htmlspecialchars(trim($loan->fields['beneficiary_dni']   ?? ''));
+
+// Pre-fill email modal: beneficiary email first, then requester email as fallback
+$dest_email_prefill = $ben_email_raw;
+if (!$dest_email_prefill && $loan->fields['users_id']) {
     $dest_email_prefill = UserEmail::getDefaultForUser($loan->fields['users_id']) ?: '';
 }
+
+// Pre-fill signing form from beneficiary fields (fallback to previously signed values)
+$sign_name    = trim($loan->fields['beneficiary_name']  ?? '') ?: ($destinatario !== '—' ? $destinatario : ($loan->fields['signature_name']   ?? ''));
+$sign_dni     = trim($loan->fields['beneficiary_dni']   ?? '') ?: ($loan->fields['albaran_passport']  ?? '');
+$sign_project = trim($loan->fields['field_2']           ?? '') ?: ($loan->fields['albaran_project']   ?? '');
+
+// Loan field labels (for additional fields in document)
+$_alb_field_labels = PluginLagapenakLoan::getFieldLabels();
 
 // ── Action: PDF download ──────────────────────────────────────────────────────────
 if (isset($_GET['action']) && $_GET['action'] === 'pdf') {
     if (!$already_signed) {
         Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID);
     }
-    $pdf      = plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $header_fs, $footer_fs);
+    $pdf      = plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $header_fs, $footer_fs, $albaran_loan_fields);
     $filename = 'albaran_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $loan->fields['name'] ?: 'loan') . '_' . $ID . '.pdf';
     $pdf->Output($filename, 'D');
     exit;
@@ -304,7 +339,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'pdf') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
     $to_email = trim($_POST['to_email'] ?? '');
     if ($to_email && filter_var($to_email, FILTER_VALIDATE_EMAIL) && $already_signed) {
-        $pdf         = plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $header_fs, $footer_fs);
+        $pdf         = plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $header_fs, $footer_fs, $albaran_loan_fields);
         $pdf_content = $pdf->Output('', 'S');
         $filename    = 'albaran_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $loan->fields['name'] ?: 'loan') . '_' . $ID . '.pdf';
         $loan_name   = $loan->fields['name'] ?: __('Loan', 'lagapenak') . ' #' . $ID;
@@ -418,6 +453,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
             <div class="field-row"><span class="field-lbl"><?= __('Full name', 'lagapenak') ?>:</span><span class="field-val"><?= $disp_name ?></span></div>
             <div class="field-row"><span class="field-lbl"><?= __('Passport / ID', 'lagapenak') ?>:</span><span class="field-val"><?= $disp_passport ?: '&nbsp;' ?></span></div>
             <div class="field-row"><span class="field-lbl"><?= __('Project', 'lagapenak') ?>:</span><span class="field-val"><?= $disp_project ?: '&nbsp;' ?></span></div>
+            <?php if ($ben_email): ?>
+            <div class="field-row"><span class="field-lbl"><?= __('Email address', 'lagapenak') ?>:</span><span class="field-val"><?= $ben_email ?></span></div>
+            <?php endif; ?>
+            <?php foreach ($albaran_loan_fields as $_af_key): ?>
+            <?php $_af_val = htmlspecialchars(trim($loan->fields[$_af_key] ?? '')); if (!$_af_val) continue; ?>
+            <div class="field-row"><span class="field-lbl"><?= htmlspecialchars($_alb_field_labels[$_af_key] ?? $_af_key) ?>:</span><span class="field-val"><?= $_af_val ?></span></div>
+            <?php endforeach; ?>
             <?php endif; ?>
 
             <!-- Material list (always shown) -->
@@ -488,18 +530,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
                         <div class="col-md-5">
                             <label class="form-label fw-semibold"><?= __('Full name', 'lagapenak') ?> <span class="text-danger">*</span></label>
                             <input type="text" name="signature_name" class="form-control"
-                                   value="<?= htmlspecialchars($destinatario !== '—' ? $destinatario : ($disp_name ?: '')) ?>"
+                                   value="<?= htmlspecialchars($sign_name) ?>"
                                    required placeholder="<?= __('Full name', 'lagapenak') ?>">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label fw-semibold"><?= __('Passport / ID', 'lagapenak') ?></label>
                             <input type="text" name="albaran_passport" class="form-control"
-                                   value="<?= $disp_passport ?>" placeholder="<?= __('Number', 'lagapenak') ?>">
+                                   value="<?= htmlspecialchars($sign_dni) ?>" placeholder="<?= __('Number', 'lagapenak') ?>">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-semibold"><?= __('Project', 'lagapenak') ?></label>
                             <input type="text" name="albaran_project" class="form-control"
-                                   value="<?= $disp_project ?>" placeholder="<?= __('Project name', 'lagapenak') ?>">
+                                   value="<?= htmlspecialchars($sign_project) ?>" placeholder="<?= __('Project name', 'lagapenak') ?>">
                         </div>
                     </div>
 

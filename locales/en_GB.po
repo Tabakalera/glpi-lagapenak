@@ -127,6 +127,9 @@ msgstr "Loan status"
 msgid "View signed delivery note"
 msgstr "View signed delivery note"
 
+msgid "Beneficiary"
+msgstr "Beneficiary"
+
 msgid "Automatic"
 msgstr "Automatic"
 

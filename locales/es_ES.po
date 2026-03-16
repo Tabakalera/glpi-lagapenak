@@ -141,6 +141,9 @@ msgstr "Ver albarán firmado"
 
 # ── Form labels ───────────────────────────────────────────────────────────────
 
+msgid "Beneficiary"
+msgstr "Beneficiario"
+
 msgid "Automatic"
 msgstr "Automático"
 

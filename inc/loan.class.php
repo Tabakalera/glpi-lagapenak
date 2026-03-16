@@ -141,8 +141,8 @@ class PluginLagapenakLoan extends CommonDBTM {
             'field_1' => 'Convocatoria',
             'field_2' => 'Proyecto',
             'field_3' => 'Ubicación',
-            'field_4' => 'Referencia',
-            'field_5' => 'Sortzailearen izena',
+            'field_4' => 'Arloa',
+            'field_5' => 'Departamentua',
         ];
     }
 
@@ -484,6 +484,47 @@ class PluginLagapenakLoan extends CommonDBTM {
 
         echo '</div>';
 
+        // ── Beneficiario / Persona que recoge ──────────────────────────────
+        $ben_name  = $loan['beneficiary_name']  ?? '';
+        $ben_email = $loan['beneficiary_email'] ?? '';
+        $ben_dni   = $loan['beneficiary_dni']   ?? '';
+
+        if ($ID <= 0) {
+            // New form: pre-fill from requester's GLPI data
+            $req = new User();
+            if ($req->getFromDB((int)($_SESSION['glpiID'] ?? 0))) {
+                if (empty($ben_name)) {
+                    $rn = trim(($req->fields['realname'] ?? '') . ' ' . ($req->fields['firstname'] ?? ''));
+                    $ben_name = $rn ?: ($req->fields['name'] ?? '');
+                }
+                if (empty($ben_email)) {
+                    $ben_email = UserEmail::getDefaultForUser($req->getID()) ?: '';
+                }
+            }
+        }
+
+        echo '<div class="row g-3 mb-1 mt-1">';
+        echo '<div class="col-12">';
+        echo '<p class="mb-0 fw-bold text-secondary" style="font-size:.78rem;text-transform:uppercase;letter-spacing:.6px;">';
+        echo '<i class="fas fa-user me-1"></i>' . __('Beneficiary', 'lagapenak') . '</p>';
+        echo '</div>';
+        echo '</div>';
+
+        echo '<div class="row g-3 mb-3">';
+        echo '<div class="col-md-5">';
+        echo '<label class="form-label fw-bold">' . __('Full name', 'lagapenak') . '</label>';
+        echo '<input type="text" class="form-control" name="beneficiary_name" value="' . htmlspecialchars($ben_name) . '">';
+        echo '</div>';
+        echo '<div class="col-md-4">';
+        echo '<label class="form-label fw-bold">' . __('Email address', 'lagapenak') . '</label>';
+        echo '<input type="email" class="form-control" name="beneficiary_email" value="' . htmlspecialchars($ben_email) . '">';
+        echo '</div>';
+        echo '<div class="col-md-3">';
+        echo '<label class="form-label fw-bold">' . __('Passport / ID', 'lagapenak') . '</label>';
+        echo '<input type="text" class="form-control" name="beneficiary_dni" value="' . htmlspecialchars($ben_dni) . '">';
+        echo '</div>';
+        echo '</div>';
+
         // ── Campos adicionales (colapsados por defecto si están vacíos) ──
         $has_extra = array_filter(array_map('trim', [
             $loan['field_1'] ?? '', $loan['field_2'] ?? '', $loan['field_3'] ?? '',
@@ -595,6 +636,24 @@ class PluginLagapenakLoan extends CommonDBTM {
         echo '<div class="col-md-6"><label class="form-label fw-bold">' . __('End date', 'lagapenak') . '</label>';
         echo '<p class="form-control-plaintext">' . $ff . '</p></div>';
         echo '</div>';
+
+        // ── Beneficiary ──────────────────────────────────────────────────────
+        $ben_name_ro  = trim($loan['beneficiary_name']  ?? '');
+        $ben_email_ro = trim($loan['beneficiary_email'] ?? '');
+        $ben_dni_ro   = trim($loan['beneficiary_dni']   ?? '');
+        if ($ben_name_ro || $ben_email_ro || $ben_dni_ro) {
+            echo '<div class="row g-3 mb-1">';
+            echo '<div class="col-12"><h6 class="fw-bold mb-0"><i class="fas fa-user me-2"></i>' . __('Beneficiary', 'lagapenak') . '</h6></div>';
+            echo '</div>';
+            echo '<div class="row g-3 mb-3">';
+            echo '<div class="col-md-5"><label class="form-label fw-bold">' . __('Full name', 'lagapenak') . '</label>';
+            echo '<p class="form-control-plaintext">' . (empty($ben_name_ro) ? '<span class="text-muted">—</span>' : htmlspecialchars($ben_name_ro)) . '</p></div>';
+            echo '<div class="col-md-4"><label class="form-label fw-bold">' . __('Email address', 'lagapenak') . '</label>';
+            echo '<p class="form-control-plaintext">' . (empty($ben_email_ro) ? '<span class="text-muted">—</span>' : htmlspecialchars($ben_email_ro)) . '</p></div>';
+            echo '<div class="col-md-3"><label class="form-label fw-bold">' . __('Passport / ID', 'lagapenak') . '</label>';
+            echo '<p class="form-control-plaintext">' . (empty($ben_dni_ro) ? '<span class="text-muted">—</span>' : htmlspecialchars($ben_dni_ro)) . '</p></div>';
+            echo '</div>';
+        }
 
         echo '<div class="row g-3 mb-3">';
         echo '<div class="col-md-6"><label class="form-label fw-bold">' . htmlspecialchars($labels['field_1']) . '</label>';
