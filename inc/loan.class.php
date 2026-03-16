@@ -34,16 +34,35 @@ class PluginLagapenakLoan extends CommonDBTM {
         return Plugin::getWebDir('lagapenak', true, $full) . '/front/loan.form.php';
     }
 
+    /**
+     * DB-based permission check — works for both central and helpdesk (Self-Service) users.
+     * Session::haveRight() filters out plugin rights for helpdesk profiles, so we query
+     * glpi_profilerights directly to get the current value regardless of session state.
+     */
+    static function hasPluginRight(string $right_name, int $flag): bool {
+        global $DB;
+        $profile_id = (int)($_SESSION['glpiactiveprofile']['id'] ?? 0);
+        if (!$profile_id) return false;
+        foreach ($DB->request([
+            'SELECT' => ['rights'],
+            'FROM'   => 'glpi_profilerights',
+            'WHERE'  => ['profiles_id' => $profile_id, 'name' => $right_name],
+        ]) as $r) {
+            return ((int)$r['rights'] & $flag) > 0;
+        }
+        return false;
+    }
+
     static function canView() {
-        return Session::haveRight(self::$rightname, READ);
+        return self::hasPluginRight(self::$rightname, READ);
     }
 
     static function canCreate() {
-        return Session::haveRight(self::$rightname, CREATE);
+        return self::hasPluginRight(self::$rightname, CREATE);
     }
 
     static function canSupervise() {
-        return Session::haveRight(self::$rightname, UPDATE);
+        return self::hasPluginRight(self::$rightname, UPDATE);
     }
 
     /**

@@ -11,7 +11,20 @@ if ($ID <= 0) {
 }
 
 $loan = new PluginLagapenakLoan();
-if (!$loan->getFromDB($ID) || !$loan->can($ID, READ)) {
+if (!$loan->getFromDB($ID)) {
+    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
+}
+
+// Access check: supervisor always allowed; others need the albaran right AND
+// must be the requester or recipient of this specific loan.
+$_alb_uid        = (int)($_SESSION['glpiID'] ?? 0);
+$_alb_is_req     = (int)($loan->fields['users_id'] ?? 0) === $_alb_uid;
+$_alb_is_dest    = (int)($loan->fields['users_id_destinatario'] ?? 0) === $_alb_uid;
+$_alb_supervise  = PluginLagapenakLoan::canSupervise();
+$_alb_has_right  = PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_albaran', READ);
+$_alb_allowed    = $_alb_supervise || ($_alb_has_right && ($_alb_is_req || $_alb_is_dest));
+
+if (!$_alb_allowed) {
     Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
 }
 

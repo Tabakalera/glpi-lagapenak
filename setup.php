@@ -6,7 +6,6 @@ define('PLUGIN_LAGAPENAK_VERSION', '1.1.0');
 global $PLUGIN_HOOKS;
 $PLUGIN_HOOKS['csrf_compliant']['lagapenak'] = true;
 $PLUGIN_HOOKS['menu_toadd']['lagapenak'] = ['tools' => 'PluginLagapenakLoan'];
-// Also show in the simplified (Self-Service) interface
 $PLUGIN_HOOKS['helpdesk_menu_entry']['lagapenak'] = '/plugins/lagapenak/front/loan.php';
 define('PLUGIN_LAGAPENAK_MIN_GLPI', '10.0.0');
 define('PLUGIN_LAGAPENAK_MAX_GLPI', '10.99.99');

@@ -182,6 +182,19 @@ if ($ID > 0) {
 $title     = $ID > 0 ? sprintf(__('Loan #%d', 'lagapenak'), $ID) : __('New request', 'lagapenak');
 $edit_item = isset($_GET['edit_item']) ? (int) $_GET['edit_item'] : 0;
 
+// ── Albarán access — computed before header so it's available in both views ──
+// Supervisors always have access. Non-supervisors need the albaran right AND
+// must be the requester or recipient of this specific loan.
+$can_albaran = false;
+if ($ID > 0) {
+    $_lf_uid     = (int)($_SESSION['glpiID'] ?? 0);
+    $_lf_is_req  = (int)($loan->fields['users_id'] ?? 0) === $_lf_uid;
+    $_lf_is_dest = (int)($loan->fields['users_id_destinatario'] ?? 0) === $_lf_uid;
+    $can_albaran = $can_supervise
+        || (PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_albaran', READ)
+            && ($_lf_is_req || $_lf_is_dest));
+}
+
 Html::header($title, $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
 
 echo '<div class="container-fluid mt-3">';
@@ -224,10 +237,12 @@ if ($can_supervise || $ID == 0) {
     echo '<a href="' . Plugin::getWebDir('lagapenak') . '/front/loan.php" class="btn btn-secondary">';
     echo '<i class="fas fa-arrow-left me-1"></i>' . __('Back', 'lagapenak');
     echo '</a>';
-    if ($ID > 0 && $can_supervise) {
+    if ($ID > 0 && $can_albaran) {
         $albaran_url = Plugin::getWebDir('lagapenak', true) . '/front/albaran.php?id=' . $ID;
         echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
         echo '<i class="fas fa-file-signature me-1"></i>' . __('Delivery note', 'lagapenak') . '</a>';
+    }
+    if ($ID > 0 && $can_supervise) {
         echo '<button type="submit" name="delete_loan" class="btn btn-danger ms-auto"
                       onclick="return confirm(\'' . __('Delete this loan?', 'lagapenak') . '\')">';
         echo '<i class="fas fa-trash me-1"></i>' . __('Delete', 'lagapenak');
@@ -243,10 +258,15 @@ if ($can_supervise || $ID == 0) {
     echo __('Your request has been registered. The supervisor will manage the assets and loan status.', 'lagapenak');
     echo '</div>';
     $loan->renderReadOnly($ID);
-    echo '<div class="mt-3">';
+    echo '<div class="d-flex gap-2 mt-3">';
     echo '<a href="' . Plugin::getWebDir('lagapenak') . '/front/loan.php" class="btn btn-secondary">';
     echo '<i class="fas fa-arrow-left me-1"></i>' . __('Back', 'lagapenak');
     echo '</a>';
+    if ($can_albaran) {
+        $albaran_url = Plugin::getWebDir('lagapenak', true) . '/front/albaran.php?id=' . $ID;
+        echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
+        echo '<i class="fas fa-file-signature me-1"></i>' . __('Delivery note', 'lagapenak') . '</a>';
+    }
     echo '</div>';
 }
 

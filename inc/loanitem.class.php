@@ -318,7 +318,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
     // ── Native GLPI search support ───────────────────────────────────────────
 
     static function canView() {
-        return Session::haveRight(self::$rightname, READ);
+        return PluginLagapenakLoan::hasPluginRight(PluginLagapenakLoan::$rightname, READ);
     }
 
     static function getTypeName($nb = 0) {
