@@ -3,6 +3,27 @@
 // Load GLPI for session / DB / classes — standalone HTML page (no Html::header)
 include('../../../inc/includes.php');
 
+// Custom TCPDF subclass — renders footer image on every page
+if (!class_exists('PluginLagapenakAlbaranPDF')) {
+    class PluginLagapenakAlbaranPDF extends TCPDF {
+        public $alb_footer_image = null;
+        public $alb_footer_h     = 20; // mm
+
+        public function Footer() {
+            if ($this->alb_footer_image && file_exists($this->alb_footer_image)) {
+                $pg_h = $this->getPageHeight();
+                $this->Image(
+                    $this->alb_footer_image,
+                    20,
+                    $pg_h - 4 - $this->alb_footer_h,
+                    170,
+                    $this->alb_footer_h
+                );
+            }
+        }
+    }
+}
+
 Session::checkLoginUser();
 
 $ID = isset($_GET['id']) ? (int) $_GET['id'] : 0;
@@ -86,6 +107,144 @@ function plugin_lagapenak_date_es($date_str) {
     return intval(date('j', $ts)) . ' de ' . $months[intval(date('n', $ts))] . ' de ' . date('Y', $ts);
 }
 
+// ── PDF GENERATOR ────────────────────────────────────────────────────────────────
+function plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $header_fs, $footer_fs) {
+
+    // Pre-compute footer height from image aspect ratio
+    $footer_h_mm = 0;
+    if ($footer_fs) {
+        $fi = @getimagesize($footer_fs);
+        if ($fi && $fi[0] > 0) {
+            $footer_h_mm = min(round(170 * ($fi[1] / $fi[0])), 25);
+        } else {
+            $footer_h_mm = 18;
+        }
+    }
+    $foot_margin     = $footer_h_mm + 5;  // footer area height at bottom of page
+    $autobreak_margin = $foot_margin + 5; // content stops this far from bottom
+
+    $pdf = new PluginLagapenakAlbaranPDF('P', 'mm', 'A4', true, 'UTF-8');
+    $pdf->SetCreator('Lagapenak');
+    $pdf->SetTitle('Cesión de Material #' . $loan->getID());
+    $pdf->setPrintHeader(false);
+    $pdf->SetMargins(20, 15, 20);
+    $pdf->SetAutoPageBreak(true, $autobreak_margin);
+
+    // Attach footer image to every page via custom Footer() method
+    if ($footer_fs) {
+        $pdf->setPrintFooter(true);
+        $pdf->SetFooterMargin($foot_margin);
+        $pdf->alb_footer_image = $footer_fs;
+        $pdf->alb_footer_h     = $footer_h_mm;
+    } else {
+        $pdf->setPrintFooter(false);
+    }
+
+    $pdf->AddPage();
+    $pdf->SetFont('helvetica', '', 10);
+
+    $y_cursor = 12;
+
+    // Header image — small logo, LEFT side only (max 90 mm wide, max 20 mm tall)
+    if ($header_fs) {
+        $hi      = @getimagesize($header_fs);
+        $max_w   = 90;
+        $max_h   = 20;
+        $hh_mm   = $max_h;
+        $hw_mm   = $max_w;
+        if ($hi && $hi[0] > 0 && $hi[1] > 0) {
+            $aspect  = $hi[0] / $hi[1]; // w/h
+            $calc_w  = $hh_mm * $aspect;
+            if ($calc_w > $max_w) {
+                $hh_mm = $max_w / $aspect;
+                $hw_mm = $max_w;
+            } else {
+                $hw_mm = $calc_w;
+            }
+        }
+        $pdf->Image($header_fs, 20, $y_cursor, $hw_mm, $hh_mm);
+        $y_cursor += $hh_mm + 6;
+    }
+    $pdf->SetY($y_cursor);
+
+    // Prepare data
+    $name     = $loan->fields['signature_name']   ?? '';
+    $passport = $loan->fields['albaran_passport'] ?? '';
+    $project  = $loan->fields['albaran_project']  ?? '';
+    $fecha_rec = !empty($loan->fields['fecha_inicio']) ? Html::convDate($loan->fields['fecha_inicio']) : '—';
+    $fecha_dev = !empty($loan->fields['fecha_fin'])    ? Html::convDate($loan->fields['fecha_fin'])    : '—';
+    $sig_date_txt = !empty($loan->fields['signature_date'])
+        ? plugin_lagapenak_date_es($loan->fields['signature_date']) : '';
+
+    // Items list
+    $items_li = '';
+    foreach ($items as $item) {
+        $n = htmlspecialchars(PluginLagapenakLoanItem::getItemName($item['itemtype'], $item['items_id']));
+        $items_li .= "<li>1x {$n}</li>";
+    }
+    if (!$items_li) $items_li = '<li>—</li>';
+
+    // Conditions list
+    $cond_li = '';
+    foreach ($condiciones as $c) {
+        $cond_li .= '<li style="margin-bottom:2px;">' . htmlspecialchars($c) . '</li>';
+    }
+
+    $lbl = 'font-weight:bold;width:48mm;';
+    $html = '
+<h3 style="font-size:12pt;letter-spacing:1px;text-transform:uppercase;margin:0 0 8px 0;">CESIÓN DE MATERIAL</h3>
+<table style="width:100%;font-size:10pt;margin-bottom:5px;">
+  <tr><td style="' . $lbl . '">Nombre completo:</td><td>' . htmlspecialchars($name) . '</td></tr>
+  <tr><td style="' . $lbl . '">DNI / Pasaporte:</td><td>' . htmlspecialchars($passport) . '</td></tr>
+  <tr><td style="' . $lbl . '">Proyecto:</td><td>' . htmlspecialchars($project) . '</td></tr>
+</table>
+<p style="font-weight:bold;margin:5px 0 2px;font-size:10pt;">Material / equipos:</p>
+<ul style="font-size:10pt;margin:0 0 5px 0;">' . $items_li . '</ul>
+<table style="width:100%;font-size:10pt;margin-bottom:5px;">
+  <tr><td style="' . $lbl . '">Fecha de recogida:</td><td>' . htmlspecialchars($fecha_rec) . '</td></tr>
+  <tr><td style="' . $lbl . '">Fecha de devolución:</td><td>' . htmlspecialchars($fecha_dev) . '</td></tr>
+</table>
+<hr/>
+<p style="font-size:8.5pt;">El usuario del material se compromete a cumplir las siguientes normas de uso y funcionamiento de Tabakalera:</p>
+<ol style="font-size:8.5pt;">' . $cond_li . '</ol>
+<p style="font-size:8.5pt;">El usuario del material confirma aceptar estas normas,</p>';
+
+    // $reseth=false so GetY() returns position AFTER the rendered content
+    $pdf->writeHTML($html, true, false, false, false, '');
+
+    // Signature image + name + date
+    if (!empty($loan->fields['signature_data'])) {
+        $sig_y      = $pdf->GetY() + 4;
+        $sig_data   = $loan->fields['signature_data'];
+        $sig_binary = base64_decode(substr($sig_data, strpos($sig_data, ',') + 1));
+
+        // Add white background to transparent canvas PNG so it renders correctly
+        $sig_gd = @imagecreatefromstring($sig_binary);
+        if ($sig_gd) {
+            $white = imagecreatetruecolor(imagesx($sig_gd), imagesy($sig_gd));
+            imagefill($white, 0, 0, imagecolorallocate($white, 255, 255, 255));
+            imagecopy($white, $sig_gd, 0, 0, 0, 0, imagesx($sig_gd), imagesy($sig_gd));
+            ob_start();
+            imagepng($white);
+            $sig_binary = ob_get_clean();
+            imagedestroy($sig_gd);
+            imagedestroy($white);
+        }
+
+        $pdf->Image('@' . $sig_binary, 20, $sig_y, 70, 25, 'PNG');
+
+        $pdf->SetFont('helvetica', '', 9);
+        $pdf->SetXY(20, $sig_y + 27);
+        $pdf->Cell(70, 5, $name, 0, 0, 'L');
+
+        $pdf->SetFont('helvetica', '', 9);
+        $pdf->SetXY(110, $sig_y + 10);
+        $pdf->MultiCell(80, 5, "Donostia/San Sebastián, a\n" . $sig_date_txt, 0, 'R');
+    }
+
+    return $pdf;
+}
+
 // ── POST: save signature ──────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_signature'])) {
     $sig_data     = $_POST['signature_data']          ?? '';
@@ -123,6 +282,65 @@ $disp_sig_date = $loan->fields['signature_date']
 
 $fecha_recogida   = $loan->fields['fecha_inicio'] ? Html::convDate($loan->fields['fecha_inicio']) : '—';
 $fecha_devolucion = $loan->fields['fecha_fin']    ? Html::convDate($loan->fields['fecha_fin'])    : '—';
+
+// Pre-fill email modal with requester's email (editable)
+$dest_email_prefill = '';
+if ($loan->fields['users_id']) {
+    $dest_email_prefill = UserEmail::getDefaultForUser($loan->fields['users_id']) ?: '';
+}
+
+// ── Action: PDF download ──────────────────────────────────────────────────────────
+if (isset($_GET['action']) && $_GET['action'] === 'pdf') {
+    if (!$already_signed) {
+        Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID);
+    }
+    $pdf      = plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $header_fs, $footer_fs);
+    $filename = 'albaran_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $loan->fields['name'] ?: 'loan') . '_' . $ID . '.pdf';
+    $pdf->Output($filename, 'D');
+    exit;
+}
+
+// ── Action: Send by email ─────────────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
+    $to_email = trim($_POST['to_email'] ?? '');
+    if ($to_email && filter_var($to_email, FILTER_VALIDATE_EMAIL) && $already_signed) {
+        $pdf         = plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $header_fs, $footer_fs);
+        $pdf_content = $pdf->Output('', 'S');
+        $filename    = 'albaran_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $loan->fields['name'] ?: 'loan') . '_' . $ID . '.pdf';
+        $loan_name   = $loan->fields['name'] ?: __('Loan', 'lagapenak') . ' #' . $ID;
+
+        global $CFG_GLPI;
+        $from_email = $CFG_GLPI['admin_email']      ?? '';
+        $from_name  = $CFG_GLPI['admin_email_name'] ?? 'Lagapenak';
+
+        if (class_exists('GLPIMailer')) {
+            try {
+                $mail = new GLPIMailer();
+                if ($from_email) $mail->setFrom($from_email, $from_name);
+                $mail->addAddress($to_email);
+                $mail->Subject  = sprintf(__('Delivery note — %s', 'lagapenak'), $loan_name);
+                $mail->CharSet  = 'UTF-8';
+                $mail->Encoding = 'base64';
+                $mail->isHTML(true);
+                $body_line = sprintf(
+                    __('Please find attached the delivery note for loan <strong>%s</strong>.', 'lagapenak'),
+                    htmlspecialchars($loan_name)
+                );
+                $mail->Body    = '<p>' . $body_line . '</p>';
+                $mail->AltBody = strip_tags($body_line);
+                $mail->addStringAttachment($pdf_content, $filename, 'base64', 'application/pdf');
+                $mail->send();
+                Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID . '&email_sent=1');
+            } catch (\Exception $e) {
+                Toolbox::logError('[lagapenak] Error sending albaran email: ' . $e->getMessage());
+                Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID . '&email_error=1');
+            }
+            exit;
+        }
+    }
+    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID);
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -154,8 +372,12 @@ $fecha_devolucion = $loan->fields['fecha_fin']    ? Html::convDate($loan->fields
             <i class="fas fa-arrow-left me-1"></i><?= __('Back to loan', 'lagapenak') ?>
         </a>
         <?php if ($already_signed): ?>
-        <button type="button" class="btn btn-sm btn-success" onclick="window.print()">
-            <i class="fas fa-print me-1"></i><?= __('Print / Save PDF', 'lagapenak') ?>
+        <a href="?action=pdf&id=<?= $ID ?>" class="btn btn-sm btn-outline-success">
+            <i class="fas fa-file-pdf me-1"></i>Descargar PDF
+        </a>
+        <button type="button" class="btn btn-sm btn-outline-primary"
+                data-bs-toggle="modal" data-bs-target="#emailModal">
+            <i class="fas fa-envelope me-1"></i>Enviar por correo
         </button>
         <?php endif; ?>
     </div>
@@ -163,6 +385,14 @@ $fecha_devolucion = $loan->fields['fecha_fin']    ? Html::convDate($loan->fields
     <?php if (isset($_GET['saved'])): ?>
     <div class="alert alert-success no-print">
         <i class="fas fa-check-circle me-2"></i><?= __('Signature saved successfully.', 'lagapenak') ?>
+    </div>
+    <?php elseif (isset($_GET['email_sent'])): ?>
+    <div class="alert alert-success no-print">
+        <i class="fas fa-check-circle me-2"></i>Albarán enviado correctamente por correo.
+    </div>
+    <?php elseif (isset($_GET['email_error'])): ?>
+    <div class="alert alert-danger no-print">
+        <i class="fas fa-exclamation-circle me-2"></i>Error al enviar el correo. Revisa la configuración de email en GLPI.
     </div>
     <?php endif; ?>
 
@@ -304,6 +534,41 @@ $fecha_devolucion = $loan->fields['fecha_fin']    ? Html::convDate($loan->fields
     </div><!-- /doc-card -->
 </div><!-- /container -->
 
+<!-- Email modal -->
+<div class="modal fade no-print" id="emailModal" tabindex="-1" aria-labelledby="emailModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="emailModalLabel">
+                    <i class="fas fa-envelope me-2"></i>Enviar albarán por correo
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="">
+                <input type="hidden" name="_glpi_csrf_token" value="<?= Session::getNewCSRFToken() ?>">
+                <input type="hidden" name="action_email" value="1">
+                <div class="modal-body">
+                    <label class="form-label fw-semibold">
+                        Correo electrónico <span class="text-danger">*</span>
+                    </label>
+                    <input type="email" name="to_email" class="form-control" required
+                           placeholder="destinatario@ejemplo.com"
+                           value="<?= htmlspecialchars($dest_email_prefill) ?>">
+                    <div class="form-text mt-2">
+                        <i class="fas fa-paperclip me-1"></i>El albarán se adjuntará como PDF al correo.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane me-1"></i>Enviar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 (function () {
@@ -353,6 +618,7 @@ $fecha_devolucion = $loan->fields['fecha_fin']    ? Html::convDate($loan->fields
         resignBtn.addEventListener('click', function () {
             document.getElementById('sign-form-wrapper').style.display = 'block';
             resignBtn.style.display = 'none';
+            resizeCanvas(); // canvas was hidden on load → recalculate dimensions now
         });
     }
 })();
