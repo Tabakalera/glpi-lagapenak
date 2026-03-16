@@ -5,15 +5,7 @@ include('../../../inc/includes.php');
 Session::checkLoginUser();
 
 $can_supervise = PluginLagapenakLoan::canSupervise();
-
-// Gate: requires at least READ or supervisor right to access the loan list
-if (!PluginLagapenakLoan::canView() && !$can_supervise) {
-    Html::displayRightError();
-    Html::footer();
-    exit;
-}
-
-$tab = isset($_GET['tab']) ? $_GET['tab'] : 'prestamos';
+$tab           = isset($_GET['tab']) ? $_GET['tab'] : 'prestamos';
 // Non-supervisors cannot access the activos tab
 if ($tab === 'activos' && !$can_supervise) {
     $tab = 'prestamos';
@@ -23,7 +15,12 @@ $avail_url  = $plugin_web . '/ajax/availability.php';
 $loan_form  = $plugin_web . '/front/loan.form.php';
 $cal_url    = $plugin_web . '/front/calendar.php';
 
-Html::header('Lagapenak - Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
+$is_helpdesk = (Session::getCurrentInterface() === 'helpdesk');
+if ($is_helpdesk) {
+    Html::helpHeader('Lagapenak - Préstamos');
+} else {
+    Html::header('Lagapenak - Préstamos', $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
+}
 
 // Firefox fix: GLPI calls form.submit() programmatically (not via a submit event)
 // when its ResultsView finds no pre-rendered results. Programmatic form.submit()
@@ -93,7 +90,6 @@ if(window.location.search.indexOf("tab=disponibilidad")!==-1){
     $url_delivered = $f([['link' => 'AND', 'field' => 3, 'searchtype' => 'equals', 'value' => $s2]]);
     $url_returned  = $f([['link' => 'AND', 'field' => 3, 'searchtype' => 'equals', 'value' => $s3]]);
     $url_overdue   = $f([
-        ['link' => 'AND', 'field' => 3,  'searchtype' => 'notequals', 'value' => $s2],
         ['link' => 'AND', 'field' => 3,  'searchtype' => 'notequals', 'value' => $s3],
         ['link' => 'AND', 'field' => 3,  'searchtype' => 'notequals', 'value' => $s4],
         ['link' => 'AND', 'field' => 7,  'searchtype' => 'lessthan',  'value' => date('Y-m-d H:i:s')],
@@ -898,4 +894,8 @@ if ($tab === 'prestamos') {
     <?php
 }
 
-Html::footer();
+if ($is_helpdesk) {
+    Html::helpFooter();
+} else {
+    Html::footer();
+}
