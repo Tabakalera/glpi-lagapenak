@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.1] - 2026-03-24
+
+### Fixed
+- Simplified interface (helpdesk profiles): plugin now stays under "Complementos" instead of being relocated to "Herramientas" — `Html::helpHeader()` is used when the active profile interface is `helpdesk`
+- Simplified interface: added "+ New loan" button directly in the page content, since the standard toolbar is not rendered in helpdesk layout
+- Email notification and return reminder links were broken (`http://plugins/lagapenak/...`) — replaced `Plugin::getWebDir()` with `$CFG_GLPI['url_base']` to guarantee an absolute URL in all contexts
+- Helpdesk sidebar entry ("Complementos") is now hidden for profiles without READ permission on the plugin — hook moved to `plugin_init_lagapenak()` with permission check
+
+---
+
 ## [1.3.0] - 2026-03-16
 
 ### Added
