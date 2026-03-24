@@ -30,8 +30,8 @@ function plugin_lagapenak_notify_loan_created($item) {
     $fecha_dev = !empty($item->fields['fecha_fin'])
         ? Html::convDate($item->fields['fecha_fin']) : '—';
 
-    // Loan link
-    $loan_url  = Plugin::getWebDir('lagapenak', true) . '/front/loan.form.php?id=' . (int) $item->getID();
+    // Loan link — use url_base to guarantee an absolute URL
+    $loan_url  = rtrim($CFG_GLPI['url_base'], '/') . '/plugins/lagapenak/front/loan.form.php?id=' . (int) $item->getID();
     $loan_name = $item->fields['name'] ?: __('Loan #', 'lagapenak') . $item->getID();
 
     global $CFG_GLPI;
@@ -135,7 +135,7 @@ function plugin_lagapenak_send_loan_reminder(array $loan_row): void {
     $fecha_dev = !empty($loan_row['fecha_fin'])
         ? Html::convDateTime($loan_row['fecha_fin']) : '—';
     $loan_name = $loan_row['name'] ?: __('Loan #', 'lagapenak') . $loan_row['id'];
-    $loan_url  = Plugin::getWebDir('lagapenak', true) . '/front/loan.form.php?id=' . (int)$loan_row['id'];
+    $loan_url  = rtrim($CFG_GLPI['url_base'], '/') . '/plugins/lagapenak/front/loan.form.php?id=' . (int)$loan_row['id'];
 
     global $CFG_GLPI;
     $from_email = $CFG_GLPI['admin_email']      ?? '';

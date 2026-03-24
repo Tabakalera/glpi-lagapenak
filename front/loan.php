@@ -15,7 +15,12 @@ $avail_url  = $plugin_web . '/ajax/availability.php';
 $loan_form  = $plugin_web . '/front/loan.form.php';
 $cal_url    = $plugin_web . '/front/calendar.php';
 
-Html::header(__('Lagapenak - Loans', 'lagapenak'), $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
+$is_helpdesk = ($_SESSION['glpiactiveprofile']['interface'] ?? '') === 'helpdesk';
+if ($is_helpdesk) {
+    Html::helpHeader(__('Lagapenak - Loans', 'lagapenak'));
+} else {
+    Html::header(__('Lagapenak - Loans', 'lagapenak'), $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
+}
 
 // Firefox fix: GLPI calls form.submit() programmatically (not via a submit event)
 // when its ResultsView finds no pre-rendered results. Programmatic form.submit()
@@ -102,6 +107,15 @@ if(window.location.search.indexOf("tab=disponibilidad")!==-1){
         array_splice($tile_defs, 1, 0, [[$cnt_mine, __('My loans', 'lagapenak'), 'fas fa-user', '#6298d5', $url_mine]]);
     }
     $tile_defs[] = [$cnt_overdue, __('Overdue', 'lagapenak'), 'fas fa-exclamation-triangle', '#e74c3c', $url_overdue];
+
+    // "+ New loan" button for helpdesk interface (toolbar buttons don't appear there)
+    if ($is_helpdesk && PluginLagapenakLoan::canCreate()) {
+        echo '<div class="mb-3">';
+        echo '<a href="' . htmlspecialchars($loan_form) . '" class="btn btn-primary">';
+        echo '<i class="fas fa-plus me-1"></i>' . __('New loan', 'lagapenak');
+        echo '</a>';
+        echo '</div>';
+    }
 
     // Render summary tiles — same visual style as GLPI's mini_ticket dashboard tiles
     echo '<div class="d-none d-md-flex flex-wrap mb-2" style="gap:4px;padding:4px 0;">';

@@ -6,7 +6,6 @@ define('PLUGIN_LAGAPENAK_VERSION', '1.3.0');
 global $PLUGIN_HOOKS;
 $PLUGIN_HOOKS['csrf_compliant']['lagapenak'] = true;
 $PLUGIN_HOOKS['menu_toadd']['lagapenak'] = ['tools' => 'PluginLagapenakLoan'];
-$PLUGIN_HOOKS['helpdesk_menu_entry']['lagapenak'] = '/plugins/lagapenak/front/loan.php';
 define('PLUGIN_LAGAPENAK_MIN_GLPI', '10.0.0');
 define('PLUGIN_LAGAPENAK_MAX_GLPI', '10.99.99');
 
@@ -65,6 +64,12 @@ function plugin_init_lagapenak() {
         'state'   => CronTask::STATE_WAITING,
         'mode'    => CronTask::MODE_INTERNAL,
     ]);
+
+    // Only show the helpdesk sidebar entry to users who have at least READ on the plugin
+    if (PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_loan', READ)) {
+        global $PLUGIN_HOOKS;
+        $PLUGIN_HOOKS['helpdesk_menu_entry']['lagapenak'] = '/plugins/lagapenak/front/loan.php';
+    }
 
     global $PLUGIN_HOOKS;
     $PLUGIN_HOOKS['item_add']['lagapenak'] = [

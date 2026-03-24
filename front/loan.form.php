@@ -195,7 +195,11 @@ if ($ID > 0) {
             && ($_lf_is_req || $_lf_is_dest));
 }
 
-Html::header($title, $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
+if (($_SESSION['glpiactiveprofile']['interface'] ?? '') === 'helpdesk') {
+    Html::helpHeader($title);
+} else {
+    Html::header($title, $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
+}
 
 echo '<div class="container-fluid mt-3">';
 

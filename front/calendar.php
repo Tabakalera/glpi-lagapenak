@@ -6,7 +6,11 @@ Session::checkLoginUser();
 
 Html::requireJs('fullcalendar');
 
-Html::header(__('Lagapenak - Loan Calendar', 'lagapenak'), $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
+if (($_SESSION['glpiactiveprofile']['interface'] ?? '') === 'helpdesk') {
+    Html::helpHeader(__('Lagapenak - Loan Calendar', 'lagapenak'));
+} else {
+    Html::header(__('Lagapenak - Loan Calendar', 'lagapenak'), $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
+}
 
 $plugin_web      = Plugin::getWebDir('lagapenak', true);
 $ajax_events_url = $plugin_web . '/ajax/calendar_events.php';
