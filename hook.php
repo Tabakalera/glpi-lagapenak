@@ -54,17 +54,19 @@ function plugin_lagapenak_install() {
         $DB->queryOrDie($query, $DB->error());
     }
 
-    // Upgrade: add signature + albaran + beneficiary columns if not present
+    // Upgrade: add signature + albaran + beneficiary + signing-token columns if not present
     foreach ([
-        'signature_data'   => "LONGTEXT NULL DEFAULT NULL",
-        'signature_name'   => "VARCHAR(255) NOT NULL DEFAULT ''",
-        'signature_date'   => "TIMESTAMP NULL DEFAULT NULL",
-        'has_albaran'      => "TINYINT(1) NOT NULL DEFAULT 0",
-        'albaran_passport' => "VARCHAR(100) NOT NULL DEFAULT ''",
-        'albaran_project'  => "VARCHAR(255) NOT NULL DEFAULT ''",
+        'signature_data'    => "LONGTEXT NULL DEFAULT NULL",
+        'signature_name'    => "VARCHAR(255) NOT NULL DEFAULT ''",
+        'signature_date'    => "TIMESTAMP NULL DEFAULT NULL",
+        'has_albaran'       => "TINYINT(1) NOT NULL DEFAULT 0",
+        'albaran_passport'  => "VARCHAR(100) NOT NULL DEFAULT ''",
+        'albaran_project'   => "VARCHAR(255) NOT NULL DEFAULT ''",
         'beneficiary_name'  => "VARCHAR(255) NOT NULL DEFAULT ''",
         'beneficiary_email' => "VARCHAR(255) NOT NULL DEFAULT ''",
         'beneficiary_dni'   => "VARCHAR(100) NOT NULL DEFAULT ''",
+        'sign_token'        => "VARCHAR(64) NULL DEFAULT NULL",
+        'sign_token_expires'=> "DATETIME NULL DEFAULT NULL",
     ] as $col => $def) {
         if (!$DB->fieldExists('glpi_plugin_lagapenak_loans', $col)) {
             $DB->queryOrDie(

@@ -30,11 +30,11 @@ function plugin_lagapenak_notify_loan_created($item) {
     $fecha_dev = !empty($item->fields['fecha_fin'])
         ? Html::convDate($item->fields['fecha_fin']) : '—';
 
+    global $CFG_GLPI;
+
     // Loan link — use url_base to guarantee an absolute URL
     $loan_url  = rtrim($CFG_GLPI['url_base'], '/') . '/plugins/lagapenak/front/loan.form.php?id=' . (int) $item->getID();
     $loan_name = $item->fields['name'] ?: __('Loan #', 'lagapenak') . $item->getID();
-
-    global $CFG_GLPI;
     $from_email = $CFG_GLPI['admin_email']      ?? '';
     $from_name  = $CFG_GLPI['admin_email_name'] ?? 'Lagapenak';
 
@@ -200,5 +200,81 @@ HTML;
         $mail->send();
     } catch (\Exception $e) {
         Toolbox::logError('[lagapenak] Error sending return reminder: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Sends the signed delivery note PDF to the requester and beneficiary.
+ * Called after signature is saved (from albaran.php and sign.php).
+ * If both addresses are the same, only one email is sent.
+ */
+function plugin_lagapenak_send_signed_albaran(int $loan_id): void {
+    global $CFG_GLPI;
+
+    include_once GLPI_ROOT . '/plugins/lagapenak/inc/albaran_pdf.php';
+
+    $loan = new PluginLagapenakLoan();
+    if (!$loan->getFromDB($loan_id)) return;
+
+    $items       = PluginLagapenakLoanItem::getItemsForLoan($loan_id);
+    $condiciones = plugin_lagapenak_get_condiciones();
+    $header_fs   = plugin_lagapenak_find_img('albaran_header');
+    $footer_fs   = plugin_lagapenak_find_img('albaran_footer');
+
+    // Fields shown in the PDF (same as albaran.php config)
+    $albaran_loan_fields = ['field_1', 'field_2'];
+
+    $pdf      = plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $header_fs, $footer_fs, $albaran_loan_fields);
+    $pdf_content = $pdf->Output('', 'S');
+    $filename = 'albaran_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $loan->fields['name'] ?: 'loan') . '_' . $loan_id . '.pdf';
+    $loan_name = $loan->fields['name'] ?: 'Préstamo #' . $loan_id;
+
+    $from_email = $CFG_GLPI['admin_email']      ?? '';
+    $from_name  = $CFG_GLPI['admin_email_name'] ?? 'Lagapenak';
+
+    // Collect unique recipient addresses
+    $recipients = [];
+
+    // Requester
+    $req_email = UserEmail::getDefaultForUser((int)($loan->fields['users_id'] ?? 0));
+    if ($req_email) $recipients[$req_email] = $req_email;
+
+    // Beneficiary: beneficiary_email field first, then the destinatario GLPI user
+    $ben_email = trim($loan->fields['beneficiary_email'] ?? '');
+    if (!$ben_email) {
+        $ben_email = UserEmail::getDefaultForUser((int)($loan->fields['users_id_destinatario'] ?? 0)) ?: '';
+    }
+    if ($ben_email) $recipients[$ben_email] = $ben_email;
+
+    if (empty($recipients) || !class_exists('GLPIMailer')) return;
+
+    $subject    = sprintf(__('Signed delivery note — %s', 'lagapenak'), $loan_name);
+    $body_line  = sprintf(
+        __('The delivery note for loan <strong>%s</strong> has been signed. Please find the signed PDF attached.', 'lagapenak'),
+        htmlspecialchars($loan_name)
+    );
+    $body = <<<HTML
+<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.6;">
+  <p>{$body_line}</p>
+</body></html>
+HTML;
+
+    foreach ($recipients as $email) {
+        try {
+            $mail = new GLPIMailer();
+            if ($from_email) $mail->setFrom($from_email, $from_name);
+            $mail->addAddress($email);
+            $mail->Subject  = $subject;
+            $mail->CharSet  = 'UTF-8';
+            $mail->Encoding = 'base64';
+            $mail->isHTML(true);
+            $mail->Body     = $body;
+            $mail->AltBody  = strip_tags($body_line);
+            $mail->addStringAttachment($pdf_content, $filename, 'base64', 'application/pdf');
+            $mail->send();
+        } catch (\Exception $e) {
+            Toolbox::logError('[lagapenak] Error sending signed albaran to ' . $email . ': ' . $e->getMessage());
+        }
     }
 }

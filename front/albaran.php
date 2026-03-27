@@ -3,26 +3,7 @@
 // Load GLPI for session / DB / classes — standalone HTML page (no Html::header)
 include('../../../inc/includes.php');
 
-// Custom TCPDF subclass — renders footer image on every page
-if (!class_exists('PluginLagapenakAlbaranPDF')) {
-    class PluginLagapenakAlbaranPDF extends TCPDF {
-        public $alb_footer_image = null;
-        public $alb_footer_h     = 20; // mm
-
-        public function Footer() {
-            if ($this->alb_footer_image && file_exists($this->alb_footer_image)) {
-                $pg_h = $this->getPageHeight();
-                $this->Image(
-                    $this->alb_footer_image,
-                    20,
-                    $pg_h - 4 - $this->alb_footer_h,
-                    170,
-                    $this->alb_footer_h
-                );
-            }
-        }
-    }
-}
+include_once __DIR__ . '/../inc/albaran_pdf.php';
 
 Session::checkLoginUser();
 
@@ -55,216 +36,13 @@ if (!$_alb_allowed) {
 // Pon [] para no mostrar ninguno.
 $albaran_loan_fields = ['field_1', 'field_2']; // Convocatoria + Proyecto
 
-// ── CONDICIONES ─────────────────────────────────────────────────────────────────
-// Para personalizar el texto edita este array. Ver README.md → "Condiciones albarán"
-$condiciones = [
-    'El uso que se vaya a hacer de los materiales deberá ir acorde con las líneas de trabajo desarrolladas por el centro.',
-    'La persona solicitante del material deberá devolver el material en las mismas condiciones en que le fue entregado. En caso de desperfecto el/la solicitante deberá abonar el valor de reposición del elemento o su reparación.',
-    'La persona solicitante asumirá cualquier tipo de responsabilidad que pudiera derivarse directa o indirectamente de la actividad que realice con el material prestado.',
-    'La recogida y entrega de materiales se hará en las oficinas de Tabakalera de 9h a 15h.',
-    'Los materiales fungibles asociados al uso del material correrán por cuenta de la persona usuaria.',
-    'La persona solicitante se hará cargo del borrado del material generado en los equipos solicitados. Tabakalera procederá al borrado de las memorias diariamente.',
-    'La persona solicitante se compromete a hacer constar la colaboración de Tabakalera, incluyendo su logotipo, en las producciones que deriven del uso del material prestado.',
-];
-
-// ── IMAGE HELPERS ────────────────────────────────────────────────────────────────
-// Images stored at: lagapenak/pics/albaran_header.png (or .jpg)
-//                   lagapenak/pics/albaran_footer.png (or .jpg)
-function plugin_lagapenak_find_img($name) {
-    foreach (['.png', '.jpg', '.jpeg'] as $ext) {
-        $fs = GLPI_ROOT . '/plugins/lagapenak/pics/' . $name . $ext;
-        if (file_exists($fs)) return $fs;
-    }
-    return null;
-}
-
 global $CFG_GLPI;
-$root_doc = rtrim($CFG_GLPI['root_doc'] ?? '', '/');
 
-function plugin_lagapenak_img_web($name) {
-    global $root_doc;
-    foreach (['.png', '.jpg', '.jpeg'] as $ext) {
-        $fs = GLPI_ROOT . '/plugins/lagapenak/pics/' . $name . $ext;
-        if (file_exists($fs)) return $root_doc . '/plugins/lagapenak/pics/' . $name . $ext;
-    }
-    return null;
-}
-
-$header_fs  = plugin_lagapenak_find_img('albaran_header');
-$footer_fs  = plugin_lagapenak_find_img('albaran_footer');
-$header_web = plugin_lagapenak_img_web('albaran_header');
-$footer_web = plugin_lagapenak_img_web('albaran_footer');
-
-// ── HELPERS ──────────────────────────────────────────────────────────────────────
-function plugin_lagapenak_albaran_user_name($uid) {
-    if (!$uid) return '—';
-    $u = new User();
-    if (!$u->getFromDB($uid)) return '—';
-    $name = trim(($u->fields['realname'] ?? '') . ' ' . ($u->fields['firstname'] ?? ''));
-    return $name ?: $u->fields['name'];
-}
-
-function plugin_lagapenak_date_es($date_str) {
-    if (!$date_str) return '—';
-    $ts = strtotime($date_str);
-    if (!$ts) return $date_str;
-    $months = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-               'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-    return intval(date('j', $ts)) . ' de ' . $months[intval(date('n', $ts))] . ' de ' . date('Y', $ts);
-}
-
-// ── PDF GENERATOR ────────────────────────────────────────────────────────────────
-function plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $header_fs, $footer_fs, $albaran_loan_fields = []) {
-
-    // Pre-compute footer height from image aspect ratio
-    $footer_h_mm = 0;
-    if ($footer_fs) {
-        $fi = @getimagesize($footer_fs);
-        if ($fi && $fi[0] > 0) {
-            $footer_h_mm = min(round(170 * ($fi[1] / $fi[0])), 25);
-        } else {
-            $footer_h_mm = 18;
-        }
-    }
-    $foot_margin     = $footer_h_mm + 5;  // footer area height at bottom of page
-    $autobreak_margin = $foot_margin + 5; // content stops this far from bottom
-
-    $pdf = new PluginLagapenakAlbaranPDF('P', 'mm', 'A4', true, 'UTF-8');
-    $pdf->SetCreator('Lagapenak');
-    $pdf->SetTitle('Cesión de Material #' . $loan->getID());
-    $pdf->setPrintHeader(false);
-    $pdf->SetMargins(20, 15, 20);
-    $pdf->SetAutoPageBreak(true, $autobreak_margin);
-
-    // Attach footer image to every page via custom Footer() method
-    if ($footer_fs) {
-        $pdf->setPrintFooter(true);
-        $pdf->SetFooterMargin($foot_margin);
-        $pdf->alb_footer_image = $footer_fs;
-        $pdf->alb_footer_h     = $footer_h_mm;
-    } else {
-        $pdf->setPrintFooter(false);
-    }
-
-    $pdf->AddPage();
-    $pdf->SetFont('helvetica', '', 10);
-
-    $y_cursor = 12;
-
-    // Header image — small logo, LEFT side only (max 90 mm wide, max 20 mm tall)
-    if ($header_fs) {
-        $hi      = @getimagesize($header_fs);
-        $max_w   = 90;
-        $max_h   = 20;
-        $hh_mm   = $max_h;
-        $hw_mm   = $max_w;
-        if ($hi && $hi[0] > 0 && $hi[1] > 0) {
-            $aspect  = $hi[0] / $hi[1]; // w/h
-            $calc_w  = $hh_mm * $aspect;
-            if ($calc_w > $max_w) {
-                $hh_mm = $max_w / $aspect;
-                $hw_mm = $max_w;
-            } else {
-                $hw_mm = $calc_w;
-            }
-        }
-        $pdf->Image($header_fs, 20, $y_cursor, $hw_mm, $hh_mm);
-        $y_cursor += $hh_mm + 6;
-    }
-    $pdf->SetY($y_cursor);
-
-    // Prepare data
-    $name     = $loan->fields['signature_name']   ?? '';
-    $passport = $loan->fields['albaran_passport'] ?? '';
-    $project  = $loan->fields['albaran_project']  ?? '';
-    $fecha_rec = !empty($loan->fields['fecha_inicio']) ? Html::convDate($loan->fields['fecha_inicio']) : '—';
-    $fecha_dev = !empty($loan->fields['fecha_fin'])    ? Html::convDate($loan->fields['fecha_fin'])    : '—';
-    $sig_date_txt = !empty($loan->fields['signature_date'])
-        ? plugin_lagapenak_date_es($loan->fields['signature_date']) : '';
-
-    // Items list
-    $items_li = '';
-    foreach ($items as $item) {
-        $n = htmlspecialchars(PluginLagapenakLoanItem::getItemName($item['itemtype'], $item['items_id']));
-        $items_li .= "<li>1x {$n}</li>";
-    }
-    if (!$items_li) $items_li = '<li>—</li>';
-
-    // Conditions list
-    $cond_li = '';
-    foreach ($condiciones as $c) {
-        $cond_li .= '<li style="margin-bottom:2px;">' . htmlspecialchars($c) . '</li>';
-    }
-
-    // Build extra rows: beneficiary email + configured field_N values
-    $ben_email_pdf  = htmlspecialchars(trim($loan->fields['beneficiary_email'] ?? ''));
-    $field_labels   = PluginLagapenakLoan::getFieldLabels();
-    $extra_rows_pdf = '';
-    if ($ben_email_pdf) {
-        $extra_rows_pdf .= '  <tr><td style="' . 'font-weight:bold;width:48mm;' . '">' . __('Email address', 'lagapenak') . ':</td><td>' . $ben_email_pdf . '</td></tr>';
-    }
-    foreach ($albaran_loan_fields as $fkey) {
-        $fval = htmlspecialchars(trim($loan->fields[$fkey] ?? ''));
-        if (!$fval) continue;
-        $flabel = htmlspecialchars($field_labels[$fkey] ?? $fkey);
-        $extra_rows_pdf .= '  <tr><td style="' . 'font-weight:bold;width:48mm;' . '">' . $flabel . ':</td><td>' . $fval . '</td></tr>';
-    }
-
-    $lbl = 'font-weight:bold;width:48mm;';
-    $html = '
-<h3 style="font-size:12pt;letter-spacing:1px;text-transform:uppercase;margin:0 0 8px 0;">' . __('MATERIAL HANDOVER', 'lagapenak') . '</h3>
-<table style="width:100%;font-size:10pt;margin-bottom:5px;">
-  <tr><td style="' . $lbl . '">' . __('Full name', 'lagapenak') . ':</td><td>' . htmlspecialchars($name) . '</td></tr>
-  <tr><td style="' . $lbl . '">' . __('Passport / ID', 'lagapenak') . ':</td><td>' . htmlspecialchars($passport) . '</td></tr>
-  <tr><td style="' . $lbl . '">' . __('Project', 'lagapenak') . ':</td><td>' . htmlspecialchars($project) . '</td></tr>
-' . $extra_rows_pdf . '
-</table>
-<p style="font-weight:bold;margin:5px 0 2px;font-size:10pt;">' . __('Material / equipment', 'lagapenak') . ':</p>
-<ul style="font-size:10pt;margin:0 0 5px 0;">' . $items_li . '</ul>
-<table style="width:100%;font-size:10pt;margin-bottom:5px;">
-  <tr><td style="' . $lbl . '">' . __('Pickup date', 'lagapenak') . ':</td><td>' . htmlspecialchars($fecha_rec) . '</td></tr>
-  <tr><td style="' . $lbl . '">' . __('Return date', 'lagapenak') . ':</td><td>' . htmlspecialchars($fecha_dev) . '</td></tr>
-</table>
-<hr/>
-<p style="font-size:8.5pt;">' . __('The material user agrees to comply with the following rules of use:', 'lagapenak') . '</p>
-<ol style="font-size:8.5pt;">' . $cond_li . '</ol>
-<p style="font-size:8.5pt;">' . __('The material user confirms acceptance of these rules,', 'lagapenak') . '</p>';
-
-    // $reseth=false so GetY() returns position AFTER the rendered content
-    $pdf->writeHTML($html, true, false, false, false, '');
-
-    // Signature image + name + date
-    if (!empty($loan->fields['signature_data'])) {
-        $sig_y      = $pdf->GetY() + 4;
-        $sig_data   = $loan->fields['signature_data'];
-        $sig_binary = base64_decode(substr($sig_data, strpos($sig_data, ',') + 1));
-
-        // Add white background to transparent canvas PNG so it renders correctly
-        $sig_gd = @imagecreatefromstring($sig_binary);
-        if ($sig_gd) {
-            $white = imagecreatetruecolor(imagesx($sig_gd), imagesy($sig_gd));
-            imagefill($white, 0, 0, imagecolorallocate($white, 255, 255, 255));
-            imagecopy($white, $sig_gd, 0, 0, 0, 0, imagesx($sig_gd), imagesy($sig_gd));
-            ob_start();
-            imagepng($white);
-            $sig_binary = ob_get_clean();
-            imagedestroy($sig_gd);
-            imagedestroy($white);
-        }
-
-        $pdf->Image('@' . $sig_binary, 20, $sig_y, 70, 25, 'PNG');
-
-        $pdf->SetFont('helvetica', '', 9);
-        $pdf->SetXY(20, $sig_y + 27);
-        $pdf->Cell(70, 5, $name, 0, 0, 'L');
-
-        $pdf->SetFont('helvetica', '', 9);
-        $pdf->SetXY(110, $sig_y + 10);
-        $pdf->MultiCell(80, 5, "Donostia/San Sebastián, a\n" . $sig_date_txt, 0, 'R');
-    }
-
-    return $pdf;
-}
+$condiciones  = plugin_lagapenak_get_condiciones();
+$header_fs    = plugin_lagapenak_find_img('albaran_header');
+$footer_fs    = plugin_lagapenak_find_img('albaran_footer');
+$header_web   = plugin_lagapenak_img_web('albaran_header');
+$footer_web   = plugin_lagapenak_img_web('albaran_footer');
 
 // ── POST: save signature ──────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_signature'])) {
@@ -282,6 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_signature'])) {
             'albaran_passport' => $sig_passport,
             'albaran_project'  => $sig_project,
         ], ['id' => $ID]);
+        plugin_lagapenak_send_signed_albaran($ID);
     }
     Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID . '&saved=1');
 }
@@ -292,7 +71,7 @@ $already_signed = !empty($loan->fields['signature_data']);
 $plugin_web     = Plugin::getWebDir('lagapenak', true);
 
 $destinatario   = plugin_lagapenak_albaran_user_name($loan->fields['users_id_destinatario']);
-$fa_css         = $root_doc . '/public/lib/fortawesome/fontawesome-free/css/all.min.css';
+$fa_css         = rtrim($CFG_GLPI['root_doc'] ?? '', '/') . '/public/lib/fortawesome/fontawesome-free/css/all.min.css';
 $csrf_token     = Session::getNewCSRFToken();
 
 $disp_name     = htmlspecialchars($loan->fields['signature_name']   ?? '');
@@ -333,6 +112,61 @@ if (isset($_GET['action']) && $_GET['action'] === 'pdf') {
     $filename = 'albaran_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $loan->fields['name'] ?: 'loan') . '_' . $ID . '.pdf';
     $pdf->Output($filename, 'D');
     exit;
+}
+
+// ── Action: Generate public signing token and send by email ──────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_gen_token'])) {
+    global $DB, $CFG_GLPI;
+    $to_email = trim($_POST['sign_to_email'] ?? '');
+    $token    = bin2hex(random_bytes(32));
+    $expires  = date('Y-m-d H:i:s', strtotime('+48 hours'));
+    $DB->update('glpi_plugin_lagapenak_loans', [
+        'sign_token'         => $token,
+        'sign_token_expires' => $expires,
+    ], ['id' => $ID]);
+    $sign_url  = rtrim($CFG_GLPI['url_base'], '/') . '/plugins/lagapenak/front/sign.php?token=' . $token;
+    $loan_name = $loan->fields['name'] ?: __('Loan', 'lagapenak') . ' #' . $ID;
+
+    if ($to_email && filter_var($to_email, FILTER_VALIDATE_EMAIL) && class_exists('GLPIMailer')) {
+        $from_email = $CFG_GLPI['admin_email']      ?? '';
+        $from_name  = $CFG_GLPI['admin_email_name'] ?? 'Lagapenak';
+        $subject    = sprintf(__('Please sign the delivery note — %s', 'lagapenak'), $loan_name);
+        $body_line  = sprintf(
+            __('You have been asked to sign the delivery note for loan <strong>%s</strong>. Please click the button below to sign. The link will expire in 48 hours.', 'lagapenak'),
+            htmlspecialchars($loan_name)
+        );
+        $btn_label  = __('Sign delivery note', 'lagapenak');
+        $body = <<<HTML
+<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.6;">
+  <p>{$body_line}</p>
+  <p style="margin-top:24px;">
+    <a href="{$sign_url}" style="background:#1a73e8;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;">
+      {$btn_label}
+    </a>
+  </p>
+</body></html>
+HTML;
+        try {
+            $mail = new GLPIMailer();
+            if ($from_email) $mail->setFrom($from_email, $from_name);
+            $mail->addAddress($to_email);
+            $mail->Subject  = $subject;
+            $mail->CharSet  = 'UTF-8';
+            $mail->Encoding = 'base64';
+            $mail->isHTML(true);
+            $mail->Body     = $body;
+            $mail->AltBody  = strip_tags($body_line) . "\n\n" . $sign_url;
+            $mail->send();
+            Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID . '&sign_sent=1');
+        } catch (\Exception $e) {
+            Toolbox::logError('[lagapenak] Error sending sign link email: ' . $e->getMessage());
+            Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID . '&sign_error=1');
+        }
+        exit;
+    }
+    // No email provided — just show the link
+    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID . '&sign_link=' . urlencode($sign_url));
 }
 
 // ── Action: Send by email ─────────────────────────────────────────────────────────
@@ -415,15 +249,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
             <i class="fas fa-envelope me-1"></i><?= __('Send by email', 'lagapenak') ?>
         </button>
         <?php endif; ?>
+        <?php if (!$already_signed): ?>
+        <button type="button" class="btn btn-sm btn-outline-info"
+                data-bs-toggle="modal" data-bs-target="#signLinkModal">
+            <i class="fas fa-share-alt me-1"></i><?= __('Send signing link', 'lagapenak') ?>
+        </button>
+        <?php endif; ?>
     </div>
 
-    <?php if (isset($_GET['saved'])): ?>
+    <?php if (isset($_GET['sign_link'])): ?>
+    <div class="alert alert-info no-print">
+        <strong><i class="fas fa-share-alt me-2"></i><?= __('Signing link generated (valid 48 hours)', 'lagapenak') ?>:</strong>
+        <div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
+            <input type="text" class="form-control form-control-sm" id="sign-url-input"
+                   value="<?= htmlspecialchars(urldecode($_GET['sign_link'])) ?>" readonly style="max-width:520px;">
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    onclick="navigator.clipboard.writeText(document.getElementById('sign-url-input').value);this.innerHTML='<i class=\'fas fa-check me-1\'></i><?= __('Copied', 'lagapenak') ?>'">
+                <i class="fas fa-copy me-1"></i><?= __('Copy', 'lagapenak') ?>
+            </button>
+        </div>
+        <div class="form-text mt-1"><?= __('Share this link with the person who needs to sign. No GLPI login required.', 'lagapenak') ?></div>
+    </div>
+    <?php elseif (isset($_GET['saved'])): ?>
     <div class="alert alert-success no-print">
         <i class="fas fa-check-circle me-2"></i><?= __('Signature saved successfully.', 'lagapenak') ?>
     </div>
     <?php elseif (isset($_GET['email_sent'])): ?>
     <div class="alert alert-success no-print">
         <i class="fas fa-check-circle me-2"></i><?= __('Delivery note sent successfully by email.', 'lagapenak') ?>
+    </div>
+    <?php elseif (isset($_GET['sign_sent'])): ?>
+    <div class="alert alert-success no-print">
+        <i class="fas fa-check-circle me-2"></i><?= __('Signing link sent by email successfully.', 'lagapenak') ?>
+    </div>
+    <?php elseif (isset($_GET['sign_error'])): ?>
+    <div class="alert alert-danger no-print">
+        <i class="fas fa-exclamation-circle me-2"></i><?= __('Error sending signing link. Please check the email settings in GLPI.', 'lagapenak') ?>
     </div>
     <?php elseif (isset($_GET['email_error'])): ?>
     <div class="alert alert-danger no-print">
@@ -575,6 +436,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
 
     </div><!-- /doc-card -->
 </div><!-- /container -->
+
+<!-- Sign link modal -->
+<div class="modal fade no-print" id="signLinkModal" tabindex="-1" aria-labelledby="signLinkModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="signLinkModalLabel">
+                    <i class="fas fa-share-alt me-2"></i><?= __('Send signing link by email', 'lagapenak') ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="">
+                <input type="hidden" name="_glpi_csrf_token" value="<?= Session::getNewCSRFToken() ?>">
+                <input type="hidden" name="action_gen_token" value="1">
+                <div class="modal-body">
+                    <label class="form-label fw-semibold">
+                        <?= __('Email address', 'lagapenak') ?> <span class="text-danger">*</span>
+                    </label>
+                    <input type="email" name="sign_to_email" class="form-control" required
+                           placeholder="recipient@example.com"
+                           value="<?= htmlspecialchars($ben_email_raw ?: '') ?>">
+                    <div class="form-text mt-2">
+                        <i class="fas fa-clock me-1"></i><?= __('The link will be valid for 48 hours and can only be used once.', 'lagapenak') ?>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('Cancel', 'lagapenak') ?></button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane me-1"></i><?= __('Send', 'lagapenak') ?>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <!-- Email modal -->
 <div class="modal fade no-print" id="emailModal" tabindex="-1" aria-labelledby="emailModalLabel" aria-hidden="true">
