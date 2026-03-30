@@ -210,7 +210,7 @@ if ($tab === 'prestamos') {
     $loans_res = $DB->query(
         "SELECT `id`, `name`, `fecha_inicio`, `fecha_fin`
          FROM `glpi_plugin_lagapenak_loans`
-         WHERE `status` IN ({$s1},{$s5})
+         WHERE `status` IN ({$s1},{$s5},{$s2})
            AND `fecha_inicio` IS NOT NULL AND `fecha_fin` IS NOT NULL
            {$entity_sql}
          ORDER BY `fecha_inicio` ASC"
@@ -292,6 +292,7 @@ if ($tab === 'prestamos') {
                 <select id="avail-filter-estado" class="form-select form-select-sm" style="width:auto;">
                     <option value="">Todos</option>
                     <option value="free">Solo libres</option>
+                    <option value="delivered">Solo entregados</option>
                     <option value="occupied">Solo ocupados</option>
                 </select>
 
@@ -452,15 +453,18 @@ if ($tab === 'prestamos') {
                 document.getElementById('avail-filter-estado').value = '';
                 document.getElementById('avail-filter-device').value = '';
 
-                var free  = avAllRows.filter(function(r) { return r.available; }).length;
-                var total = avAllRows.length;
+                var free      = avAllRows.filter(function(r) { return r.state === 'free'; }).length;
+                var delivered = avAllRows.filter(function(r) { return r.state === 'delivered'; }).length;
+                var occupied  = avAllRows.filter(function(r) { return r.state === 'occupied'; }).length;
+                var total     = avAllRows.length;
                 document.getElementById('avail-summary').innerHTML =
                     'Período: <strong>' + availEsc(data.fecha_inicio) + '</strong> → <strong>'
                     + availEsc(data.fecha_fin) + '</strong>'
                     + ' &nbsp;|&nbsp; '
                     + '<span class="text-success fw-bold">' + free + ' libre' + (free !== 1 ? 's' : '') + '</span>'
+                    + (delivered > 0 ? ' + <span class="text-warning fw-bold">' + delivered + ' entregado' + (delivered !== 1 ? 's' : '') + '</span>' : '')
                     + ' / '
-                    + '<span class="text-danger fw-bold">' + (total - free) + ' ocupado' + ((total - free) !== 1 ? 's' : '') + '</span>'
+                    + '<span class="text-danger fw-bold">' + occupied + ' ocupado' + (occupied !== 1 ? 's' : '') + '</span>'
                     + ' de ' + total + ' activos';
 
                 document.getElementById('avail-results').style.display = '';
@@ -524,8 +528,9 @@ if ($tab === 'prestamos') {
         var device = document.getElementById('avail-filter-device').value;
         avFiltered = avAllRows.filter(function(r) {
             if (tipo   && r.itemtype !== tipo)                                       return false;
-            if (estado === 'free'     && !r.available)                               return false;
-            if (estado === 'occupied' && r.available)                                return false;
+            if (estado === 'free'      && r.state !== 'free')      return false;
+            if (estado === 'delivered' && r.state !== 'delivered') return false;
+            if (estado === 'occupied'  && r.state !== 'occupied')  return false;
             if (device && (r.itemtype + ':' + r.device_type_id) !== device)         return false;
             return true;
         });
@@ -557,8 +562,14 @@ if ($tab === 'prestamos') {
         });
     });
 
+    var stateOrder = {occupied: 0, delivered: 1, free: 2};
     function avSort() {
         avFiltered.sort(function(a, b) {
+            if (avSortCol === 'available') {
+                var oa = stateOrder[a.state] ?? 2, ob = stateOrder[b.state] ?? 2;
+                if (oa !== ob) return avSortDir * (oa - ob);
+                return a.name.localeCompare(b.name);
+            }
             var va = a[avSortCol], vb = b[avSortCol];
             if (typeof va === 'boolean') { va = va ? 1 : 0; vb = vb ? 1 : 0; }
             if (typeof va === 'string')  { return avSortDir * va.localeCompare(vb); }
@@ -592,7 +603,8 @@ if ($tab === 'prestamos') {
         tbody.innerHTML = '';
         slice.forEach(function(row) {
             var tr = document.createElement('tr');
-            if (!row.available) tr.classList.add('table-danger');
+            if (row.state === 'occupied')  tr.classList.add('table-danger');
+            if (row.state === 'delivered') tr.classList.add('table-warning');
 
             // Checkbox column
             var tdChk = document.createElement('td');
@@ -620,9 +632,13 @@ if ($tab === 'prestamos') {
             tr.appendChild(tdName);
 
             var tdStatus = document.createElement('td');
-            tdStatus.innerHTML = row.available
-                ? '<span class="badge bg-success"><i class="fas fa-check me-1"></i>Libre</span>'
-                : '<span class="badge bg-danger"><i class="fas fa-times me-1"></i>Ocupado</span>';
+            if (row.state === 'free') {
+                tdStatus.innerHTML = '<span class="badge bg-success"><i class="fas fa-check me-1"></i>Libre</span>';
+            } else if (row.state === 'delivered') {
+                tdStatus.innerHTML = '<span class="badge bg-warning text-dark"><i class="fas fa-box-open me-1"></i>Entregado</span>';
+            } else {
+                tdStatus.innerHTML = '<span class="badge bg-danger"><i class="fas fa-times me-1"></i>Ocupado</span>';
+            }
             tr.appendChild(tdStatus);
 
             var tdLoans = document.createElement('td');

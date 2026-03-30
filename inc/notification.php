@@ -278,3 +278,182 @@ HTML;
         }
     }
 }
+
+/**
+ * Notifies all supervisors when a user requests a date extension.
+ */
+function plugin_lagapenak_notify_date_request(int $loan_id): void {
+    global $CFG_GLPI;
+
+    $loan = new PluginLagapenakLoan();
+    if (!$loan->getFromDB($loan_id)) return;
+
+    $supervisors = PluginLagapenakLoan::getSupervisorsForEntity((int)($loan->fields['entities_id'] ?? 0));
+    if (empty($supervisors)) return;
+
+    $req_user_obj  = new User();
+    $req_user_name = '';
+    if ($req_user_obj->getFromDB((int)($loan->fields['users_id'] ?? 0))) {
+        $req_user_name = trim(($req_user_obj->fields['realname'] ?? '') . ' ' . ($req_user_obj->fields['firstname'] ?? ''));
+        if (!$req_user_name) $req_user_name = $req_user_obj->fields['name'];
+    }
+
+    $loan_name    = $loan->fields['name'] ?: __('Loan #', 'lagapenak') . $loan_id;
+    $loan_url     = rtrim($CFG_GLPI['url_base'], '/') . '/plugins/lagapenak/front/loan.form.php?id=' . $loan_id;
+    $req_date_fmt = Html::convDate($loan->fields['requested_date_end'] ?? '');
+    $from_email   = $CFG_GLPI['admin_email']      ?? '';
+    $from_name    = $CFG_GLPI['admin_email_name'] ?? 'Lagapenak';
+
+    $subject = sprintf(__('Date extension request — %s', 'lagapenak'), $loan_name);
+
+    if (!class_exists('GLPIMailer')) return;
+
+    foreach ($supervisors as $sup) {
+        $sup_email = UserEmail::getDefaultForUser($sup['id']);
+        if (!$sup_email) continue;
+
+        $saludo = sprintf(__('Hello, %s,', 'lagapenak'), htmlspecialchars($sup['name']));
+        $p1 = sprintf(
+            __('%s has requested to extend the end date of loan <strong>%s</strong> to <strong>%s</strong>.', 'lagapenak'),
+            htmlspecialchars($req_user_name), htmlspecialchars($loan_name), htmlspecialchars($req_date_fmt)
+        );
+        $btn_view   = __('Review request', 'lagapenak');
+        $p_footer   = sprintf(__('This message was generated automatically by the %s loan management system.', 'lagapenak'), htmlspecialchars($from_name));
+
+        $body = <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.6;">
+  <p>{$saludo}</p>
+  <p>{$p1}</p>
+  <p style="margin-top:24px;">
+    <a href="{$loan_url}" style="background:#f59e0b;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;">
+      {$btn_view}
+    </a>
+  </p>
+  <p style="margin-top:32px;font-size:12px;color:#888;">{$p_footer}</p>
+</body>
+</html>
+HTML;
+        try {
+            $mail = new GLPIMailer();
+            if ($from_email) $mail->setFrom($from_email, $from_name);
+            $mail->addAddress($sup_email, $sup['name']);
+            $mail->Subject  = $subject;
+            $mail->CharSet  = 'UTF-8';
+            $mail->Encoding = 'base64';
+            $mail->isHTML(true);
+            $mail->Body    = $body;
+            $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
+            $mail->send();
+        } catch (\Exception $e) {
+            Toolbox::logError('[lagapenak] Error sending date request notification to ' . $sup_email . ': ' . $e->getMessage());
+        }
+    }
+}
+
+/**
+ * Notifies the requester (and beneficiary on approval) of the supervisor's decision.
+ * $decision: 'approved' | 'rejected'
+ */
+function plugin_lagapenak_notify_date_request_decision(int $loan_id, string $decision): void {
+    global $CFG_GLPI;
+
+    $loan = new PluginLagapenakLoan();
+    if (!$loan->getFromDB($loan_id)) return;
+
+    $loan_name  = $loan->fields['name'] ?: __('Loan #', 'lagapenak') . $loan_id;
+    $loan_url   = rtrim($CFG_GLPI['url_base'], '/') . '/plugins/lagapenak/front/loan.form.php?id=' . $loan_id;
+    $from_email = $CFG_GLPI['admin_email']      ?? '';
+    $from_name  = $CFG_GLPI['admin_email_name'] ?? 'Lagapenak';
+
+    // Date shown: on approval it's the now-updated fecha_fin; on rejection show the requested date
+    $date_fmt = Html::convDate($loan->fields['fecha_fin'] ?? '');
+
+    $recipients = [];
+
+    // Requester
+    $req_email = UserEmail::getDefaultForUser((int)($loan->fields['users_id'] ?? 0));
+    if ($req_email) {
+        $req_user  = new User();
+        $req_name  = '';
+        if ($req_user->getFromDB((int)($loan->fields['users_id'] ?? 0))) {
+            $req_name = trim(($req_user->fields['realname'] ?? '') . ' ' . ($req_user->fields['firstname'] ?? ''));
+            if (!$req_name) $req_name = $req_user->fields['name'];
+        }
+        $recipients[$req_email] = $req_name;
+    }
+
+    // Beneficiary (only on approval)
+    if ($decision === 'approved') {
+        $ben_email = trim($loan->fields['beneficiary_email'] ?? '');
+        if (!$ben_email) {
+            $ben_email = UserEmail::getDefaultForUser((int)($loan->fields['users_id_destinatario'] ?? 0)) ?: '';
+        }
+        $ben_name = trim($loan->fields['beneficiary_name'] ?? '');
+        if (!$ben_name) {
+            $ben_user = new User();
+            if ($ben_user->getFromDB((int)($loan->fields['users_id_destinatario'] ?? 0))) {
+                $ben_name = trim(($ben_user->fields['realname'] ?? '') . ' ' . ($ben_user->fields['firstname'] ?? ''));
+                if (!$ben_name) $ben_name = $ben_user->fields['name'];
+            }
+        }
+        if ($ben_email && !isset($recipients[$ben_email])) {
+            $recipients[$ben_email] = $ben_name;
+        }
+    }
+
+    if (empty($recipients) || !class_exists('GLPIMailer')) return;
+
+    if ($decision === 'approved') {
+        $subject = sprintf(__('Date extension approved — %s', 'lagapenak'), $loan_name);
+        $message = sprintf(
+            __('The end date of loan <strong>%s</strong> has been extended to <strong>%s</strong>.', 'lagapenak'),
+            htmlspecialchars($loan_name), htmlspecialchars($date_fmt)
+        );
+    } else {
+        $subject = sprintf(__('Date extension rejected — %s', 'lagapenak'), $loan_name);
+        $message = sprintf(
+            __('Your request to extend the end date of loan <strong>%s</strong> has been rejected by the supervisor.', 'lagapenak'),
+            htmlspecialchars($loan_name)
+        );
+    }
+
+    $btn_view = __('View loan', 'lagapenak');
+    $p_footer = sprintf(__('This message was generated automatically by the %s loan management system.', 'lagapenak'), htmlspecialchars($from_name));
+
+    foreach ($recipients as $email => $name) {
+        $saludo = $name ? sprintf(__('Hello, %s,', 'lagapenak'), htmlspecialchars($name)) : __('Hello,', 'lagapenak');
+        $body = <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.6;">
+  <p>{$saludo}</p>
+  <p>{$message}</p>
+  <p style="margin-top:24px;">
+    <a href="{$loan_url}" style="background:#1a73e8;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;">
+      {$btn_view}
+    </a>
+  </p>
+  <p style="margin-top:32px;font-size:12px;color:#888;">{$p_footer}</p>
+</body>
+</html>
+HTML;
+        try {
+            $mail = new GLPIMailer();
+            if ($from_email) $mail->setFrom($from_email, $from_name);
+            $mail->addAddress($email, $name);
+            $mail->Subject  = $subject;
+            $mail->CharSet  = 'UTF-8';
+            $mail->Encoding = 'base64';
+            $mail->isHTML(true);
+            $mail->Body    = $body;
+            $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
+            $mail->send();
+        } catch (\Exception $e) {
+            Toolbox::logError('[lagapenak] Error sending date decision notification to ' . $email . ': ' . $e->getMessage());
+        }
+    }
+}

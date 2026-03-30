@@ -10,6 +10,10 @@ class PluginLagapenakLoan extends CommonDBTM {
     const STATUS_RETURNED    = 3;  // Devuelto    — todos los activos devueltos
     const STATUS_CANCELLED   = 4;  // Cancelado
 
+    const DATE_REQUEST_NONE     = 0;  // Sin solicitud pendiente
+    const DATE_REQUEST_PENDING  = 1;  // Solicitud enviada, pendiente de aprobación
+    const DATE_REQUEST_REJECTED = 2;  // Solicitud rechazada por el supervisor
+
     static function getTypeName($nb = 0) {
         return _n('Loan', 'Loans', $nb, 'lagapenak');
     }

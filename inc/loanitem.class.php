@@ -231,6 +231,17 @@ class PluginLagapenakLoanItem extends CommonDBTM {
         $DB->delete('glpi_plugin_lagapenak_loanitems', ['id' => (int) $id]);
     }
 
+    /**
+     * Update the date_checkin of all items of a loan to the given date.
+     */
+    static function applyLoanDateToAllItems(int $loans_id, string $fecha_fin): void {
+        global $DB;
+        $DB->update('glpi_plugin_lagapenak_loanitems',
+            ['date_checkin' => $fecha_fin, 'date_mod' => date('Y-m-d H:i:s')],
+            ['loans_id' => $loans_id]
+        );
+    }
+
     static function updateItemStatus($id, $status) {
         global $DB;
         $DB->update('glpi_plugin_lagapenak_loanitems', [

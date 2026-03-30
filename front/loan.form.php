@@ -31,6 +31,9 @@ if (isset($_POST['save_loan'])) {
             if ($ID > 0) {
                 $_POST['id'] = $ID;
                 $loan->update($_POST);
+                if (!empty($_POST['apply_dates_to_items']) && !empty($_POST['fecha_fin'])) {
+                    PluginLagapenakLoanItem::applyLoanDateToAllItems($ID, $_POST['fecha_fin']);
+                }
                 Html::back();
             } else {
                 $new_id = $loan->add($_POST);
@@ -160,6 +163,58 @@ if (isset($_POST['bulk_update_items'])) {
     Html::redirect(htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID);
 }
 
+// ── Date extension request (self-service) ──────────────────────────────────
+if (isset($_POST['save_date_request'])) {
+    if ($can_supervise || $ID == 0) { Html::back(); }
+    $loan->getFromDB($ID);
+    if ((int)($loan->fields['users_id'] ?? 0) !== (int)($_SESSION['glpiID'] ?? 0)) { Html::back(); }
+    $requested_end = trim($_POST['requested_date_end'] ?? '');
+    if (empty($requested_end)) { Html::back(); }
+    $loan->update([
+        'id'                       => $ID,
+        'requested_date_end'       => $requested_end,
+        'date_request_status'      => PluginLagapenakLoan::DATE_REQUEST_PENDING,
+        'date_request_apply_items' => !empty($_POST['date_request_apply_items']) ? 1 : 0,
+        'date_request_notes'       => trim($_POST['date_request_notes'] ?? ''),
+    ]);
+    include_once GLPI_ROOT . '/plugins/lagapenak/inc/notification.php';
+    plugin_lagapenak_notify_date_request($ID);
+    Html::redirect(htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID . '&date_request_sent=1');
+}
+
+// ── Approve date extension request (supervisor) ─────────────────────────────
+if (isset($_POST['approve_date_request'])) {
+    if (!$can_supervise || $ID == 0) { Html::back(); }
+    $loan->getFromDB($ID);
+    $new_fecha_fin = $loan->fields['requested_date_end'];
+    $apply_items   = !empty($_POST['date_request_apply_items']) ? 1 : 0;
+    $loan->update([
+        'id'                       => $ID,
+        'fecha_fin'                => $new_fecha_fin,
+        'date_request_status'      => PluginLagapenakLoan::DATE_REQUEST_NONE,
+        'date_request_apply_items' => 0,
+        'date_request_notes'       => '',
+    ]);
+    if ($apply_items && $new_fecha_fin) {
+        PluginLagapenakLoanItem::applyLoanDateToAllItems($ID, $new_fecha_fin);
+    }
+    include_once GLPI_ROOT . '/plugins/lagapenak/inc/notification.php';
+    plugin_lagapenak_notify_date_request_decision($ID, 'approved');
+    Html::back();
+}
+
+// ── Reject date extension request (supervisor) ──────────────────────────────
+if (isset($_POST['reject_date_request'])) {
+    if (!$can_supervise || $ID == 0) { Html::back(); }
+    $loan->update([
+        'id'                  => $ID,
+        'date_request_status' => PluginLagapenakLoan::DATE_REQUEST_REJECTED,
+    ]);
+    include_once GLPI_ROOT . '/plugins/lagapenak/inc/notification.php';
+    plugin_lagapenak_notify_date_request_decision($ID, 'rejected');
+    Html::back();
+}
+
 // ── Load existing record ────────────────────────────────────────────────────
 if ($ID > 0) {
     if (!$loan->getFromDB($ID)) {
@@ -226,6 +281,49 @@ if ($form_error) {
     echo '<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>' . htmlspecialchars($form_error) . '</div>';
 }
 
+// ── Date extension request alert (supervisor) ────────────────────────────────
+if ($can_supervise && $ID > 0
+    && (int)($loan->fields['date_request_status'] ?? 0) === PluginLagapenakLoan::DATE_REQUEST_PENDING
+    && !empty($loan->fields['requested_date_end'])
+) {
+    $req_date_fmt  = Html::convDateTime($loan->fields['requested_date_end']);
+    $req_user_id   = (int)($loan->fields['users_id'] ?? 0);
+    $req_user_obj  = new User();
+    $req_user_name = '';
+    if ($req_user_obj->getFromDB($req_user_id)) {
+        $req_user_name = trim(($req_user_obj->fields['realname'] ?? '') . ' ' . ($req_user_obj->fields['firstname'] ?? ''));
+        if (!$req_user_name) $req_user_name = $req_user_obj->fields['name'];
+    }
+    $req_apply     = (int)($loan->fields['date_request_apply_items'] ?? 0);
+    $req_notes     = htmlspecialchars(trim($loan->fields['date_request_notes'] ?? ''));
+
+    echo '<div class="alert alert-warning mb-3">';
+    echo '<div class="mb-2"><i class="fas fa-clock me-2"></i><strong>' . __('Date extension request', 'lagapenak') . '</strong></div>';
+    echo '<div class="mb-1">';
+    echo sprintf(
+        __('%s requests to extend the end date to <strong>%s</strong>.', 'lagapenak'),
+        htmlspecialchars($req_user_name), htmlspecialchars($req_date_fmt)
+    );
+    echo '</div>';
+    if ($req_notes) {
+        echo '<div class="mb-2 fst-italic text-muted"><i class="fas fa-comment me-1"></i>' . $req_notes . '</div>';
+    }
+    echo '<form method="POST" action="' . htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID . '">';
+    echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
+    echo '<div class="form-check mb-2">';
+    echo '<input class="form-check-input" type="checkbox" name="date_request_apply_items" id="sup_apply_items" value="1"' . ($req_apply ? ' checked' : '') . '>';
+    echo '<label class="form-check-label" for="sup_apply_items">' . __('Apply to all loan assets too', 'lagapenak') . '</label>';
+    echo '</div>';
+    echo '<div class="d-flex gap-2">';
+    echo '<button type="submit" name="approve_date_request" class="btn btn-sm btn-success">';
+    echo '<i class="fas fa-check me-1"></i>' . __('Approve', 'lagapenak') . '</button>';
+    echo '<button type="submit" name="reject_date_request" class="btn btn-sm btn-danger">';
+    echo '<i class="fas fa-times me-1"></i>' . __('Reject', 'lagapenak') . '</button>';
+    echo '</div>';
+    echo '</form>';
+    echo '</div>';
+}
+
 if ($can_supervise || $ID == 0) {
     // ── Editable form ────────────────────────────────────────────────────────
     echo '<form method="POST" action="' . htmlspecialchars($_SERVER['PHP_SELF'])
@@ -262,16 +360,81 @@ if ($can_supervise || $ID == 0) {
     echo __('Your request has been registered. The supervisor will manage the assets and loan status.', 'lagapenak');
     echo '</div>';
     $loan->renderReadOnly($ID);
+
+    // ── Date extension status messages ──────────────────────────────────────
+    if ($ID > 0) {
+        $dr_status = (int)($loan->fields['date_request_status'] ?? 0);
+        if (isset($_GET['date_request_sent'])) {
+            echo '<div class="alert alert-success mt-3 py-2"><i class="fas fa-check-circle me-2"></i>';
+            echo __('Your date extension request has been sent to the supervisor.', 'lagapenak');
+            echo '</div>';
+        } elseif ($dr_status === PluginLagapenakLoan::DATE_REQUEST_PENDING) {
+            $req_fmt = Html::convDateTime($loan->fields['requested_date_end'] ?? '');
+            echo '<div class="alert alert-warning mt-3 py-2"><i class="fas fa-clock me-2"></i>';
+            echo sprintf(__('Your request to extend the end date to <strong>%s</strong> is pending supervisor approval.', 'lagapenak'), htmlspecialchars($req_fmt));
+            echo '</div>';
+        } elseif ($dr_status === PluginLagapenakLoan::DATE_REQUEST_REJECTED) {
+            echo '<div class="alert alert-danger mt-3 py-2"><i class="fas fa-times-circle me-2"></i>';
+            echo __('Your date extension request was rejected by the supervisor.', 'lagapenak');
+            echo '</div>';
+        }
+    }
+
+    // ── Buttons row ─────────────────────────────────────────────────────────
     echo '<div class="d-flex gap-2 mt-3">';
     echo '<a href="' . Plugin::getWebDir('lagapenak') . '/front/loan.php" class="btn btn-secondary">';
     echo '<i class="fas fa-arrow-left me-1"></i>' . __('Back', 'lagapenak');
     echo '</a>';
+
+    // Date request button (only when no pending request)
+    if ($ID > 0 && (int)($loan->fields['date_request_status'] ?? 0) !== PluginLagapenakLoan::DATE_REQUEST_PENDING) {
+        echo '<button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#dateRequestModal">';
+        echo '<i class="fas fa-calendar-plus me-1"></i>' . __('Request end date change', 'lagapenak');
+        echo '</button>';
+    }
+
     if ($can_albaran) {
         $albaran_url = Plugin::getWebDir('lagapenak', true) . '/front/albaran.php?id=' . $ID;
         echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
         echo '<i class="fas fa-file-signature me-1"></i>' . __('Delivery note', 'lagapenak') . '</a>';
     }
     echo '</div>';
+
+    // ── Date request modal ──────────────────────────────────────────────────
+    if ($ID > 0 && (int)($loan->fields['date_request_status'] ?? 0) !== PluginLagapenakLoan::DATE_REQUEST_PENDING) {
+        echo '<div class="modal fade" id="dateRequestModal" tabindex="-1" aria-labelledby="dateRequestModalLabel" aria-hidden="true">';
+        echo '<div class="modal-dialog">';
+        echo '<div class="modal-content">';
+        echo '<form method="POST" action="' . htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID . '">';
+        echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
+        echo '<div class="modal-header">';
+        echo '<h5 class="modal-title" id="dateRequestModalLabel"><i class="fas fa-calendar-plus me-2"></i>' . __('Request end date change', 'lagapenak') . '</h5>';
+        echo '<button type="button" class="btn-close" data-bs-dismiss="modal"></button>';
+        echo '</div>';
+        echo '<div class="modal-body">';
+        echo '<div class="mb-3">';
+        echo '<label class="form-label fw-bold">' . __('New end date requested', 'lagapenak') . '</label>';
+        Html::showDateTimeField('requested_date_end', ['value' => '', 'maybeempty' => false]);
+        echo '</div>';
+        echo '<div class="mb-3">';
+        echo '<label class="form-label">' . __('Notes', 'lagapenak') . '</label>';
+        echo '<textarea class="form-control" name="date_request_notes" rows="2" placeholder="' . __('Optional — visible to the supervisor', 'lagapenak') . '"></textarea>';
+        echo '</div>';
+        echo '<div class="form-check">';
+        echo '<input class="form-check-input" type="checkbox" name="date_request_apply_items" id="date_request_apply_items" value="1">';
+        echo '<label class="form-check-label" for="date_request_apply_items">';
+        echo __('Apply to all loan assets too', 'lagapenak');
+        echo '</label>';
+        echo '</div>';
+        echo '</div>';
+        echo '<div class="modal-footer">';
+        echo '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">' . __('Cancel', 'lagapenak') . '</button>';
+        echo '<button type="submit" name="save_date_request" class="btn btn-warning">';
+        echo '<i class="fas fa-paper-plane me-1"></i>' . __('Send request', 'lagapenak') . '</button>';
+        echo '</div>';
+        echo '</form>';
+        echo '</div></div></div>';
+    }
 }
 
 echo '</div>'; // card-body

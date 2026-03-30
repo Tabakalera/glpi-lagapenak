@@ -65,8 +65,12 @@ function plugin_lagapenak_install() {
         'beneficiary_name'  => "VARCHAR(255) NOT NULL DEFAULT ''",
         'beneficiary_email' => "VARCHAR(255) NOT NULL DEFAULT ''",
         'beneficiary_dni'   => "VARCHAR(100) NOT NULL DEFAULT ''",
-        'sign_token'        => "VARCHAR(64) NULL DEFAULT NULL",
-        'sign_token_expires'=> "DATETIME NULL DEFAULT NULL",
+        'sign_token'          => "VARCHAR(64) NULL DEFAULT NULL",
+        'sign_token_expires'  => "DATETIME NULL DEFAULT NULL",
+        'requested_date_end'       => "DATETIME NULL DEFAULT NULL",
+        'date_request_status'      => "TINYINT NOT NULL DEFAULT 0",
+        'date_request_apply_items' => "TINYINT NOT NULL DEFAULT 0",
+        'date_request_notes'       => "TEXT NULL DEFAULT NULL",
     ] as $col => $def) {
         if (!$DB->fieldExists('glpi_plugin_lagapenak_loans', $col)) {
             $DB->queryOrDie(

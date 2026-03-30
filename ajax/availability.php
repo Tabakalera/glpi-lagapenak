@@ -59,10 +59,15 @@ if ($filter_device_key !== '' && strpos($filter_device_key, ':') !== false) {
     $filter_device_id = (int)$filter_device_id_str;
 }
 
+// All statuses that create a conflict (RETURNED and CANCELLED do not)
 $active_statuses = implode(',', [
     PluginLagapenakLoan::STATUS_PENDING,
     PluginLagapenakLoan::STATUS_IN_PROGRESS,
     PluginLagapenakLoan::STATUS_DELIVERED,
+]);
+$blocking_statuses = implode(',', [
+    PluginLagapenakLoan::STATUS_PENDING,
+    PluginLagapenakLoan::STATUS_IN_PROGRESS,
 ]);
 
 $fi = $DB->escape($fecha_inicio);
@@ -151,12 +156,23 @@ foreach ($all_assets as $asset) {
            AND COALESCE(li.date_checkin,  l.fecha_fin)    > '{$fi}'"
     );
 
-    $occupied_loans = [];
+    $occupied_loans  = [];
+    $has_blocking    = false;
+    $has_delivered   = false;
     while ($c = $DB->fetchAssoc($conflicts)) {
         $occupied_loans[] = $c;
+        if (in_array((int)$c['loan_status'], [PluginLagapenakLoan::STATUS_PENDING, PluginLagapenakLoan::STATUS_IN_PROGRESS])) {
+            $has_blocking = true;
+        } elseif ((int)$c['loan_status'] === PluginLagapenakLoan::STATUS_DELIVERED) {
+            $has_delivered = true;
+        }
     }
 
-    $available = empty($occupied_loans);
+    // state: 'free' | 'delivered' | 'occupied'
+    // 'delivered' = only in DELIVERED-status loans → can still be requested
+    // 'occupied'  = in PENDING or IN_PROGRESS loans → truly blocked
+    $state     = $has_blocking ? 'occupied' : ($has_delivered ? 'delivered' : 'free');
+    $available = !$has_blocking; // free + delivered are selectable
 
     $rows[] = [
         'itemtype'          => $asset['itemtype'],
@@ -166,15 +182,17 @@ foreach ($all_assets as $asset) {
         'device_type_label' => $asset['device_type_label'],
         'device_type_id'    => $asset['device_type_id'],
         'available'         => $available,
+        'state'             => $state,
         'occupied_loans'    => $occupied_loans,
     ];
 }
 
-// Sort: occupied first so conflicts are visible at the top; then alphabetical
-usort($rows, function($a, $b) {
-    if ($a['available'] !== $b['available']) {
-        return $a['available'] ? 1 : -1; // occupied first
-    }
+// Sort: occupied → delivered → free, then alphabetical
+$state_order = ['occupied' => 0, 'delivered' => 1, 'free' => 2];
+usort($rows, function($a, $b) use ($state_order) {
+    $oa = $state_order[$a['state']] ?? 2;
+    $ob = $state_order[$b['state']] ?? 2;
+    if ($oa !== $ob) return $oa - $ob;
     return strcmp($a['name'], $b['name']);
 });
 

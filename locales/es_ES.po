@@ -499,3 +499,65 @@ msgstr "No hay activos con préstamos"
 
 msgid "Error loading assets"
 msgstr "Error al cargar activos"
+
+# ── Date extension request ────────────────────────────────────────────────────
+
+msgid "Apply end date to all loan assets"
+msgstr "Aplicar fecha fin a todos los activos del préstamo"
+
+msgid "Optional — visible to the supervisor"
+msgstr "Opcional — visible para el supervisor"
+
+msgid "Apply to all loan assets too"
+msgstr "Aplicar también a todos los activos del préstamo"
+
+msgid "Request end date change"
+msgstr "Solicitar cambio de fecha fin"
+
+msgid "New end date requested"
+msgstr "Nueva fecha fin solicitada"
+
+msgid "Send request"
+msgstr "Enviar solicitud"
+
+msgid "Your date extension request has been sent to the supervisor."
+msgstr "Tu solicitud de cambio de fecha ha sido enviada al supervisor."
+
+msgid "Your request to extend the end date to <strong>%s</strong> is pending supervisor approval."
+msgstr "Tu solicitud para extender la fecha fin hasta <strong>%s</strong> está pendiente de aprobación del supervisor."
+
+msgid "Your date extension request was rejected by the supervisor."
+msgstr "Tu solicitud de cambio de fecha fue rechazada por el supervisor."
+
+msgid "Date extension request"
+msgstr "Solicitud de cambio de fecha"
+
+msgid "%s requests to extend the end date to <strong>%s</strong>."
+msgstr "%s solicita extender la fecha fin hasta <strong>%s</strong>."
+
+msgid "Approve"
+msgstr "Aprobar"
+
+msgid "Reject"
+msgstr "Rechazar"
+
+msgid "Date extension request — %s"
+msgstr "Solicitud de cambio de fecha — %s"
+
+msgid "%s has requested to extend the end date of loan <strong>%s</strong> to <strong>%s</strong>."
+msgstr "%s ha solicitado extender la fecha fin del préstamo <strong>%s</strong> hasta <strong>%s</strong>."
+
+msgid "Review request"
+msgstr "Revisar solicitud"
+
+msgid "Date extension approved — %s"
+msgstr "Cambio de fecha aprobado — %s"
+
+msgid "The end date of loan <strong>%s</strong> has been extended to <strong>%s</strong>."
+msgstr "La fecha fin del préstamo <strong>%s</strong> ha sido extendida hasta <strong>%s</strong>."
+
+msgid "Date extension rejected — %s"
+msgstr "Cambio de fecha rechazado — %s"
+
+msgid "Your request to extend the end date of loan <strong>%s</strong> has been rejected by the supervisor."
+msgstr "Tu solicitud para extender la fecha fin del préstamo <strong>%s</strong> ha sido rechazada por el supervisor."
