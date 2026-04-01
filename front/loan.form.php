@@ -44,7 +44,10 @@ if (isset($_POST['save_loan'])) {
 }
 
 if (isset($_POST['delete_loan'])) {
-    if (!$can_supervise) { Html::back(); }
+    $loan->getFromDB($ID);
+    $is_own_pending = ((int)($loan->fields['users_id'] ?? 0) === (int)($_SESSION['glpiID'] ?? 0))
+                      && (int)($loan->fields['status'] ?? 0) === PluginLagapenakLoan::STATUS_PENDING;
+    if (!$can_supervise && !$is_own_pending) { Html::back(); }
     $loan->delete(['id' => $ID]);
     Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
 }
@@ -56,10 +59,10 @@ if (isset($_POST['add_loanitem'])) {
     $li_loan->getFromDB($li_loans_id);
     $li_status = (int) ($li_loan->fields['status'] ?? 0);
 
-    // Supervisor always allowed; the loan's own requester can add items while still Pendiente
+    // Supervisor always allowed; the loan's own requester can add items as long as not Returned
     $li_is_owner = ((int) ($li_loan->fields['users_id'] ?? 0) === (int) ($_SESSION['glpiID'] ?? -1));
     $can_add = $can_supervise ||
-               ($li_status === PluginLagapenakLoan::STATUS_PENDING && $li_is_owner);
+               ($li_status !== PluginLagapenakLoan::STATUS_RETURNED && $li_is_owner);
     if (!$can_add) { Html::back(); }
 
     $li_itemtype = $_POST['itemtype'] ?? '';
@@ -113,8 +116,12 @@ if (isset($_POST['remove_loanitem'])) {
     $rm_status = (int) ($rm_loan->fields['status'] ?? 0);
 
     $rm_is_owner = ((int) ($rm_loan->fields['users_id'] ?? 0) === (int) ($_SESSION['glpiID'] ?? -1));
+    // Also check the item's own status — requester can only remove if the item is still Pending
+    $rm_loanitem = new PluginLagapenakLoanItem();
+    $rm_loanitem->getFromDB((int) ($_POST['loanitem_id'] ?? 0));
+    $rm_item_status = (int) ($rm_loanitem->fields['status'] ?? -1);
     $can_remove = $can_supervise ||
-                  ($rm_status === PluginLagapenakLoan::STATUS_PENDING && $rm_is_owner);
+                  ($rm_item_status === PluginLagapenakLoanItem::STATUS_PENDING && $rm_is_owner);
     if (!$can_remove) { Html::back(); }
 
     PluginLagapenakLoanItem::removeItem((int) ($_POST['loanitem_id'] ?? 0));
@@ -213,6 +220,28 @@ if (isset($_POST['reject_date_request'])) {
     include_once GLPI_ROOT . '/plugins/lagapenak/inc/notification.php';
     plugin_lagapenak_notify_date_request_decision($ID, 'rejected');
     Html::back();
+}
+
+// ── Add comment ─────────────────────────────────────────────────────────────
+if (isset($_POST['add_comment'])) {
+    global $DB;
+    if ($ID == 0) { Html::back(); }
+    // Must be the requester or a supervisor
+    $loan->getFromDB($ID);
+    $is_owner = (int)($loan->fields['users_id'] ?? 0) === (int)($_SESSION['glpiID'] ?? 0);
+    if (!$can_supervise && !$is_owner) { Html::back(); }
+    $comment_text = trim($_POST['comment_text'] ?? '');
+    if ($comment_text !== '') {
+        $DB->insert('glpi_plugin_lagapenak_loancomments', [
+            'loans_id'      => $ID,
+            'users_id'      => (int)$_SESSION['glpiID'],
+            'comment'       => $comment_text,
+            'date_creation' => date('Y-m-d H:i:s'),
+        ]);
+        include_once GLPI_ROOT . '/plugins/lagapenak/inc/notification.php';
+        plugin_lagapenak_notify_new_comment($ID, (int)$_SESSION['glpiID'], $comment_text);
+    }
+    Html::redirect(htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID . '#comments');
 }
 
 // ── Load existing record ────────────────────────────────────────────────────
@@ -398,6 +427,19 @@ if ($can_supervise || $ID == 0) {
         echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
         echo '<i class="fas fa-file-signature me-1"></i>' . __('Delivery note', 'lagapenak') . '</a>';
     }
+    // Solicitante can delete their own loan while still Pending
+    if ($ID > 0
+        && (int)($loan->fields['users_id'] ?? 0) === (int)($_SESSION['glpiID'] ?? 0)
+        && (int)($loan->fields['status'] ?? 0) === PluginLagapenakLoan::STATUS_PENDING
+    ) {
+        echo '<form method="POST" action="' . htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID . '" class="ms-auto">';
+        echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
+        echo '<button type="submit" name="delete_loan" class="btn btn-danger"
+                      onclick="return confirm(\'' . __('Delete this loan?', 'lagapenak') . '\')">';
+        echo '<i class="fas fa-trash me-1"></i>' . __('Delete', 'lagapenak');
+        echo '</button>';
+        echo '</form>';
+    }
     echo '</div>';
 
     // ── Date request modal ──────────────────────────────────────────────────
@@ -447,13 +489,18 @@ if ($ID > 0) {
     $current_items = PluginLagapenakLoanItem::getItemsForLoan($ID);
     $loan_status   = (int) ($loan->fields['status'] ?? PluginLagapenakLoan::STATUS_PENDING);
 
-    // The loan's own requester can add/remove items while the loan is still Pendiente
+    // The loan's own requester can add items as long as loan is not Returned
+    // but can only remove/edit existing items while loan is still Pending
     $is_loan_owner = ((int) ($loan->fields['users_id'] ?? 0) === (int) ($_SESSION['glpiID'] ?? -1));
+    $is_requester_can_add    = !$can_supervise &&
+                               ($loan_status !== PluginLagapenakLoan::STATUS_RETURNED) &&
+                               $is_loan_owner;
     $is_requester_can_modify = !$can_supervise &&
                                ($loan_status === PluginLagapenakLoan::STATUS_PENDING) &&
                                $is_loan_owner;
 
-    $show_actions_col = $can_supervise || $is_requester_can_modify;
+    $has_pending_items = count(array_filter($current_items, fn($i) => (int)$i['status'] === PluginLagapenakLoanItem::STATUS_PENDING)) > 0;
+    $show_actions_col = $can_supervise || $is_requester_can_modify || ($is_loan_owner && $has_pending_items);
 
     $add_type = (isset($_GET['add_type']) && array_key_exists($_GET['add_type'], $asset_types))
         ? $_GET['add_type']
@@ -519,8 +566,14 @@ if ($ID > 0) {
             echo '<td class="text-muted small align-middle">' . $item['id'] . '</td>';
             echo '<td class="align-middle">' . PluginLagapenakLoanItem::getTypeLabel($item['itemtype']) . '</td>';
             echo '<td class="align-middle"><strong>' . htmlspecialchars($item_name) . '</strong></td>';
-            echo '<td class="text-nowrap align-middle small">' . (Html::convDateTime($item['date_checkout']) ?: '<span class="text-muted">—</span>') . '</td>';
-            echo '<td class="text-nowrap align-middle small">' . (Html::convDateTime($item['date_checkin'])  ?: '<span class="text-muted">—</span>') . '</td>';
+            $disp_checkout = $item['date_checkout'] ?: ($loan->fields['fecha_inicio'] ?? '');
+            $disp_checkin  = $item['date_checkin']  ?: ($loan->fields['fecha_fin']    ?? '');
+            $checkout_html = Html::convDateTime($disp_checkout) ?: '<span class="text-muted">—</span>';
+            $checkin_html  = Html::convDateTime($disp_checkin)  ?: '<span class="text-muted">—</span>';
+            if (!$item['date_checkout'] && $disp_checkout) $checkout_html = Html::convDateTime($disp_checkout);
+            if (!$item['date_checkin']  && $disp_checkin)  $checkin_html  = Html::convDateTime($disp_checkin);
+            echo '<td class="text-nowrap align-middle small">' . $checkout_html . '</td>';
+            echo '<td class="text-nowrap align-middle small">' . $checkin_html  . '</td>';
 
             // ── Status column (badge only) ────────────────────────────────────
             echo '<td class="align-middle">';
@@ -573,8 +626,8 @@ if ($ID > 0) {
                    . '<i class="fas fa-times"></i></button>';
                 echo '</form>';
                 echo '</td>';
-            } elseif ($is_requester_can_modify) {
-                // Requester can remove items while loan is Pending
+            } elseif ($is_loan_owner && $item_st === PluginLagapenakLoanItem::STATUS_PENDING) {
+                // Requester can remove items that are still Pending (not yet delivered)
                 echo '<td class="align-middle">';
                 echo '<form method="POST" action="' . $base_url . '" class="d-inline">';
                 echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
@@ -626,8 +679,8 @@ if ($ID > 0) {
         }
     }
 
-    // ── Add item (supervisor, or requester while loan is Pendiente) ────────────
-    if ($can_supervise || $is_requester_can_modify) {
+    // ── Add item (supervisor, or requester while loan is not Returned) ─────────
+    if ($can_supervise || $is_requester_can_add) {
         echo '<hr>';
         echo '<h6 class="mb-3"><i class="fas fa-plus-circle me-1"></i>' . __('Add asset', 'lagapenak') . '</h6>';
 
@@ -736,6 +789,64 @@ if ($ID > 0) {
     echo '<i class="fas fa-info-circle me-2"></i>';
     echo __('Save the loan first to add assets.', 'lagapenak');
     echo '</div>';
+}
+
+// ── Comments section ────────────────────────────────────────────────────────
+if ($ID > 0) {
+    global $DB;
+    $is_loan_participant = $can_supervise
+        || (int)($loan->fields['users_id'] ?? 0) === (int)($_SESSION['glpiID'] ?? 0);
+
+    if ($is_loan_participant) {
+        $comments_res = $DB->request([
+            'SELECT' => ['c.*', 'u.name', 'u.realname', 'u.firstname'],
+            'FROM'   => 'glpi_plugin_lagapenak_loancomments AS c',
+            'LEFT JOIN' => [
+                'glpi_users AS u' => ['FKEY' => ['c' => 'users_id', 'u' => 'id']],
+            ],
+            'WHERE'  => ['c.loans_id' => $ID],
+            'ORDER'  => ['c.date_creation ASC'],
+        ]);
+        $comments = iterator_to_array($comments_res);
+
+        echo '<div class="card mt-4" id="comments">';
+        echo '<div class="card-header"><h5 class="mb-0"><i class="fas fa-comments me-2"></i>' . __('Comments', 'lagapenak') . '</h5></div>';
+        echo '<div class="card-body">';
+
+        if (empty($comments)) {
+            echo '<p class="text-muted mb-3">' . __('No comments yet.', 'lagapenak') . '</p>';
+        } else {
+            foreach ($comments as $c) {
+                $c_name = trim(($c['realname'] ?? '') . ' ' . ($c['firstname'] ?? ''));
+                if (!$c_name) $c_name = $c['name'] ?? __('Unknown', 'lagapenak');
+                $is_me = (int)($c['users_id'] ?? 0) === (int)($_SESSION['glpiID'] ?? 0);
+                $row_style    = 'display:flex;margin-bottom:12px;' . ($is_me ? 'justify-content:flex-end;' : 'justify-content:flex-start;');
+                $bubble_style = $is_me
+                    ? 'background:#d0d0d0;color:#222;border-radius:12px;padding:8px 14px;max-width:70%;word-break:break-word;writing-mode:horizontal-tb;'
+                    : 'background:#f1f1f1;border:1px solid #ddd;border-radius:12px;padding:8px 14px;max-width:70%;word-break:break-word;writing-mode:horizontal-tb;';
+                echo '<div style="' . $row_style . '">';
+                echo '<div style="' . $bubble_style . '">';
+                echo '<div style="font-size:.8rem;font-weight:bold;margin-bottom:4px;">' . htmlspecialchars($c_name) . '</div>';
+                echo '<div style="font-size:.95rem;">' . nl2br(htmlspecialchars($c['comment'])) . '</div>';
+                echo '<div style="font-size:.75rem;margin-top:4px;opacity:.7;">' . Html::convDateTime($c['date_creation']) . '</div>';
+                echo '</div>';
+                echo '</div>';
+            }
+        }
+
+        // Add comment form
+        echo '<form method="POST" action="' . htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID . '#comments" class="mt-3">';
+        echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
+        echo '<div class="input-group">';
+        echo '<textarea class="form-control" name="comment_text" rows="2" placeholder="' . __('Add a comment…', 'lagapenak') . '" required></textarea>';
+        echo '<button type="submit" name="add_comment" class="btn btn-primary align-self-end">';
+        echo '<i class="fas fa-paper-plane me-1"></i>' . __('Send', 'lagapenak') . '</button>';
+        echo '</div>';
+        echo '</form>';
+
+        echo '</div>'; // card-body
+        echo '</div>'; // card
+    }
 }
 
 echo '</div>'; // container-fluid

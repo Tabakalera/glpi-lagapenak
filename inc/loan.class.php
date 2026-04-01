@@ -715,7 +715,8 @@ class PluginLagapenakLoan extends CommonDBTM {
 
     public function cleanDBonPurge() {
         global $DB;
-        $DB->delete('glpi_plugin_lagapenak_loanitems', ['loans_id' => $this->getID()]);
+        $DB->delete('glpi_plugin_lagapenak_loanitems',    ['loans_id' => $this->getID()]);
+        $DB->delete('glpi_plugin_lagapenak_loancomments', ['loans_id' => $this->getID()]);
     }
 
     // ── Cron: recordatorio de devolución ─────────────────────────────────────

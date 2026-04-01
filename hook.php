@@ -80,6 +80,23 @@ function plugin_lagapenak_install() {
         }
     }
 
+    // Comments table
+    if (!$DB->tableExists('glpi_plugin_lagapenak_loancomments')) {
+        $DB->queryOrDie(
+            "CREATE TABLE `glpi_plugin_lagapenak_loancomments` (
+                `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `loans_id`    INT UNSIGNED NOT NULL DEFAULT 0,
+                `users_id`    INT UNSIGNED NOT NULL DEFAULT 0,
+                `comment`     TEXT NOT NULL,
+                `date_creation` TIMESTAMP NULL DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                KEY `loans_id` (`loans_id`),
+                KEY `users_id` (`users_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation}",
+            $DB->error()
+        );
+    }
+
     ProfileRight::addProfileRights(['plugin_lagapenak_loan']);
 
     // Default display columns for loan list (users_id=0 = global default)
@@ -123,7 +140,7 @@ function plugin_lagapenak_set_display_prefs() {
 function plugin_lagapenak_uninstall() {
     global $DB;
 
-    foreach (['glpi_plugin_lagapenak_loans', 'glpi_plugin_lagapenak_loanitems'] as $table) {
+    foreach (['glpi_plugin_lagapenak_loans', 'glpi_plugin_lagapenak_loanitems', 'glpi_plugin_lagapenak_loancomments'] as $table) {
         if ($DB->tableExists($table)) {
             $DB->queryOrDie("DROP TABLE `$table`", $DB->error());
         }

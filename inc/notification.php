@@ -457,3 +457,101 @@ HTML;
         }
     }
 }
+
+/**
+ * Notifies the other participant when a comment is added.
+ * If the author is the requester → notify supervisors.
+ * If the author is a supervisor → notify the requester.
+ */
+function plugin_lagapenak_notify_new_comment(int $loan_id, int $author_id, string $comment_text): void {
+    global $CFG_GLPI;
+
+    $loan = new PluginLagapenakLoan();
+    if (!$loan->getFromDB($loan_id)) return;
+
+    $loan_name  = $loan->fields['name'] ?: __('Loan #', 'lagapenak') . $loan_id;
+    $loan_url   = rtrim($CFG_GLPI['url_base'], '/') . '/plugins/lagapenak/front/loan.form.php?id=' . $loan_id . '#comments';
+    $from_email = $CFG_GLPI['admin_email']      ?? '';
+    $from_name  = $CFG_GLPI['admin_email_name'] ?? 'Lagapenak';
+
+    // Author name
+    $author_obj  = new User();
+    $author_name = '';
+    if ($author_obj->getFromDB($author_id)) {
+        $author_name = trim(($author_obj->fields['realname'] ?? '') . ' ' . ($author_obj->fields['firstname'] ?? ''));
+        if (!$author_name) $author_name = $author_obj->fields['name'];
+    }
+
+    // Determine recipients: if author is supervisor → notify requester; otherwise → notify supervisors
+    $author_is_supervisor = PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_loan', UPDATE);
+    $recipients = [];
+
+    if ($author_is_supervisor) {
+        // Notify requester
+        $req_email = UserEmail::getDefaultForUser((int)($loan->fields['users_id'] ?? 0));
+        $req_user  = new User();
+        $req_name  = '';
+        if ($req_user->getFromDB((int)($loan->fields['users_id'] ?? 0))) {
+            $req_name = trim(($req_user->fields['realname'] ?? '') . ' ' . ($req_user->fields['firstname'] ?? ''));
+            if (!$req_name) $req_name = $req_user->fields['name'];
+        }
+        if ($req_email && (int)($loan->fields['users_id'] ?? 0) !== $author_id) {
+            $recipients[$req_email] = $req_name;
+        }
+    } else {
+        // Notify all supervisors of the entity
+        foreach (PluginLagapenakLoan::getSupervisorsForEntity((int)($loan->fields['entities_id'] ?? 0)) as $sup) {
+            if ($sup['id'] === $author_id) continue;
+            $sup_email = UserEmail::getDefaultForUser($sup['id']);
+            if ($sup_email) $recipients[$sup_email] = $sup['name'];
+        }
+    }
+
+    if (empty($recipients) || !class_exists('GLPIMailer')) return;
+
+    $subject     = sprintf(__('New comment on loan %s', 'lagapenak'), $loan_name);
+    $btn_view    = __('View conversation', 'lagapenak');
+    $p_footer    = sprintf(__('This message was generated automatically by the %s loan management system.', 'lagapenak'), htmlspecialchars($from_name));
+    $comment_esc = nl2br(htmlspecialchars($comment_text));
+
+    foreach ($recipients as $email => $name) {
+        $saludo = $name ? sprintf(__('Hello, %s,', 'lagapenak'), htmlspecialchars($name)) : __('Hello,', 'lagapenak');
+        $p1 = sprintf(
+            __('%s has left a comment on loan <strong>%s</strong>:', 'lagapenak'),
+            htmlspecialchars($author_name), htmlspecialchars($loan_name)
+        );
+        $body = <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.6;">
+  <p>{$saludo}</p>
+  <p>{$p1}</p>
+  <blockquote style="border-left:4px solid #ccc;margin:12px 0;padding:8px 16px;color:#444;">
+    {$comment_esc}
+  </blockquote>
+  <p style="margin-top:24px;">
+    <a href="{$loan_url}" style="background:#1a73e8;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;">
+      {$btn_view}
+    </a>
+  </p>
+  <p style="margin-top:32px;font-size:12px;color:#888;">{$p_footer}</p>
+</body>
+</html>
+HTML;
+        try {
+            $mail = new GLPIMailer();
+            if ($from_email) $mail->setFrom($from_email, $from_name);
+            $mail->addAddress($email, $name);
+            $mail->Subject  = $subject;
+            $mail->CharSet  = 'UTF-8';
+            $mail->Encoding = 'base64';
+            $mail->isHTML(true);
+            $mail->Body    = $body;
+            $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
+            $mail->send();
+        } catch (\Exception $e) {
+            Toolbox::logError('[lagapenak] Error sending comment notification to ' . $email . ': ' . $e->getMessage());
+        }
+    }
+}

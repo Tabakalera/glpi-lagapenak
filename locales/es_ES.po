@@ -505,6 +505,26 @@ msgstr "Error al cargar activos"
 msgid "Apply end date to all loan assets"
 msgstr "Aplicar fecha fin a todos los activos del préstamo"
 
+# ── Comments ─────────────────────────────────────────────────────────────────
+
+msgid "Comments"
+msgstr "Comentarios"
+
+msgid "No comments yet."
+msgstr "Todavía no hay comentarios."
+
+msgid "Add a comment…"
+msgstr "Añadir un comentario…"
+
+msgid "New comment on loan %s"
+msgstr "Nuevo comentario en el préstamo %s"
+
+msgid "%s has left a comment on loan <strong>%s</strong>:"
+msgstr "%s ha dejado un comentario en el préstamo <strong>%s</strong>:"
+
+msgid "View conversation"
+msgstr "Ver conversación"
+
 msgid "Optional — visible to the supervisor"
 msgstr "Opcional — visible para el supervisor"
 
