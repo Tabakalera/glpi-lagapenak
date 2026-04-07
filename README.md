@@ -31,10 +31,14 @@ Para desinstalar, pulsa **Desactivar** y luego **Desinstalar** desde el mismo me
 - Añadir activos en bloque con comprobación de conflictos
 - **Datos del beneficiario**: nombre, email y DNI/pasaporte de la persona que recoge el material, con pre-relleno desde los datos del solicitante en GLPI
 - **Albarán de entrega** con firma digital en pantalla (tablet y móvil), descarga como PDF real y envío por correo electrónico
+- **Solicitud de prórroga**: el solicitante puede pedir al supervisor extender la fecha de devolución; incluye observaciones y opción de aplicar el cambio a todos los activos; notificaciones por email en ambas direcciones
+- **Chat / comentarios**: hilo de conversación entre solicitante y supervisores dentro del préstamo, con notificaciones por email
+- **Self-Service — gestión de activos**: el solicitante puede añadir activos a un préstamo existente (en cualquier estado salvo Devuelto) y quitar los que aún estén en estado Pendiente
+- **Self-Service — borrar préstamo propio**: el solicitante puede eliminar su propio préstamo si está en estado Pendiente
 - Notificación por email al destinatario al crear un préstamo
 - Recordatorio automático por cron 2 días antes de la fecha de devolución
 - **Calendario mensual** (FullCalendar) con colores por estado y filtro por activo
-- **Comprobador de disponibilidad** de activos en un rango de fechas
+- **Comprobador de disponibilidad** de activos en un rango de fechas (incluye estado Entregado con badge naranja)
 - **Suscripción iCal** (Google Calendar, Outlook) con autenticación por token
 - Panel de resumen (contadores por estado) en la página principal del plugin
 - 3 pestañas en la página principal: **Préstamos** / **Listado por activos** / **Disponibilidad**
@@ -52,7 +56,7 @@ Los permisos se gestionan en **Administración → Perfiles → [perfil] → pes
 | Permiso  | Capacidad                                                                 |
 |----------|---------------------------------------------------------------------------|
 | READ     | Ver préstamos propios (o todos si tiene UPDATE)                           |
-| CREATE   | Crear nuevos préstamos                                                    |
+| CREATE   | Crear préstamos; añadir/quitar activos pendientes en préstamos propios    |
 | UPDATE   | Supervisor: ver y editar todos los préstamos, generar albaranes, ver stats|
 
 ---
@@ -217,10 +221,14 @@ To uninstall: click **Disable** then **Uninstall**. Database tables are removed 
 - Bulk asset addition with conflict checking
 - **Beneficiary fields**: name, email and ID/passport of the person collecting the equipment, pre-filled from the requester's GLPI data and fully editable
 - **Delivery note** with on-screen digital signature (tablet and mobile compatible), real PDF download and email sending
+- **Date extension request**: requesters can ask the supervisor to extend the return date; includes notes and apply-to-all-assets option; email notifications in both directions
+- **Comments / chat**: conversation thread between requester and supervisors within each loan, with email notifications
+- **Self-Service — asset management**: requesters can add assets to an existing loan (any status except Returned) and remove assets still in Pending status
+- **Self-Service — delete own loan**: requesters can delete their own loan while it is still Pending
 - Email notification to recipient on loan creation
 - Automatic cron reminder 2 days before return date
 - **Monthly calendar** (FullCalendar) with status colors and asset filter
-- **Availability checker** for a given date range
+- **Availability checker** for a given date range (Delivered loans shown with orange badge, selectable)
 - **iCal subscription** (Google Calendar, Outlook) with token authentication
 - Summary dashboard (counters by status) on the plugin home page
 - 3 tabs on the main page: **Loans** / **Assets** / **Availability**
@@ -237,9 +245,9 @@ Managed in **Administration → Profiles → [profile] → Lagapenak tab**.
 
 | Right  | Capability                                                            |
 |--------|-----------------------------------------------------------------------|
-| READ   | View own loans (all loans if also has UPDATE)                         |
-| CREATE | Create new loans                                                      |
-| UPDATE | Supervisor: view/edit all loans, generate delivery notes, view stats  |
+| READ   | View own loans (all loans if also has UPDATE)                              |
+| CREATE | Create loans; add/remove pending assets on own existing loans              |
+| UPDATE | Supervisor: view/edit all loans, generate delivery notes, view stats       |
 
 ---
 

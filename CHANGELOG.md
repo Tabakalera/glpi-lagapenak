@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-04-07
+
+### Added
+- **Date extension request**: self-service users can request a change to the loan end date; request includes notes and an option to apply the new date to all assets. Supervisor receives an email notification and can approve or reject directly from the loan form.
+- **Comments / chat**: conversation thread between the requester and supervisors within each loan, with email notifications in both directions.
+- **Self-service: delete own loan**: requesters can delete their own loan while it is still in Pending status.
+- **Self-service: add assets (CREATE)**: requesters can add new assets to an existing loan in any status except Returned.
+- **Self-service: remove pending assets (CREATE)**: requesters can remove individual assets that are still in Pending status (not yet delivered), regardless of the overall loan status.
+- **Availability — Delivered state**: loans in Delivered status now appear in the availability checker with an orange "Entregado" badge and remain selectable for date pre-fill.
+
+### Fixed
+- Asset dates inherited from the loan (no explicit per-asset dates set) are now displayed in the same style as explicit dates — no longer shown as muted/grey text.
+- End-date sync: when saving a loan, a checkbox allows applying the loan end date to all associated assets at once.
+- Email links now use `$CFG_GLPI['url_base']` to guarantee correct absolute URLs in all environments.
+
+### Changed
+- Permissions table updated: CREATE now also covers adding/removing own pending assets on existing loans.
+
+---
+
 ## [1.3.1] - 2026-03-24
 
 ### Fixed
