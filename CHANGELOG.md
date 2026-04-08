@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.1] - 2026-04-08
+
+### Fixed
+- Two date columns (`sign_token_expires`, `requested_date_end`) were created as `DATETIME` instead of `TIMESTAMP`, causing a GLPI migration warning on the dashboard. The upgrade routine now converts them automatically.
+
+---
+
 ## [1.4.0] - 2026-04-07
 
 ### Added

@@ -1,6 +1,6 @@
 <?php
 
-define('PLUGIN_LAGAPENAK_VERSION', '1.4.0');
+define('PLUGIN_LAGAPENAK_VERSION', '1.4.1');
 
 // Requerido por GLPI 10 para activar el plugin
 global $PLUGIN_HOOKS;

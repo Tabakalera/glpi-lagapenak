@@ -66,8 +66,8 @@ function plugin_lagapenak_install() {
         'beneficiary_email' => "VARCHAR(255) NOT NULL DEFAULT ''",
         'beneficiary_dni'   => "VARCHAR(100) NOT NULL DEFAULT ''",
         'sign_token'          => "VARCHAR(64) NULL DEFAULT NULL",
-        'sign_token_expires'  => "DATETIME NULL DEFAULT NULL",
-        'requested_date_end'       => "DATETIME NULL DEFAULT NULL",
+        'sign_token_expires'  => "TIMESTAMP NULL DEFAULT NULL",
+        'requested_date_end'       => "TIMESTAMP NULL DEFAULT NULL",
         'date_request_status'      => "TINYINT NOT NULL DEFAULT 0",
         'date_request_apply_items' => "TINYINT NOT NULL DEFAULT 0",
         'date_request_notes'       => "TEXT NULL DEFAULT NULL",
@@ -75,6 +75,16 @@ function plugin_lagapenak_install() {
         if (!$DB->fieldExists('glpi_plugin_lagapenak_loans', $col)) {
             $DB->queryOrDie(
                 "ALTER TABLE `glpi_plugin_lagapenak_loans` ADD COLUMN `$col` $def",
+                $DB->error()
+            );
+        }
+    }
+
+    // Fix: convert any DATETIME columns to TIMESTAMP (GLPI standard)
+    foreach (['sign_token_expires', 'requested_date_end'] as $col) {
+        if ($DB->fieldExists('glpi_plugin_lagapenak_loans', $col)) {
+            $DB->queryOrDie(
+                "ALTER TABLE `glpi_plugin_lagapenak_loans` MODIFY COLUMN `$col` TIMESTAMP NULL DEFAULT NULL",
                 $DB->error()
             );
         }
