@@ -288,8 +288,13 @@ function plugin_lagapenak_notify_date_request(int $loan_id): void {
     $loan = new PluginLagapenakLoan();
     if (!$loan->getFromDB($loan_id)) return;
 
-    $supervisors = PluginLagapenakLoan::getSupervisorsForEntity((int)($loan->fields['entities_id'] ?? 0));
-    if (empty($supervisors)) return;
+    // Send only to the loan's destinatario (not all supervisors)
+    $dest_user = new User();
+    if (!$dest_user->getFromDB((int)($loan->fields['users_id_destinatario'] ?? 0))) return;
+    $dest_email = UserEmail::getDefaultForUser((int)$dest_user->fields['id']);
+    if (!$dest_email) return;
+    $dest_name = trim(($dest_user->fields['realname'] ?? '') . ' ' . ($dest_user->fields['firstname'] ?? ''));
+    if (!$dest_name) $dest_name = $dest_user->fields['name'];
 
     $req_user_obj  = new User();
     $req_user_name = '';
@@ -308,19 +313,15 @@ function plugin_lagapenak_notify_date_request(int $loan_id): void {
 
     if (!class_exists('GLPIMailer')) return;
 
-    foreach ($supervisors as $sup) {
-        $sup_email = UserEmail::getDefaultForUser($sup['id']);
-        if (!$sup_email) continue;
+    $saludo   = sprintf(__('Hello, %s,', 'lagapenak'), htmlspecialchars($dest_name));
+    $p1       = sprintf(
+        __('%s has requested to extend the end date of loan <strong>%s</strong> to <strong>%s</strong>.', 'lagapenak'),
+        htmlspecialchars($req_user_name), htmlspecialchars($loan_name), htmlspecialchars($req_date_fmt)
+    );
+    $btn_view = __('Review request', 'lagapenak');
+    $p_footer = sprintf(__('This message was generated automatically by the %s loan management system.', 'lagapenak'), htmlspecialchars($from_name));
 
-        $saludo = sprintf(__('Hello, %s,', 'lagapenak'), htmlspecialchars($sup['name']));
-        $p1 = sprintf(
-            __('%s has requested to extend the end date of loan <strong>%s</strong> to <strong>%s</strong>.', 'lagapenak'),
-            htmlspecialchars($req_user_name), htmlspecialchars($loan_name), htmlspecialchars($req_date_fmt)
-        );
-        $btn_view   = __('Review request', 'lagapenak');
-        $p_footer   = sprintf(__('This message was generated automatically by the %s loan management system.', 'lagapenak'), htmlspecialchars($from_name));
-
-        $body = <<<HTML
+    $body = <<<HTML
 <!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"></head>
@@ -336,20 +337,19 @@ function plugin_lagapenak_notify_date_request(int $loan_id): void {
 </body>
 </html>
 HTML;
-        try {
-            $mail = new GLPIMailer();
-            if ($from_email) $mail->setFrom($from_email, $from_name);
-            $mail->addAddress($sup_email, $sup['name']);
-            $mail->Subject  = $subject;
-            $mail->CharSet  = 'UTF-8';
-            $mail->Encoding = 'base64';
-            $mail->isHTML(true);
-            $mail->Body    = $body;
-            $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
-            $mail->send();
-        } catch (\Exception $e) {
-            Toolbox::logError('[lagapenak] Error sending date request notification to ' . $sup_email . ': ' . $e->getMessage());
-        }
+    try {
+        $mail = new GLPIMailer();
+        if ($from_email) $mail->setFrom($from_email, $from_name);
+        $mail->addAddress($dest_email, $dest_name);
+        $mail->Subject  = $subject;
+        $mail->CharSet  = 'UTF-8';
+        $mail->Encoding = 'base64';
+        $mail->isHTML(true);
+        $mail->Body    = $body;
+        $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
+        $mail->send();
+    } catch (\Exception $e) {
+        Toolbox::logError('[lagapenak] Error sending date request notification to ' . $dest_email . ': ' . $e->getMessage());
     }
 }
 
