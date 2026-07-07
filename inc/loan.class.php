@@ -306,6 +306,17 @@ class PluginLagapenakLoan extends CommonDBTM {
             'massiveaction' => false,
         ];
 
+        $tab[] = [
+            'id'            => 25,
+            'table'         => $this->getTable(),
+            'field'         => '_signed',
+            'name'          => __('Signed', 'lagapenak'),
+            'computation'   => "IF(`{$t}`.`signature_data` IS NULL OR `{$t}`.`signature_data` = '', 0, 1)",
+            'datatype'      => 'bool',
+            'nosort'        => true,
+            'massiveaction' => false,
+        ];
+
         // Assets: subquery returns "Tipo~Nombre||Tipo~Nombre" → LIKE search works on real names
         $tab[] = [
             'id'            => 20,

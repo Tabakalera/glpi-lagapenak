@@ -373,6 +373,12 @@ msgstr "Mis préstamos"
 msgid "Overdue"
 msgstr "Vencidos"
 
+msgid "Pending signature"
+msgstr "Pendiente de firma"
+
+msgid "Signed"
+msgstr "Firmado"
+
 msgid "Loans"
 msgstr "Préstamos"
 

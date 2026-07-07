@@ -69,6 +69,7 @@ if(window.location.search.indexOf("tab=disponibilidad")!==-1){
     $cnt_delivered = $qc(" AND `status` = {$s2}");
     $cnt_returned  = $qc(" AND `status` = {$s3}");
     $cnt_overdue   = $qc(" AND `status` IN ({$s1},{$s5},{$s2}) AND `fecha_fin` IS NOT NULL AND `fecha_fin` < '{$now}'");
+    $cnt_unsigned  = $qc(" AND `status` != {$s4} AND (`signature_data` IS NULL OR `signature_data` = '')");
 
     $b = $plugin_web . '/front/loan.php?tab=prestamos&search=Search&start=0';
     $f = function(array $criteria) use ($b): string {
@@ -94,6 +95,10 @@ if(window.location.search.indexOf("tab=disponibilidad")!==-1){
         ['link' => 'AND', 'field' => 3,  'searchtype' => 'notequals', 'value' => $s4],
         ['link' => 'AND', 'field' => 7,  'searchtype' => 'lessthan',  'value' => date('Y-m-d H:i:s')],
     ]);
+    $url_unsigned  = $f([
+        ['link' => 'AND', 'field' => 3,  'searchtype' => 'notequals', 'value' => $s4],
+        ['link' => 'AND', 'field' => 25, 'searchtype' => 'equals',    'value' => 0],
+    ]);
 
     // Same colors as GLPI's native mini_tickets dashboard
     $tile_defs = [
@@ -107,6 +112,7 @@ if(window.location.search.indexOf("tab=disponibilidad")!==-1){
         array_splice($tile_defs, 1, 0, [[$cnt_mine, __('My loans', 'lagapenak'), 'fas fa-user', '#6298d5', $url_mine]]);
     }
     $tile_defs[] = [$cnt_overdue, __('Overdue', 'lagapenak'), 'fas fa-exclamation-triangle', '#e74c3c', $url_overdue];
+    $tile_defs[] = [$cnt_unsigned, __('Pending signature', 'lagapenak'), 'fas fa-signature', '#f8a5c2', $url_unsigned];
 
     // "+ New loan" button for helpdesk interface (toolbar buttons don't appear there)
     if ($is_helpdesk && PluginLagapenakLoan::canCreate()) {
@@ -208,7 +214,7 @@ if ($tab === 'prestamos') {
 
     // Loans for the "fill from loan" dropdown (active + pending, with dates)
     $loans_res = $DB->query(
-        "SELECT `id`, `name`, `fecha_inicio`, `fecha_fin`
+        "SELECT `id`, `name`, `status`, `fecha_inicio`, `fecha_fin`
          FROM `glpi_plugin_lagapenak_loans`
          WHERE `status` IN ({$s1},{$s5},{$s2})
            AND `fecha_inicio` IS NOT NULL AND `fecha_fin` IS NOT NULL
@@ -221,12 +227,26 @@ if ($tab === 'prestamos') {
             $loans_for_select[] = $row;
         }
     }
+    // Statuses actually present in the dropdown, for the status filter
+    $loan_select_statuses = [];
+    foreach ($loans_for_select as $ln) {
+        $loan_select_statuses[$ln['status']] = PluginLagapenakLoan::getStatusName($ln['status']);
+    }
     ?>
     <div class="container-fluid mt-3">
 
         <!-- ── Fill from loan ── -->
         <?php if (!empty($loans_for_select)): ?>
         <div class="row g-2 align-items-end mb-2">
+            <div class="col-auto">
+                <label class="form-label mb-1 text-muted" style="font-size:.85rem;">Estado</label>
+                <select id="avail-loan-status-filter" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <?php foreach ($loan_select_statuses as $st_id => $st_label): ?>
+                    <option value="<?= (int)$st_id ?>"><?= htmlspecialchars($st_label) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <div class="col-auto">
                 <label class="form-label mb-1 text-muted" style="font-size:.85rem;">Rellenar fechas desde préstamo</label>
                 <select id="avail-loan-select" class="form-select form-select-sm" style="min-width:260px;">
@@ -235,7 +255,8 @@ if ($tab === 'prestamos') {
                     <option value="<?= htmlspecialchars($ln['fecha_inicio']) ?>"
                             data-fin="<?= htmlspecialchars($ln['fecha_fin']) ?>"
                             data-id="<?= (int)$ln['id'] ?>"
-                            data-name="<?= htmlspecialchars($ln['name']) ?>">
+                            data-name="<?= htmlspecialchars($ln['name']) ?>"
+                            data-status="<?= (int)$ln['status'] ?>">
                         <?= htmlspecialchars($ln['name']) ?>
                         (<?= date('d/m/Y', strtotime($ln['fecha_inicio'])) ?> – <?= date('d/m/Y', strtotime($ln['fecha_fin'])) ?>)
                     </option>
@@ -407,6 +428,26 @@ if ($tab === 'prestamos') {
     }
     ?>
     var BULK_LOANS = <?= json_encode($bulk_loans) ?>;
+
+    // Filter the "fill from loan" dropdown by status
+    (function() {
+        var statusFilter = document.getElementById('avail-loan-status-filter');
+        var loanSelect    = document.getElementById('avail-loan-select');
+        if (!statusFilter || !loanSelect) return;
+        statusFilter.addEventListener('change', function() {
+            var status = statusFilter.value;
+            var options = loanSelect.querySelectorAll('option');
+            options.forEach(function(opt) {
+                if (!opt.value) return; // keep placeholder always visible
+                opt.hidden = status !== '' && opt.getAttribute('data-status') !== status;
+            });
+            // If the currently selected option got hidden, reset to placeholder
+            var selected = loanSelect.options[loanSelect.selectedIndex];
+            if (selected && selected.hidden) {
+                loanSelect.value = '';
+            }
+        });
+    })();
 
     // State
     var avAllRows      = [];   // all rows from server

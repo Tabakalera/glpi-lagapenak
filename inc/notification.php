@@ -119,17 +119,23 @@ HTML;
  * Called from the cronLoanReminder cron task.
  */
 function plugin_lagapenak_send_loan_reminder(array $loan_row): void {
-    $uid = (int) ($loan_row['users_id'] ?? 0);
-    if (!$uid) return;
+    // Prefer the beneficiary; fall back to the requester if there is none.
+    $email = trim($loan_row['beneficiary_email'] ?? '');
+    $display_name = trim($loan_row['beneficiary_name'] ?? '');
 
-    $email = UserEmail::getDefaultForUser($uid);
-    if (!$email) return;
+    if (!$email) {
+        $uid = (int) ($loan_row['users_id'] ?? 0);
+        if (!$uid) return;
 
-    $user = new User();
-    $display_name = '';
-    if ($user->getFromDB($uid)) {
-        $display_name = trim(($user->fields['realname'] ?? '') . ' ' . ($user->fields['firstname'] ?? ''));
-        if (!$display_name) $display_name = $user->fields['name'];
+        $email = UserEmail::getDefaultForUser($uid);
+        if (!$email) return;
+
+        $user = new User();
+        $display_name = '';
+        if ($user->getFromDB($uid)) {
+            $display_name = trim(($user->fields['realname'] ?? '') . ' ' . ($user->fields['firstname'] ?? ''));
+            if (!$display_name) $display_name = $user->fields['name'];
+        }
     }
 
     $fecha_dev = !empty($loan_row['fecha_fin'])
@@ -245,6 +251,9 @@ function plugin_lagapenak_send_signed_albaran(int $loan_id): void {
         $ben_email = UserEmail::getDefaultForUser((int)($loan->fields['users_id_destinatario'] ?? 0)) ?: '';
     }
     if ($ben_email) $recipients[$ben_email] = $ben_email;
+
+    // Fixed additional recipient
+    $recipients['kontratazioak@tabakalera.eus'] = 'kontratazioak@tabakalera.eus';
 
     if (empty($recipients) || !class_exists('GLPIMailer')) return;
 
@@ -460,8 +469,8 @@ HTML;
 
 /**
  * Notifies the other participant when a comment is added.
- * If the author is the requester → notify supervisors.
- * If the author is a supervisor → notify the requester.
+ * If the author is the requester → notify the destinatario (GLPI user).
+ * Otherwise (author is the destinatario, or anyone else) → notify the requester.
  */
 function plugin_lagapenak_notify_new_comment(int $loan_id, int $author_id, string $comment_text): void {
     global $CFG_GLPI;
@@ -482,28 +491,38 @@ function plugin_lagapenak_notify_new_comment(int $loan_id, int $author_id, strin
         if (!$author_name) $author_name = $author_obj->fields['name'];
     }
 
-    // Determine recipients: if author is supervisor → notify requester; otherwise → notify supervisors
-    $author_is_supervisor = PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_loan', UPDATE);
-    $recipients = [];
+    // Determine recipients: if author is the requester → notify the destinatario; otherwise → notify the requester
+    $requester_id = (int) ($loan->fields['users_id'] ?? 0);
+    $dest_id      = (int) ($loan->fields['users_id_destinatario'] ?? 0);
+    $recipients   = [];
 
-    if ($author_is_supervisor) {
-        // Notify requester
-        $req_email = UserEmail::getDefaultForUser((int)($loan->fields['users_id'] ?? 0));
-        $req_user  = new User();
-        $req_name  = '';
-        if ($req_user->getFromDB((int)($loan->fields['users_id'] ?? 0))) {
-            $req_name = trim(($req_user->fields['realname'] ?? '') . ' ' . ($req_user->fields['firstname'] ?? ''));
-            if (!$req_name) $req_name = $req_user->fields['name'];
-        }
-        if ($req_email && (int)($loan->fields['users_id'] ?? 0) !== $author_id) {
-            $recipients[$req_email] = $req_name;
+    if ($author_id === $requester_id) {
+        // Notify destinatario
+        if ($dest_id && $dest_id !== $author_id) {
+            $dest_email = UserEmail::getDefaultForUser($dest_id);
+            $dest_user  = new User();
+            $dest_name  = '';
+            if ($dest_user->getFromDB($dest_id)) {
+                $dest_name = trim(($dest_user->fields['realname'] ?? '') . ' ' . ($dest_user->fields['firstname'] ?? ''));
+                if (!$dest_name) $dest_name = $dest_user->fields['name'];
+            }
+            if ($dest_email) {
+                $recipients[$dest_email] = $dest_name;
+            }
         }
     } else {
-        // Notify all supervisors of the entity
-        foreach (PluginLagapenakLoan::getSupervisorsForEntity((int)($loan->fields['entities_id'] ?? 0)) as $sup) {
-            if ($sup['id'] === $author_id) continue;
-            $sup_email = UserEmail::getDefaultForUser($sup['id']);
-            if ($sup_email) $recipients[$sup_email] = $sup['name'];
+        // Notify requester
+        if ($requester_id && $requester_id !== $author_id) {
+            $req_email = UserEmail::getDefaultForUser($requester_id);
+            $req_user  = new User();
+            $req_name  = '';
+            if ($req_user->getFromDB($requester_id)) {
+                $req_name = trim(($req_user->fields['realname'] ?? '') . ' ' . ($req_user->fields['firstname'] ?? ''));
+                if (!$req_name) $req_name = $req_user->fields['name'];
+            }
+            if ($req_email) {
+                $recipients[$req_email] = $req_name;
+            }
         }
     }
 
