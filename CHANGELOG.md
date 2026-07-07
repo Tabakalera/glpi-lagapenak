@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2026-07-07
+
+### Added
+- "Pending signature" tile in the loan list summary, with count and click-through filter; new "Signed" search field
+- Status filter for the "fill dates from loan" dropdown in the availability checker
+
+### Changed
+- Return reminder now emails the beneficiary and falls back to the requester (previously always the requester, or the GLPI destinatario in an interim version)
+- Comment/chat notifications now alternate between requester and destinatario, instead of notifying all supervisors
+- Signed delivery note email now always includes kontratazioak@tabakalera.eus as an additional recipient
+
+### Fixed
+- Spanish translations added for new labels ("Pendiente de firma", "Firmado")
+
+---
+
 ## [1.4.1] - 2026-04-08
 
 ### Fixed
