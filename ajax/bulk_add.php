@@ -64,8 +64,8 @@ foreach ($items as $item) {
     );
 
     if (!empty($conflict_list)) {
-        $loan_names = array_map(function ($c) {
-            return '#' . $c['id'] . ' ' . htmlspecialchars($c['name']);
+        $loan_names = array_map(function ($c) use ($_ba_can_sup) {
+            return PluginLagapenakLoanItem::describeConflictingLoan($c, $_ba_can_sup);
         }, $conflict_list);
         $conflicts[] = ['name' => htmlspecialchars($name), 'loans' => $loan_names];
     } else {

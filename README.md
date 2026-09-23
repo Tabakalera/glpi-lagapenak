@@ -2,13 +2,13 @@
 
 > **Español** · [English below](#english)
 
-Plugin para GLPI 10.0.x que permite gestionar préstamos de activos (ordenadores, periféricos, monitores, etc.) con albarán de entrega, firma digital, calendario y notificaciones por email.
+Plugin para GLPI 10.0.x y 11.0.x que permite gestionar préstamos de activos (ordenadores, periféricos, monitores, etc.) con albarán de entrega, firma digital, calendario y notificaciones por email.
 
 ---
 
 ## Requisitos
 
-- GLPI >= 10.0.0 (probado hasta 10.0.24)
+- GLPI 10.0.11 o superior (probado en 10.0.24) o GLPI 11.0.x (probado en 11.0.9)
 - PHP >= 7.4
 - MySQL / MariaDB
 
@@ -111,7 +111,7 @@ Los tres campos también están disponibles como **columnas y filtros en el busc
 5. Pulsa **Descargar PDF** para obtener el documento como PDF real (A4, con cabecera y pie de página)
 6. O pulsa **Enviar por correo** para enviarlo como adjunto a cualquier dirección de email
 
-**Imagen corporativa:** Sustituye `pics/albaran_header.png` y `pics/albaran_footer.png`.
+**Imagen corporativa:** Sustituye `public/pics/albaran_header.png` y `public/pics/albaran_footer.png`.
 
 **Condiciones de uso:** Edita el array `$condiciones` al inicio de `front/albaran.php`.
 
@@ -133,6 +133,9 @@ Accede desde el icono de calendario en el menú de Lagapenak.
 - **Vista mensual:** un evento por préstamo, con colores por estado
 - **Vista por activo:** un evento por activo, con filtro
 - **Suscripción iCal:** botón en el calendario → URL para Google Calendar / Outlook
+  - Supervisores: enlace general con todos los préstamos
+  - Resto de usuarios: enlace personal con solo los préstamos que han pedido
+  - Botón **Regenerar enlace**: crea un enlace nuevo y el anterior deja de funcionar
 
 > Las URLs iCal solo funcionan si GLPI es accesible desde Internet.
 
@@ -170,11 +173,12 @@ lagapenak/
 │   ├── loan.class.php             # Clase principal del préstamo
 │   ├── loanitem.class.php         # Clase de ítem de préstamo
 │   ├── profile.class.php          # Integración de permisos con perfiles GLPI
+│   ├── compat.php                 # Compatibilidad GLPI 10 / GLPI 11
 │   └── notification.php           # Envío de emails y cron de recordatorios
 ├── locales/
 │   ├── en_GB.po / en_GB.mo        # English translations
 │   └── es_ES.po / es_ES.mo        # Traducciones español
-└── pics/
+└── public/pics/
     ├── albaran_header.png         # Imagen de cabecera del albarán (personalizar)
     └── albaran_footer.png         # Imagen de pie del albarán (personalizar)
 ```
@@ -192,13 +196,13 @@ GPL v2 o posterior. Ver [LICENSE](LICENSE).
 <a name="english"></a>
 # Lagapenak — Asset Loan Manager for GLPI (English)
 
-Plugin for GLPI 10.0.x to manage asset loans (computers, peripherals, monitors, etc.) with delivery notes, digital signatures, calendar views and email notifications.
+Plugin for GLPI 10.0.x and 11.0.x to manage asset loans (computers, peripherals, monitors, etc.) with delivery notes, digital signatures, calendar views and email notifications.
 
 ---
 
 ## Requirements
 
-- GLPI >= 10.0.0 (tested up to 10.0.24)
+- GLPI 10.0.11 or later (tested on 10.0.24) or GLPI 11.0.x (tested on 11.0.9)
 - PHP >= 7.4
 - MySQL / MariaDB
 
@@ -301,7 +305,7 @@ All three fields are also available as **searchable / filterable columns** in th
 5. Clicks **Download PDF** to get a real A4 PDF (header/footer images included on every page)
 6. Or clicks **Send by email** to deliver it as a PDF attachment to any email address
 
-**Corporate images:** Replace `pics/albaran_header.png` and `pics/albaran_footer.png` with your own (header recommended: 260×100 px max; footer: full width).
+**Corporate images:** Replace `public/pics/albaran_header.png` and `public/pics/albaran_footer.png` with your own (header recommended: 260×100 px max; footer: full width).
 
 **Loan conditions text:** Edit the `$condiciones` array at the top of `front/albaran.php`:
 
@@ -332,6 +336,9 @@ Access from the calendar icon in the Lagapenak menu.
 - **Monthly view:** one event per loan, colour-coded by status
 - **Asset view:** one event per asset, with asset filter dropdown
 - **iCal subscription:** click **Subscribe** in the calendar → copy the URL into Google Calendar, Outlook or any iCal-compatible app
+  - Supervisors get a general URL with every loan
+  - Other users get a personal URL with only the loans they requested
+  - **Regenerate URL** creates a new URL and disables the previous one
 
 > iCal URLs only work if GLPI is accessible from the Internet (not from `localhost`).
 
@@ -374,11 +381,12 @@ lagapenak/
 │   ├── loan.class.php             # Main loan class
 │   ├── loanitem.class.php         # Loan item class
 │   ├── profile.class.php          # GLPI profile permissions integration
+│   ├── compat.php                 # GLPI 10 / GLPI 11 compatibility helpers
 │   └── notification.php           # Email notifications and cron reminders
 ├── locales/
 │   ├── en_GB.po / en_GB.mo        # English translations
 │   └── es_ES.po / es_ES.mo        # Spanish translations
-└── pics/
+└── public/pics/
     ├── albaran_header.png         # Delivery note header image (customise)
     └── albaran_footer.png         # Delivery note footer image (customise)
 ```

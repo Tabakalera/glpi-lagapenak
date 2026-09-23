@@ -13,7 +13,9 @@ global $DB, $CFG_GLPI;
 
 // ── Validate token ────────────────────────────────────────────────────────────
 $token = trim($_GET['token'] ?? ($_POST['sign_token'] ?? ''));
-if (!$token || strlen($token) > 64) {
+// Tokens are always bin2hex(random_bytes(32)). Strict format check also prevents values such
+// as "NULL", which GLPI's query builder would turn into `sign_token IS NULL`.
+if (!preg_match('/^[a-f0-9]{64}$/', $token)) {
     die('<p style="font-family:sans-serif;padding:40px;">Enlace no válido.</p>');
 }
 
@@ -71,17 +73,9 @@ $sign_dni     = htmlspecialchars(trim($loan->fields['beneficiary_dni']  ?? '') ?
 $sign_project = htmlspecialchars(trim($loan->fields['field_2']          ?? '') ?: ($loan->fields['albaran_project']  ?? ''));
 
 // Header/footer images
-$root_doc   = rtrim($CFG_GLPI['root_doc'] ?? '', '/');
-function _sign_img_web($name, $root_doc) {
-    foreach (['.png', '.jpg', '.jpeg'] as $ext) {
-        $fs = GLPI_ROOT . '/plugins/lagapenak/pics/' . $name . $ext;
-        if (file_exists($fs)) return $root_doc . '/plugins/lagapenak/pics/' . $name . $ext;
-    }
-    return null;
-}
-$header_web = _sign_img_web('albaran_header', $root_doc);
-$footer_web = _sign_img_web('albaran_footer', $root_doc);
-$fa_css     = $root_doc . '/public/lib/fortawesome/fontawesome-free/css/all.min.css';
+$header_web = plugin_lagapenak_img_web('albaran_header');
+$footer_web = plugin_lagapenak_img_web('albaran_footer');
+$fa_css     = plugin_lagapenak_fontawesome_css_url();
 
 ?>
 <!DOCTYPE html>

@@ -33,7 +33,7 @@ function plugin_lagapenak_notify_loan_created($item) {
     global $CFG_GLPI;
 
     // Loan link — use url_base to guarantee an absolute URL
-    $loan_url  = rtrim($CFG_GLPI['url_base'], '/') . '/plugins/lagapenak/front/loan.form.php?id=' . (int) $item->getID();
+    $loan_url  = plugin_lagapenak_web_dir(true) . '/front/loan.form.php?id=' . (int) $item->getID();
     $loan_name = $item->fields['name'] ?: __('Loan #', 'lagapenak') . $item->getID();
     $from_email = $CFG_GLPI['admin_email']      ?? '';
     $from_name  = $CFG_GLPI['admin_email_name'] ?? 'Lagapenak';
@@ -54,6 +54,7 @@ function plugin_lagapenak_notify_loan_created($item) {
     $p_footer   = sprintf(__('This message was generated automatically by the %s loan management system.', 'lagapenak'), htmlspecialchars($from_name));
 
     // ── HTML body ────────────────────────────────────────────────────────────
+    $loan_name_html = htmlspecialchars($loan_name);
     $body = <<<HTML
 <!DOCTYPE html>
 <html lang="en">
@@ -65,7 +66,7 @@ function plugin_lagapenak_notify_loan_created($item) {
   <table style="border-collapse:collapse;margin:16px 0;">
     <tr>
       <td style="font-weight:bold;padding:4px 16px 4px 0;">{$lbl_loan}:</td>
-      <td style="padding:4px 0;">{$loan_name}</td>
+      <td style="padding:4px 0;">{$loan_name_html}</td>
     </tr>
     <tr>
       <td style="font-weight:bold;padding:4px 16px 4px 0;">{$lbl_pickup}:</td>
@@ -96,21 +97,18 @@ HTML;
     }
 
     try {
-        $mail = new GLPIMailer();
-        if ($from_email) {
-            $mail->setFrom($from_email, $from_name);
-        }
-        $mail->addAddress($email, $display_name);
-        $mail->addReplyTo($from_email ?: $email, $from_name);
-        $mail->Subject  = $subject;
-        $mail->CharSet  = 'UTF-8';
-        $mail->Encoding = 'base64';
-        $mail->isHTML(true);
-        $mail->Body    = $body;
-        $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
-        $mail->send();
-    } catch (\Exception $e) {
-        Toolbox::logError('[lagapenak] Error sending loan notification: ' . $e->getMessage());
+        plugin_lagapenak_send_mail([
+            'to_email'       => $email,
+            'to_name'        => $display_name,
+            'from_email'     => $from_email,
+            'from_name'      => $from_name,
+            'reply_to_email' => $from_email ?: $email,
+            'reply_to_name'  => $from_name,
+            'subject'        => $subject,
+            'html'           => $body,
+        ]);
+    } catch (\Throwable $e) {
+        plugin_lagapenak_log_error('[lagapenak] Error sending loan notification: ' . $e->getMessage());
     }
 }
 
@@ -119,6 +117,8 @@ HTML;
  * Called from the cronLoanReminder cron task.
  */
 function plugin_lagapenak_send_loan_reminder(array $loan_row): void {
+    global $CFG_GLPI;
+
     // Prefer the beneficiary; fall back to the requester if there is none.
     $email = trim($loan_row['beneficiary_email'] ?? '');
     $display_name = trim($loan_row['beneficiary_name'] ?? '');
@@ -141,9 +141,8 @@ function plugin_lagapenak_send_loan_reminder(array $loan_row): void {
     $fecha_dev = !empty($loan_row['fecha_fin'])
         ? Html::convDateTime($loan_row['fecha_fin']) : '—';
     $loan_name = $loan_row['name'] ?: __('Loan #', 'lagapenak') . $loan_row['id'];
-    $loan_url  = rtrim($CFG_GLPI['url_base'], '/') . '/plugins/lagapenak/front/loan.form.php?id=' . (int)$loan_row['id'];
+    $loan_url  = plugin_lagapenak_web_dir(true) . '/front/loan.form.php?id=' . (int)$loan_row['id'];
 
-    global $CFG_GLPI;
     $from_email = $CFG_GLPI['admin_email']      ?? '';
     $from_name  = $CFG_GLPI['admin_email_name'] ?? 'Lagapenak';
 
@@ -157,6 +156,7 @@ function plugin_lagapenak_send_loan_reminder(array $loan_row): void {
     $lbl_return = __('Return date', 'lagapenak');
     $btn_view   = __('View loan', 'lagapenak');
     $p_footer   = sprintf(__('This message was generated automatically by the %s loan management system.', 'lagapenak'), htmlspecialchars($from_name));
+    $loan_name_html = htmlspecialchars($loan_name);
 
     $body = <<<HTML
 <!DOCTYPE html>
@@ -169,7 +169,7 @@ function plugin_lagapenak_send_loan_reminder(array $loan_row): void {
   <table style="border-collapse:collapse;margin:16px 0;">
     <tr>
       <td style="font-weight:bold;padding:4px 16px 4px 0;">{$lbl_loan}:</td>
-      <td style="padding:4px 0;">{$loan_name}</td>
+      <td style="padding:4px 0;">{$loan_name_html}</td>
     </tr>
     <tr>
       <td style="font-weight:bold;padding:4px 16px 4px 0;">{$lbl_return}:</td>
@@ -193,19 +193,18 @@ HTML;
     if (!class_exists('GLPIMailer')) return;
 
     try {
-        $mail = new GLPIMailer();
-        if ($from_email) $mail->setFrom($from_email, $from_name);
-        $mail->addAddress($email, $display_name);
-        $mail->addReplyTo($from_email ?: $email, $from_name);
-        $mail->Subject  = $subject;
-        $mail->CharSet  = 'UTF-8';
-        $mail->Encoding = 'base64';
-        $mail->isHTML(true);
-        $mail->Body     = $body;
-        $mail->AltBody  = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
-        $mail->send();
-    } catch (\Exception $e) {
-        Toolbox::logError('[lagapenak] Error sending return reminder: ' . $e->getMessage());
+        plugin_lagapenak_send_mail([
+            'to_email'       => $email,
+            'to_name'        => $display_name,
+            'from_email'     => $from_email,
+            'from_name'      => $from_name,
+            'reply_to_email' => $from_email ?: $email,
+            'reply_to_name'  => $from_name,
+            'subject'        => $subject,
+            'html'           => $body,
+        ]);
+    } catch (\Throwable $e) {
+        plugin_lagapenak_log_error('[lagapenak] Error sending return reminder: ' . $e->getMessage());
     }
 }
 
@@ -217,7 +216,7 @@ HTML;
 function plugin_lagapenak_send_signed_albaran(int $loan_id): void {
     global $CFG_GLPI;
 
-    include_once GLPI_ROOT . '/plugins/lagapenak/inc/albaran_pdf.php';
+    include_once __DIR__ . '/albaran_pdf.php';
 
     $loan = new PluginLagapenakLoan();
     if (!$loan->getFromDB($loan_id)) return;
@@ -271,19 +270,17 @@ HTML;
 
     foreach ($recipients as $email) {
         try {
-            $mail = new GLPIMailer();
-            if ($from_email) $mail->setFrom($from_email, $from_name);
-            $mail->addAddress($email);
-            $mail->Subject  = $subject;
-            $mail->CharSet  = 'UTF-8';
-            $mail->Encoding = 'base64';
-            $mail->isHTML(true);
-            $mail->Body     = $body;
-            $mail->AltBody  = strip_tags($body_line);
-            $mail->addStringAttachment($pdf_content, $filename, 'base64', 'application/pdf');
-            $mail->send();
-        } catch (\Exception $e) {
-            Toolbox::logError('[lagapenak] Error sending signed albaran to ' . $email . ': ' . $e->getMessage());
+            plugin_lagapenak_send_mail([
+                'to_email'    => $email,
+                'from_email'  => $from_email,
+                'from_name'   => $from_name,
+                'subject'     => $subject,
+                'html'        => $body,
+                'text'        => strip_tags($body_line),
+                'attachments' => [[$pdf_content, $filename, 'application/pdf']],
+            ]);
+        } catch (\Throwable $e) {
+            plugin_lagapenak_log_error('[lagapenak] Error sending signed albaran to ' . $email . ': ' . $e->getMessage());
         }
     }
 }
@@ -313,7 +310,7 @@ function plugin_lagapenak_notify_date_request(int $loan_id): void {
     }
 
     $loan_name    = $loan->fields['name'] ?: __('Loan #', 'lagapenak') . $loan_id;
-    $loan_url     = rtrim($CFG_GLPI['url_base'], '/') . '/plugins/lagapenak/front/loan.form.php?id=' . $loan_id;
+    $loan_url     = plugin_lagapenak_web_dir(true) . '/front/loan.form.php?id=' . $loan_id;
     $req_date_fmt = Html::convDate($loan->fields['requested_date_end'] ?? '');
     $from_email   = $CFG_GLPI['admin_email']      ?? '';
     $from_name    = $CFG_GLPI['admin_email_name'] ?? 'Lagapenak';
@@ -347,18 +344,16 @@ function plugin_lagapenak_notify_date_request(int $loan_id): void {
 </html>
 HTML;
     try {
-        $mail = new GLPIMailer();
-        if ($from_email) $mail->setFrom($from_email, $from_name);
-        $mail->addAddress($dest_email, $dest_name);
-        $mail->Subject  = $subject;
-        $mail->CharSet  = 'UTF-8';
-        $mail->Encoding = 'base64';
-        $mail->isHTML(true);
-        $mail->Body    = $body;
-        $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
-        $mail->send();
-    } catch (\Exception $e) {
-        Toolbox::logError('[lagapenak] Error sending date request notification to ' . $dest_email . ': ' . $e->getMessage());
+        plugin_lagapenak_send_mail([
+            'to_email'   => $dest_email,
+            'to_name'    => $dest_name,
+            'from_email' => $from_email,
+            'from_name'  => $from_name,
+            'subject'    => $subject,
+            'html'       => $body,
+        ]);
+    } catch (\Throwable $e) {
+        plugin_lagapenak_log_error('[lagapenak] Error sending date request notification to ' . $dest_email . ': ' . $e->getMessage());
     }
 }
 
@@ -373,7 +368,7 @@ function plugin_lagapenak_notify_date_request_decision(int $loan_id, string $dec
     if (!$loan->getFromDB($loan_id)) return;
 
     $loan_name  = $loan->fields['name'] ?: __('Loan #', 'lagapenak') . $loan_id;
-    $loan_url   = rtrim($CFG_GLPI['url_base'], '/') . '/plugins/lagapenak/front/loan.form.php?id=' . $loan_id;
+    $loan_url   = plugin_lagapenak_web_dir(true) . '/front/loan.form.php?id=' . $loan_id;
     $from_email = $CFG_GLPI['admin_email']      ?? '';
     $from_name  = $CFG_GLPI['admin_email_name'] ?? 'Lagapenak';
 
@@ -451,18 +446,16 @@ function plugin_lagapenak_notify_date_request_decision(int $loan_id, string $dec
 </html>
 HTML;
         try {
-            $mail = new GLPIMailer();
-            if ($from_email) $mail->setFrom($from_email, $from_name);
-            $mail->addAddress($email, $name);
-            $mail->Subject  = $subject;
-            $mail->CharSet  = 'UTF-8';
-            $mail->Encoding = 'base64';
-            $mail->isHTML(true);
-            $mail->Body    = $body;
-            $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
-            $mail->send();
-        } catch (\Exception $e) {
-            Toolbox::logError('[lagapenak] Error sending date decision notification to ' . $email . ': ' . $e->getMessage());
+            plugin_lagapenak_send_mail([
+                'to_email'   => $email,
+                'to_name'    => $name,
+                'from_email' => $from_email,
+                'from_name'  => $from_name,
+                'subject'    => $subject,
+                'html'       => $body,
+            ]);
+        } catch (\Throwable $e) {
+            plugin_lagapenak_log_error('[lagapenak] Error sending date decision notification to ' . $email . ': ' . $e->getMessage());
         }
     }
 }
@@ -479,7 +472,7 @@ function plugin_lagapenak_notify_new_comment(int $loan_id, int $author_id, strin
     if (!$loan->getFromDB($loan_id)) return;
 
     $loan_name  = $loan->fields['name'] ?: __('Loan #', 'lagapenak') . $loan_id;
-    $loan_url   = rtrim($CFG_GLPI['url_base'], '/') . '/plugins/lagapenak/front/loan.form.php?id=' . $loan_id . '#comments';
+    $loan_url   = plugin_lagapenak_web_dir(true) . '/front/loan.form.php?id=' . $loan_id . '#comments';
     $from_email = $CFG_GLPI['admin_email']      ?? '';
     $from_name  = $CFG_GLPI['admin_email_name'] ?? 'Lagapenak';
 
@@ -559,18 +552,16 @@ function plugin_lagapenak_notify_new_comment(int $loan_id, int $author_id, strin
 </html>
 HTML;
         try {
-            $mail = new GLPIMailer();
-            if ($from_email) $mail->setFrom($from_email, $from_name);
-            $mail->addAddress($email, $name);
-            $mail->Subject  = $subject;
-            $mail->CharSet  = 'UTF-8';
-            $mail->Encoding = 'base64';
-            $mail->isHTML(true);
-            $mail->Body    = $body;
-            $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
-            $mail->send();
-        } catch (\Exception $e) {
-            Toolbox::logError('[lagapenak] Error sending comment notification to ' . $email . ': ' . $e->getMessage());
+            plugin_lagapenak_send_mail([
+                'to_email'   => $email,
+                'to_name'    => $name,
+                'from_email' => $from_email,
+                'from_name'  => $from_name,
+                'subject'    => $subject,
+                'html'       => $body,
+            ]);
+        } catch (\Throwable $e) {
+            plugin_lagapenak_log_error('[lagapenak] Error sending comment notification to ' . $email . ': ' . $e->getMessage());
         }
     }
 }

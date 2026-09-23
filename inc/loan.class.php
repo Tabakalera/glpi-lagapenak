@@ -35,7 +35,7 @@ class PluginLagapenakLoan extends CommonDBTM {
     }
 
     static function getFormURL($full = true) {
-        return Plugin::getWebDir('lagapenak', true, $full) . '/front/loan.form.php';
+        return plugin_lagapenak_web_dir($full) . '/front/loan.form.php';
     }
 
     /**
@@ -57,11 +57,11 @@ class PluginLagapenakLoan extends CommonDBTM {
         return false;
     }
 
-    static function canView() {
+    static function canView(): bool {
         return self::hasPluginRight(self::$rightname, READ);
     }
 
-    static function canCreate() {
+    static function canCreate(): bool {
         return self::hasPluginRight(self::$rightname, CREATE);
     }
 
@@ -81,7 +81,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             $ancestor_list      = implode(',', array_map('intval', $ancestors));
             $ancestor_condition = "OR (pu.entities_id IN ({$ancestor_list}) AND pu.is_recursive = 1)";
         }
-        $result = $DB->query("
+        $result = $DB->doQuery("
             SELECT DISTINCT pu.users_id, u.name, u.realname, u.firstname
             FROM glpi_profiles_users pu
             JOIN glpi_profilerights pr ON pr.profiles_id = pu.profiles_id
@@ -101,7 +101,7 @@ class PluginLagapenakLoan extends CommonDBTM {
         return $users;
     }
 
-    function canViewItem() {
+    function canViewItem(): bool {
         if (!static::canView()) return false;
         if (!self::canSupervise()) {
             // Non-supervisors can only view their own loans
@@ -127,6 +127,20 @@ class PluginLagapenakLoan extends CommonDBTM {
     function prepareInputForAdd($input) {
         // Solicitante is always the logged-in user, not user-supplied
         $input['users_id'] = (int)($_SESSION['glpiID'] ?? 0);
+
+        // Fields managed by the plugin workflows (signature, albarán, date requests) are never
+        // taken from the creation form, otherwise a loan could be created already "signed".
+        foreach ([
+            'signature_data', 'signature_name', 'signature_date', 'has_albaran',
+            'albaran_passport', 'albaran_project', 'sign_token', 'sign_token_expires',
+            'requested_date_end', 'date_request_status', 'date_request_apply_items', 'date_request_notes',
+        ] as $field) {
+            unset($input[$field]);
+        }
+        // Only supervisors may choose the initial status
+        if (!self::canSupervise()) {
+            $input['status'] = self::STATUS_PENDING;
+        }
         return self::sanitizeDates($input);
     }
 
@@ -358,7 +372,7 @@ class PluginLagapenakLoan extends CommonDBTM {
         if ($field === '_albaran') {
             $loan_id = (int) ($values[$field] ?? 0);
             if ($loan_id > 0) {
-                $url = Plugin::getWebDir('lagapenak', true) . '/front/albaran.php?id=' . $loan_id;
+                $url = plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $loan_id;
                 return '<a href="' . $url . '" target="_blank" title="' . __('View signed delivery note', 'lagapenak') . '">'
                      . '<i class="fas fa-check-circle text-success fa-lg"></i></a>';
             }
@@ -425,7 +439,7 @@ class PluginLagapenakLoan extends CommonDBTM {
         echo '</div>';
 
         // ── Row 1b: Entity ──────────────────────────────────────────────
-        $supervisor_url = Plugin::getWebDir('lagapenak', true) . '/ajax/entity_supervisor.php';
+        $supervisor_url = plugin_lagapenak_web_dir() . '/ajax/entity_supervisor.php';
         echo '<div class="row g-3 mb-3">';
         echo '<div class="col-md-6">';
         echo '<label class="form-label fw-bold">' . __('Entity', 'lagapenak') . ' <span class="text-danger">*</span></label>';
@@ -750,7 +764,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             self::STATUS_DELIVERED,
         ]);
 
-        $result = $DB->query(
+        $result = $DB->doQuery(
             "SELECT l.*
              FROM `glpi_plugin_lagapenak_loans` l
              WHERE l.status IN ({$active_statuses})

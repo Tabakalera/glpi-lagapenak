@@ -13,6 +13,41 @@ $ID            = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $form_error    = '';
 $can_supervise = PluginLagapenakLoan::canSupervise();
 
+// ── Date changes that conflict with other bookings ──────────────────────────
+// A conflicting date change is not saved at first: the request is kept in session and the
+// page asks for confirmation. "Save anyway" replays the original POST with the check skipped.
+$pending_conflict  = null;  // set by a handler to render the confirmation box
+$conflicts_confirmed = false;
+
+if (isset($_POST['confirm_pending_change'])) {
+    $pending_key = (string) $_POST['confirm_pending_change'];
+    $pending     = $_SESSION['plugin_lagapenak_pending'][$pending_key] ?? null;
+    unset($_SESSION['plugin_lagapenak_pending'][$pending_key]);
+    if ($pending === null || (int) $pending['loans_id'] !== $ID) {
+        Session::addMessageAfterRedirect(__('The change has expired, please make it again.', 'lagapenak'), false, WARNING);
+        Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.form.php?id=' . $ID);
+    }
+    $_POST = $pending['post'];
+    $conflicts_confirmed = true;
+}
+
+/**
+ * Keep the current POST in session and return what the confirmation box needs.
+ */
+function plugin_lagapenak_hold_conflicting_change(int $loans_id, array $conflicts, string $message, string $button): array {
+    $_SESSION['plugin_lagapenak_pending'] = array_filter(
+        $_SESSION['plugin_lagapenak_pending'] ?? [],
+        fn($p) => $p['time'] > time() - HOUR_TIMESTAMP
+    );
+    $key = bin2hex(random_bytes(8));
+    $_SESSION['plugin_lagapenak_pending'][$key] = [
+        'loans_id' => $loans_id,
+        'post'     => $_POST,
+        'time'     => time(),
+    ];
+    return ['key' => $key, 'conflicts' => $conflicts, 'message' => $message, 'button' => $button];
+}
+
 // ── Handle loan CRUD ────────────────────────────────────────────────────────
 if (isset($_POST['save_loan'])) {
     $is_new = ($ID == 0);
@@ -28,7 +63,18 @@ if (isset($_POST['save_loan'])) {
         } elseif (empty($_POST['fecha_inicio']) || empty($_POST['fecha_fin'])) {
             $form_error = __('The start and end dates are required.', 'lagapenak');
         } else {
-            if ($ID > 0) {
+            $conflicts = ($ID > 0 && !$conflicts_confirmed)
+                ? PluginLagapenakLoanItem::getConflictsForDateChange(
+                    $ID, $_POST['fecha_inicio'], $_POST['fecha_fin'], !empty($_POST['apply_dates_to_items'])
+                )
+                : [];
+            if (!empty($conflicts)) {
+                $pending_conflict = plugin_lagapenak_hold_conflicting_change(
+                    $ID, $conflicts,
+                    __('The date change has not been saved yet.', 'lagapenak'),
+                    __('Save anyway', 'lagapenak')
+                );
+            } elseif ($ID > 0) {
                 $_POST['id'] = $ID;
                 $loan->update($_POST);
                 if (!empty($_POST['apply_dates_to_items']) && !empty($_POST['fecha_fin'])) {
@@ -37,7 +83,7 @@ if (isset($_POST['save_loan'])) {
                 Html::back();
             } else {
                 $new_id = $loan->add($_POST);
-                Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.form.php?id=' . (int) $new_id);
+                Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.form.php?id=' . (int) $new_id);
             }
         }
     }
@@ -49,7 +95,7 @@ if (isset($_POST['delete_loan'])) {
                       && (int)($loan->fields['status'] ?? 0) === PluginLagapenakLoan::STATUS_PENDING;
     if (!$can_supervise && !$is_own_pending) { Html::back(); }
     $loan->delete(['id' => $ID]);
-    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.php');
 }
 
 // ── Handle loan item CRUD ────────────────────────────────────────────────────
@@ -78,13 +124,8 @@ if (isset($_POST['add_loanitem'])) {
     );
 
     if (!empty($conflicts)) {
-        $conflict_list = implode(', ', array_map(function($c) {
-            // Show effective item dates (item-level if set, else loan dates)
-            $fi = $c['eff_start'] ? Html::convDateTime($c['eff_start']) : '—';
-            $ff = $c['eff_end']   ? Html::convDateTime($c['eff_end'])   : '—';
-            return '<strong>#' . $c['id'] . ' ' . htmlspecialchars($c['name']) . '</strong>'
-                 . ' (' . PluginLagapenakLoan::getStatusName($c['status']) . ')'
-                 . ' · ' . $fi . ' → ' . $ff;
+        $conflict_list = implode(', ', array_map(function($c) use ($can_supervise) {
+            return PluginLagapenakLoanItem::describeConflictingLoan($c, $can_supervise);
         }, $conflicts));
         Session::addMessageAfterRedirect(
             __('This asset is already booked in another loan with overlapping dates: ', 'lagapenak') . $conflict_list,
@@ -131,14 +172,33 @@ if (isset($_POST['remove_loanitem'])) {
 
 if (isset($_POST['update_loanitem'])) {
     if (!$can_supervise) { Html::back(); }
-    PluginLagapenakLoanItem::updateItem(
-        (int) ($_POST['loanitem_id'] ?? 0),
-        (int) ($_POST['item_status'] ?? 1),
-        $_POST['item_date_checkout'] ?? '',
-        $_POST['item_date_checkin']  ?? ''
-    );
-    PluginLagapenakLoanItem::syncLoanStatus($ID);
-    Html::redirect(htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID);
+    $upd_item_id = (int) ($_POST['loanitem_id'] ?? 0);
+    $upd_status  = (int) ($_POST['item_status'] ?? 1);
+    $conflicts   = [];
+    if (!$conflicts_confirmed && $upd_status !== PluginLagapenakLoanItem::STATUS_RETURNED) {
+        $conflicts = PluginLagapenakLoanItem::getConflictsForDateChange($ID, null, null, false, [
+            $upd_item_id => [
+                'start' => $_POST['item_date_checkout'] ?? null,
+                'end'   => $_POST['item_date_checkin'] ?? null,
+            ],
+        ]);
+    }
+    if (!empty($conflicts)) {
+        $pending_conflict = plugin_lagapenak_hold_conflicting_change(
+            $ID, $conflicts,
+            __('The date change has not been saved yet.', 'lagapenak'),
+            __('Save anyway', 'lagapenak')
+        );
+    } else {
+        PluginLagapenakLoanItem::updateItem(
+            $upd_item_id,
+            $upd_status,
+            $_POST['item_date_checkout'] ?? '',
+            $_POST['item_date_checkin']  ?? ''
+        );
+        PluginLagapenakLoanItem::syncLoanStatus($ID);
+        Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.form.php' . '?id=' . $ID);
+    }
 }
 
 if (isset($_POST['bulk_update_items'])) {
@@ -167,7 +227,7 @@ if (isset($_POST['bulk_update_items'])) {
         }
     }
     PluginLagapenakLoanItem::syncLoanStatus($ID);
-    Html::redirect(htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID);
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.form.php' . '?id=' . $ID);
 }
 
 // ── Date extension request (self-service) ──────────────────────────────────
@@ -177,37 +237,64 @@ if (isset($_POST['save_date_request'])) {
     if ((int)($loan->fields['users_id'] ?? 0) !== (int)($_SESSION['glpiID'] ?? 0)) { Html::back(); }
     $requested_end = trim($_POST['requested_date_end'] ?? '');
     if (empty($requested_end)) { Html::back(); }
-    $loan->update([
-        'id'                       => $ID,
-        'requested_date_end'       => $requested_end,
-        'date_request_status'      => PluginLagapenakLoan::DATE_REQUEST_PENDING,
-        'date_request_apply_items' => !empty($_POST['date_request_apply_items']) ? 1 : 0,
-        'date_request_notes'       => trim($_POST['date_request_notes'] ?? ''),
-    ]);
-    include_once GLPI_ROOT . '/plugins/lagapenak/inc/notification.php';
-    plugin_lagapenak_notify_date_request($ID);
-    Html::redirect(htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID . '&date_request_sent=1');
+    $conflicts = $conflicts_confirmed ? [] : PluginLagapenakLoanItem::getConflictsForDateChange(
+        $ID, null, $requested_end, !empty($_POST['date_request_apply_items'])
+    );
+    if (!empty($conflicts)) {
+        $pending_conflict = plugin_lagapenak_hold_conflicting_change(
+            $ID, $conflicts,
+            __('The request has not been sent yet.', 'lagapenak'),
+            __('Send anyway', 'lagapenak')
+        );
+    } else {
+        $loan->update([
+            'id'                       => $ID,
+            'requested_date_end'       => $requested_end,
+            'date_request_status'      => PluginLagapenakLoan::DATE_REQUEST_PENDING,
+            'date_request_apply_items' => !empty($_POST['date_request_apply_items']) ? 1 : 0,
+            'date_request_notes'       => trim($_POST['date_request_notes'] ?? ''),
+        ]);
+        include_once __DIR__ . '/../inc/notification.php';
+        plugin_lagapenak_notify_date_request($ID);
+        Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.form.php' . '?id=' . $ID . '&date_request_sent=1');
+    }
 }
 
 // ── Approve date extension request (supervisor) ─────────────────────────────
 if (isset($_POST['approve_date_request'])) {
     if (!$can_supervise || $ID == 0) { Html::back(); }
     $loan->getFromDB($ID);
+    // Only a pending request with a date can be approved (otherwise fecha_fin would be wiped)
+    if ((int)($loan->fields['date_request_status'] ?? 0) !== PluginLagapenakLoan::DATE_REQUEST_PENDING
+        || empty($loan->fields['requested_date_end'])) {
+        Html::back();
+    }
     $new_fecha_fin = $loan->fields['requested_date_end'];
     $apply_items   = !empty($_POST['date_request_apply_items']) ? 1 : 0;
-    $loan->update([
-        'id'                       => $ID,
-        'fecha_fin'                => $new_fecha_fin,
-        'date_request_status'      => PluginLagapenakLoan::DATE_REQUEST_NONE,
-        'date_request_apply_items' => 0,
-        'date_request_notes'       => '',
-    ]);
-    if ($apply_items && $new_fecha_fin) {
-        PluginLagapenakLoanItem::applyLoanDateToAllItems($ID, $new_fecha_fin);
+    $conflicts = $conflicts_confirmed ? [] : PluginLagapenakLoanItem::getConflictsForDateChange(
+        $ID, null, $new_fecha_fin, (bool) $apply_items
+    );
+    if (!empty($conflicts)) {
+        $pending_conflict = plugin_lagapenak_hold_conflicting_change(
+            $ID, $conflicts,
+            __('The request has not been approved yet.', 'lagapenak'),
+            __('Approve anyway', 'lagapenak')
+        );
+    } else {
+        $loan->update([
+            'id'                       => $ID,
+            'fecha_fin'                => $new_fecha_fin,
+            'date_request_status'      => PluginLagapenakLoan::DATE_REQUEST_NONE,
+            'date_request_apply_items' => 0,
+            'date_request_notes'       => '',
+        ]);
+        if ($apply_items && $new_fecha_fin) {
+            PluginLagapenakLoanItem::applyLoanDateToAllItems($ID, $new_fecha_fin);
+        }
+        include_once __DIR__ . '/../inc/notification.php';
+        plugin_lagapenak_notify_date_request_decision($ID, 'approved');
+        Html::back();
     }
-    include_once GLPI_ROOT . '/plugins/lagapenak/inc/notification.php';
-    plugin_lagapenak_notify_date_request_decision($ID, 'approved');
-    Html::back();
 }
 
 // ── Reject date extension request (supervisor) ──────────────────────────────
@@ -217,7 +304,7 @@ if (isset($_POST['reject_date_request'])) {
         'id'                  => $ID,
         'date_request_status' => PluginLagapenakLoan::DATE_REQUEST_REJECTED,
     ]);
-    include_once GLPI_ROOT . '/plugins/lagapenak/inc/notification.php';
+    include_once __DIR__ . '/../inc/notification.php';
     plugin_lagapenak_notify_date_request_decision($ID, 'rejected');
     Html::back();
 }
@@ -238,16 +325,16 @@ if (isset($_POST['add_comment'])) {
             'comment'       => $comment_text,
             'date_creation' => date('Y-m-d H:i:s'),
         ]);
-        include_once GLPI_ROOT . '/plugins/lagapenak/inc/notification.php';
+        include_once __DIR__ . '/../inc/notification.php';
         plugin_lagapenak_notify_new_comment($ID, (int)$_SESSION['glpiID'], $comment_text);
     }
-    Html::redirect(htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID . '#comments');
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.form.php' . '?id=' . $ID . '#comments');
 }
 
 // ── Load existing record ────────────────────────────────────────────────────
 if ($ID > 0) {
     if (!$loan->getFromDB($ID)) {
-        Html::displayRightError();
+        plugin_lagapenak_access_denied();
         Html::footer();
         exit;
     }
@@ -257,7 +344,7 @@ if ($ID > 0) {
     if (!$can_supervise
         && (int)($loan->fields['users_id'] ?? 0) !== (int)($_SESSION['glpiID'] ?? 0)
     ) {
-        Html::displayRightError();
+        plugin_lagapenak_access_denied();
         Html::footer();
         exit;
     }
@@ -282,7 +369,7 @@ if ($ID > 0) {
 if (($_SESSION['glpiactiveprofile']['interface'] ?? '') === 'helpdesk') {
     Html::helpHeader($title);
 } else {
-    Html::header($title, $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
+    Html::header($title, plugin_lagapenak_web_dir() . '/front/loan.form.php', 'tools', 'PluginLagapenakLoan');
 }
 
 echo '<div class="container-fluid mt-3">';
@@ -291,7 +378,7 @@ echo '<div class="container-fluid mt-3">';
 echo '<nav aria-label="breadcrumb" class="mb-3">';
 echo '<ol class="breadcrumb">';
 echo '<li class="breadcrumb-item">';
-echo '<a href="' . Plugin::getWebDir('lagapenak') . '/front/loan.php">';
+echo '<a href="' . plugin_lagapenak_web_dir() . '/front/loan.php">';
 echo '<i class="fas fa-box-open me-1"></i>' . __('Loans', 'lagapenak') . '</a></li>';
 echo '<li class="breadcrumb-item active">' . htmlspecialchars($title) . '</li>';
 echo '</ol>';
@@ -308,6 +395,24 @@ echo '<div class="card-body">';
 
 if ($form_error) {
     echo '<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>' . htmlspecialchars($form_error) . '</div>';
+}
+
+// ── Date change held because of conflicts: ask for confirmation ─────────────
+if ($pending_conflict !== null) {
+    $pc_url = plugin_lagapenak_web_dir() . '/front/loan.form.php?id=' . $ID;
+    echo '<div class="alert alert-warning mb-3" id="date-conflict-confirm">';
+    echo '<div class="mb-2"><i class="fas fa-exclamation-triangle me-2"></i><strong>'
+       . htmlspecialchars($pending_conflict['message']) . '</strong></div>';
+    echo '<div class="mb-2">' . __('These assets are already booked in other loans for the new dates:', 'lagapenak') . '</div>';
+    echo PluginLagapenakLoanItem::renderDateConflicts($pending_conflict['conflicts']);
+    echo '<form method="POST" action="' . $pc_url . '" class="d-flex gap-2 mt-3">';
+    echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
+    echo '<input type="hidden" name="confirm_pending_change" value="' . htmlspecialchars($pending_conflict['key']) . '">';
+    echo '<button type="submit" class="btn btn-warning"><i class="fas fa-check me-1"></i>'
+       . htmlspecialchars($pending_conflict['button']) . '</button>';
+    echo '<a href="' . $pc_url . '" class="btn btn-outline-secondary">' . __('Cancel', 'lagapenak') . '</a>';
+    echo '</form>';
+    echo '</div>';
 }
 
 // ── Date extension request alert (supervisor) ────────────────────────────────
@@ -337,7 +442,16 @@ if ($can_supervise && $ID > 0
     if ($req_notes) {
         echo '<div class="mb-2 fst-italic text-muted"><i class="fas fa-comment me-1"></i>' . $req_notes . '</div>';
     }
-    echo '<form method="POST" action="' . htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID . '">';
+    $req_conflicts = PluginLagapenakLoanItem::getConflictsForDateChange(
+        $ID, null, $loan->fields['requested_date_end'], (bool) $req_apply
+    );
+    if (!empty($req_conflicts)) {
+        echo '<div class="mb-2 text-danger"><i class="fas fa-exclamation-triangle me-1"></i><strong>'
+           . __('If approved, these assets would overlap with other loans:', 'lagapenak') . '</strong>';
+        echo PluginLagapenakLoanItem::renderDateConflicts($req_conflicts);
+        echo '</div>';
+    }
+    echo '<form method="POST" action="' . plugin_lagapenak_web_dir() . '/front/loan.form.php' . '?id=' . $ID . '">';
     echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
     echo '<div class="form-check mb-2">';
     echo '<input class="form-check-input" type="checkbox" name="date_request_apply_items" id="sup_apply_items" value="1"' . ($req_apply ? ' checked' : '') . '>';
@@ -355,7 +469,7 @@ if ($can_supervise && $ID > 0
 
 if ($can_supervise || $ID == 0) {
     // ── Editable form ────────────────────────────────────────────────────────
-    echo '<form method="POST" action="' . htmlspecialchars($_SERVER['PHP_SELF'])
+    echo '<form method="POST" action="' . plugin_lagapenak_web_dir() . '/front/loan.form.php'
          . ($ID > 0 ? '?id=' . $ID : '') . '">';
     echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
 
@@ -365,11 +479,11 @@ if ($can_supervise || $ID == 0) {
     echo '<button type="submit" name="save_loan" class="btn btn-primary">';
     echo '<i class="fas fa-save me-1"></i>' . ($ID > 0 ? __('Save changes', 'lagapenak') : __('Submit request', 'lagapenak'));
     echo '</button>';
-    echo '<a href="' . Plugin::getWebDir('lagapenak') . '/front/loan.php" class="btn btn-secondary">';
+    echo '<a href="' . plugin_lagapenak_web_dir() . '/front/loan.php" class="btn btn-secondary">';
     echo '<i class="fas fa-arrow-left me-1"></i>' . __('Back', 'lagapenak');
     echo '</a>';
     if ($ID > 0 && $can_albaran) {
-        $albaran_url = Plugin::getWebDir('lagapenak', true) . '/front/albaran.php?id=' . $ID;
+        $albaran_url = plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID;
         echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
         echo '<i class="fas fa-file-signature me-1"></i>' . __('Delivery note', 'lagapenak') . '</a>';
     }
@@ -411,7 +525,7 @@ if ($can_supervise || $ID == 0) {
 
     // ── Buttons row ─────────────────────────────────────────────────────────
     echo '<div class="d-flex gap-2 mt-3">';
-    echo '<a href="' . Plugin::getWebDir('lagapenak') . '/front/loan.php" class="btn btn-secondary">';
+    echo '<a href="' . plugin_lagapenak_web_dir() . '/front/loan.php" class="btn btn-secondary">';
     echo '<i class="fas fa-arrow-left me-1"></i>' . __('Back', 'lagapenak');
     echo '</a>';
 
@@ -423,7 +537,7 @@ if ($can_supervise || $ID == 0) {
     }
 
     if ($can_albaran) {
-        $albaran_url = Plugin::getWebDir('lagapenak', true) . '/front/albaran.php?id=' . $ID;
+        $albaran_url = plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID;
         echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
         echo '<i class="fas fa-file-signature me-1"></i>' . __('Delivery note', 'lagapenak') . '</a>';
     }
@@ -432,7 +546,7 @@ if ($can_supervise || $ID == 0) {
         && (int)($loan->fields['users_id'] ?? 0) === (int)($_SESSION['glpiID'] ?? 0)
         && (int)($loan->fields['status'] ?? 0) === PluginLagapenakLoan::STATUS_PENDING
     ) {
-        echo '<form method="POST" action="' . htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID . '" class="ms-auto">';
+        echo '<form method="POST" action="' . plugin_lagapenak_web_dir() . '/front/loan.form.php' . '?id=' . $ID . '" class="ms-auto">';
         echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
         echo '<button type="submit" name="delete_loan" class="btn btn-danger"
                       onclick="return confirm(\'' . __('Delete this loan?', 'lagapenak') . '\')">';
@@ -447,7 +561,7 @@ if ($can_supervise || $ID == 0) {
         echo '<div class="modal fade" id="dateRequestModal" tabindex="-1" aria-labelledby="dateRequestModalLabel" aria-hidden="true">';
         echo '<div class="modal-dialog">';
         echo '<div class="modal-content">';
-        echo '<form method="POST" action="' . htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID . '">';
+        echo '<form method="POST" action="' . plugin_lagapenak_web_dir() . '/front/loan.form.php' . '?id=' . $ID . '">';
         echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
         echo '<div class="modal-header">';
         echo '<h5 class="modal-title" id="dateRequestModalLabel"><i class="fas fa-calendar-plus me-2"></i>' . __('Request end date change', 'lagapenak') . '</h5>';
@@ -508,7 +622,7 @@ if ($ID > 0) {
 
     $has_pending   = $can_supervise && count(array_filter($current_items, fn($i) => (int)$i['status'] === PluginLagapenakLoanItem::STATUS_PENDING))   > 0;
     $has_delivered = $can_supervise && count(array_filter($current_items, fn($i) => (int)$i['status'] === PluginLagapenakLoanItem::STATUS_DELIVERED)) > 0;
-    $base_url      = htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID;
+    $base_url      = plugin_lagapenak_web_dir() . '/front/loan.form.php' . '?id=' . $ID;
 
     echo '<div class="card mt-4">';
     echo '<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">';
@@ -560,7 +674,7 @@ if ($ID > 0) {
         foreach ($current_items as $item) {
             $item_name  = PluginLagapenakLoanItem::getItemName($item['itemtype'], $item['items_id']);
             $item_st    = (int) $item['status'];
-            $base_url   = htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID;
+            $base_url   = plugin_lagapenak_web_dir() . '/front/loan.form.php' . '?id=' . $ID;
 
             echo '<tr>';
             echo '<td class="text-muted small align-middle">' . $item['id'] . '</td>';
@@ -653,7 +767,7 @@ if ($ID > 0) {
         }
         if ($editing_item) {
             $ei_label = htmlspecialchars(PluginLagapenakLoanItem::getItemName($editing_item['itemtype'], $editing_item['items_id']));
-            $base_url = htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID;
+            $base_url = plugin_lagapenak_web_dir() . '/front/loan.form.php' . '?id=' . $ID;
             echo '<div class="card border-primary mb-3">';
             echo '<div class="card-header bg-primary text-white py-2 d-flex justify-content-between align-items-center">';
             echo '<span><i class="fas fa-calendar-alt me-2"></i>' . __('Edit dates', 'lagapenak') . ': <strong>' . $ei_label . '</strong></span>';
@@ -707,7 +821,7 @@ if ($ID > 0) {
 
         $reservable_ids = PluginLagapenakLoanItem::getReservableIds($add_type);
         $loan_entity    = (int)($loan->fields['entities_id'] ?? $_SESSION['glpiactive_entity'] ?? 0);
-        echo '<form method="POST" action="' . htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID . '">';
+        echo '<form method="POST" action="' . plugin_lagapenak_web_dir() . '/front/loan.form.php' . '?id=' . $ID . '">';
         echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
         echo '<input type="hidden" name="loans_id" value="' . $ID . '">';
         echo '<input type="hidden" name="itemtype" value="' . htmlspecialchars($add_type) . '">';
@@ -835,7 +949,7 @@ if ($ID > 0) {
         }
 
         // Add comment form
-        echo '<form method="POST" action="' . htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $ID . '#comments" class="mt-3">';
+        echo '<form method="POST" action="' . plugin_lagapenak_web_dir() . '/front/loan.form.php' . '?id=' . $ID . '#comments" class="mt-3">';
         echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
         echo '<div class="input-group">';
         echo '<textarea class="form-control" name="comment_text" rows="2" placeholder="' . __('Add a comment…', 'lagapenak') . '" required></textarea>';

@@ -153,7 +153,7 @@ foreach ($loans as $loan) {
         'allDay'        => $all_day,
         'color'         => $colors[$status] ?? '#6c757d',
         'textColor'     => in_array($status, $dark_text) ? '#000' : '#fff',
-        'url'           => $redact ? null : (Plugin::getWebDir('lagapenak', true) . '/front/loan.form.php?id=' . $id),
+        'url'           => $redact ? null : (plugin_lagapenak_web_dir() . '/front/loan.form.php?id=' . $id),
         'extendedProps' => [
             'status'    => $redact ? '' : PluginLagapenakLoan::getStatusName($status),
             'requester' => $redact ? '' : $requester,

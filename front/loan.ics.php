@@ -7,20 +7,18 @@ global $DB;
 // ── Auth: token (para suscripciones externas) o sesión GLPI ──────────────────
 $token_provided = isset($_GET['token']) ? trim($_GET['token']) : '';
 
+// $ics_only_user = 0 → every loan (general token / supervisor session);
+//                 > 0 → only the loans requested by that user (personal token / non-supervisor session)
 if ($token_provided) {
-    // Get (or lazily create) the iCal secret token
-    $cfg = Config::getConfigurationValues('plugin:lagapenak');
-    $stored_token = $cfg['ics_token'] ?? '';
-    if (!$stored_token) {
-        $stored_token = bin2hex(random_bytes(20));
-        Config::setConfigurationValues('plugin:lagapenak', ['ics_token' => $stored_token]);
-    }
-    if (!hash_equals($stored_token, $token_provided)) {
+    $ics_scope = PluginLagapenakIcsToken::resolve($token_provided);
+    if ($ics_scope === null) {
         http_response_code(403);
         die('Token inválido.');
     }
+    $ics_only_user = $ics_scope['users_id'];
 } else {
     Session::checkLoginUser();
+    $ics_only_user = PluginLagapenakLoan::canSupervise() ? 0 : (int) Session::getLoginUserID();
 }
 
 $type = isset($_GET['type']) ? $_GET['type'] : 'loans'; // 'loans' | 'assets'
@@ -79,11 +77,14 @@ function ics_asset_name($itemtype, $items_id) {
 // ── Query loans ───────────────────────────────────────────────────────────────
 $loans = $DB->request([
     'FROM'  => 'glpi_plugin_lagapenak_loans',
-    'WHERE' => [['status' => ['!=', PluginLagapenakLoan::STATUS_CANCELLED]]],
+    'WHERE' => array_merge(
+        [['status' => ['!=', PluginLagapenakLoan::STATUS_CANCELLED]]],
+        $ics_only_user ? [['users_id' => $ics_only_user]] : []
+    ),
     'ORDER' => 'fecha_inicio ASC',
 ]);
 
-$plugin_url = Plugin::getWebDir('lagapenak', true);
+$plugin_url = plugin_lagapenak_web_dir(true); // absolute URL for external calendar clients
 
 // ── Build VEVENT list ─────────────────────────────────────────────────────────
 $vevents = [];
@@ -157,6 +158,9 @@ foreach ($loans as $loan) {
 
 // ── Output ────────────────────────────────────────────────────────────────────
 $cal_name = $type === 'loans' ? 'Préstamos Tabakalera' : 'Activos en préstamo — Tabakalera';
+if ($ics_only_user) {
+    $cal_name = $type === 'loans' ? 'Mis préstamos — Tabakalera' : 'Mis activos en préstamo — Tabakalera';
+}
 $filename = $type === 'loans' ? 'prestamos.ics' : 'activos_prestamo.ics';
 
 header('Content-Type: text/calendar; charset=UTF-8');

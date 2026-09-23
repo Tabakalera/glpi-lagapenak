@@ -19,6 +19,8 @@ if (empty($fecha_inicio) || empty($fecha_fin)) {
     exit;
 }
 
+$can_supervise = PluginLagapenakLoan::canSupervise();
+
 // GLPI itemtype → asset table
 $type_table = [
     'Computer'         => 'glpi_computers',
@@ -42,7 +44,7 @@ $type_field_map = [
 // Pre-load all device type names to avoid N+1 queries
 $device_type_names = [];
 foreach ($type_field_map as $it => $tf) {
-    $res = $DB->query("SELECT `id`, `name` FROM `{$tf['table']}` WHERE `name` != ''");
+    $res = $DB->doQuery("SELECT `id`, `name` FROM `{$tf['table']}` WHERE `name` != ''");
     $device_type_names[$it] = [];
     if ($res) {
         while ($r = $DB->fetchAssoc($res)) {
@@ -75,7 +77,7 @@ $ff = $DB->escape($fecha_fin);
 
 // 1. All assets with "Autorizar reservas" active
 // (glpi_reservationitems has no entities_id — entity scoping is via the item itself)
-$result = $DB->query(
+$result = $DB->doQuery(
     "SELECT ri.itemtype, ri.items_id
      FROM `glpi_reservationitems` ri
      WHERE ri.is_active = 1
@@ -142,7 +144,7 @@ foreach ($all_assets as $asset) {
     $it  = $DB->escape($asset['itemtype']);
     $iid = (int)$asset['items_id'];
 
-    $conflicts = $DB->query(
+    $conflicts = $DB->doQuery(
         "SELECT l.id, l.name AS loan_name, l.status AS loan_status,
                 COALESCE(li.date_checkout, l.fecha_inicio) AS eff_start,
                 COALESCE(li.date_checkin,  l.fecha_fin)    AS eff_end
@@ -151,6 +153,7 @@ foreach ($all_assets as $asset) {
          WHERE li.itemtype = '{$it}'
            AND li.items_id = {$iid}
            AND l.status IN ({$active_statuses})
+           AND li.status != " . PluginLagapenakLoanItem::STATUS_RETURNED . "
            {$loan_entity_condition}
            AND COALESCE(li.date_checkout, l.fecha_inicio) < '{$ff}'
            AND COALESCE(li.date_checkin,  l.fecha_fin)    > '{$fi}'"
@@ -160,7 +163,9 @@ foreach ($all_assets as $asset) {
     $has_blocking    = false;
     $has_delivered   = false;
     while ($c = $DB->fetchAssoc($conflicts)) {
-        $occupied_loans[] = $c;
+        $occupied_loans[] = $can_supervise
+            ? $c
+            : ['loan_status' => $c['loan_status'], 'eff_start' => $c['eff_start'], 'eff_end' => $c['eff_end']];
         if (in_array((int)$c['loan_status'], [PluginLagapenakLoan::STATUS_PENDING, PluginLagapenakLoan::STATUS_IN_PROGRESS])) {
             $has_blocking = true;
         } elseif ((int)$c['loan_status'] === PluginLagapenakLoan::STATUS_DELIVERED) {
@@ -169,10 +174,11 @@ foreach ($all_assets as $asset) {
     }
 
     // state: 'free' | 'delivered' | 'occupied'
-    // 'delivered' = only in DELIVERED-status loans → can still be requested
-    // 'occupied'  = in PENDING or IN_PROGRESS loans → truly blocked
+    // 'delivered' = only in DELIVERED-status loans (shown in orange)
+    // 'occupied'  = in PENDING or IN_PROGRESS loans
+    // Both block the asset: same rule as the conflict check when adding it to a loan.
     $state     = $has_blocking ? 'occupied' : ($has_delivered ? 'delivered' : 'free');
-    $available = !$has_blocking; // free + delivered are selectable
+    $available = $state === 'free';
 
     $rows[] = [
         'itemtype'          => $asset['itemtype'],
@@ -201,6 +207,6 @@ echo json_encode([
     'fecha_fin'     => $fecha_fin,
     'asset_filter'  => $asset_filter,
     'rows'          => $rows,
-    'loan_form_url' => Plugin::getWebDir('lagapenak', true) . '/front/loan.form.php',
+    'loan_form_url' => plugin_lagapenak_web_dir() . '/front/loan.form.php',
 ]);
 

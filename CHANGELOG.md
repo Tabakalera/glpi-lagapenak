@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2026-09-23
+
+### Added
+- GLPI 11 compatibility (tested on GLPI 11.0.9). The plugin keeps working on GLPI 10.0.x (tested on 10.0.24); minimum is now 10.0.11
+- `inc/compat.php`: helpers that pick the right GLPI API for each version (URLs, public files, logging, emails, access denied)
+- Conflict warning when extending dates: editing the loan dates (with "apply to assets"), editing an asset's dates, requesting a date extension and approving it now check whether the assets are booked in other loans for the new period. The change is not saved until the user confirms with "Save / Send / Approve anyway"
+- The supervisor's date extension request box lists the assets that would overlap if the request is approved
+- Personal iCal URL: non-supervisors can subscribe to a calendar with only the loans they requested (new table `glpi_plugin_lagapenak_icstokens`). Supervisors keep the general URL with every loan
+- "Regenerate URL" button in the calendar subscription panel (general URL for supervisors, personal URL for everybody else)
+
+### Changed
+- Images moved from `pics/` to `public/pics/` (GLPI 11 only serves static files from the plugin `public/` folder)
+- All emails are sent through a single helper that uses Symfony Mailer on GLPI 11 and PHPMailer on GLPI 10
+- Font Awesome for the standalone delivery-note and signing pages is now loaded from jsDelivr (GLPI 11 no longer ships it as a separate file)
+- The public signing page and the iCal feed are registered as "no login required" in the GLPI 11 firewall
+
+### Fixed
+- Security: when creating a loan, signature, delivery-note and date-request fields sent in the request were saved as-is, so a non-supervisor could create a loan already "Returned" and "signed". These fields are now ignored and non-supervisors always create "Pending" loans
+- An asset returned early (item status "Returned") kept blocking other loans until the planned end date of its loan
+- Availability checker let users select assets in "Delivered" loans that were then rejected when adding them. Delivered assets now count as occupied everywhere
+- Privacy: the general iCal subscription URL (which gives access to every loan) was shown to every user; it is now only shown to supervisors, and the session-based feed only returns the user's own loans for non-supervisors
+- Privacy: non-supervisors could see other people's loan names in the "fill dates from loan" dropdown, the availability data and conflict messages; they now only see status and dates
+- Loan name was inserted unescaped in the "new loan" and "return reminder" emails (only an issue on GLPI 11, which no longer stores HTML-encoded values)
+- Security: the public signing page accepted `token=NULL`, which matched any loan without an active signing link and allowed signing it. Tokens are now strictly validated
+- Plugin update on GLPI 11 failed with a duplicate-key error when re-creating existing profile rights
+- Approving a date extension request with no pending request emptied the loan end date
+- Return reminder email contained a relative (non-clickable) link to the loan
+- iCal events now contain absolute URLs so external calendar apps can open them
+- On GLPI 11, a successfully sent delivery-note or signing-link email was reported as an error
+
+---
+
 ## [1.5.0] - 2026-07-07
 
 ### Added

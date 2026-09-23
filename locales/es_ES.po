@@ -587,3 +587,52 @@ msgstr "Cambio de fecha rechazado — %s"
 
 msgid "Your request to extend the end date of loan <strong>%s</strong> has been rejected by the supervisor."
 msgstr "Tu solicitud para extender la fecha fin del préstamo <strong>%s</strong> ha sido rechazada por el supervisor."
+
+# ── Date change conflicts ─────────────────────────────────────────────────────
+
+msgid "The change has expired, please make it again."
+msgstr "El cambio ha caducado, vuelve a hacerlo."
+
+msgid "The date change has not been saved yet."
+msgstr "El cambio de fechas todavía no se ha guardado."
+
+msgid "The request has not been sent yet."
+msgstr "La solicitud todavía no se ha enviado."
+
+msgid "The request has not been approved yet."
+msgstr "La solicitud todavía no se ha aprobado."
+
+msgid "These assets are already booked in other loans for the new dates:"
+msgstr "Estos activos ya están reservados en otros préstamos para las nuevas fechas:"
+
+msgid "If approved, these assets would overlap with other loans:"
+msgstr "Si se aprueba, estos activos coincidirán con otros préstamos:"
+
+msgid "Save anyway"
+msgstr "Guardar de todas formas"
+
+msgid "Send anyway"
+msgstr "Enviar de todas formas"
+
+msgid "Approve anyway"
+msgstr "Aprobar de todas formas"
+
+msgid "Another loan"
+msgstr "Otro préstamo"
+
+# ── iCal personal URL ───────────────────────────────────────────────────────
+
+msgid "A new subscription URL has been created. The previous one no longer works."
+msgstr "Se ha creado un enlace de suscripción nuevo. El anterior ya no funciona."
+
+msgid "This URL shows <strong>all loans</strong>."
+msgstr "Este enlace muestra <strong>todos los préstamos</strong>."
+
+msgid "This URL only shows <strong>the loans you have requested</strong>."
+msgstr "Este enlace muestra solo <strong>los préstamos que has pedido</strong>."
+
+msgid "The current URL will stop working and calendars subscribed to it will have to be subscribed again. Continue?"
+msgstr "El enlace actual dejará de funcionar y los calendarios suscritos tendrán que volver a suscribirse. ¿Continuar?"
+
+msgid "Regenerate URL"
+msgstr "Regenerar enlace"

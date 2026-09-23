@@ -4,22 +4,39 @@ include('../../../inc/includes.php');
 
 Session::checkLoginUser();
 
+// iCal subscription: supervisors get the general URL (every loan),
+// everybody else a personal URL with only the loans they requested.
+$ics_general = PluginLagapenakLoan::canSupervise();
+$ics_uid     = (int) Session::getLoginUserID();
+
+if (isset($_POST['regenerate_ics'])) {
+    if ($ics_general) {
+        PluginLagapenakIcsToken::regenerateGeneralToken();
+    } else {
+        PluginLagapenakIcsToken::regenerateUserToken($ics_uid);
+    }
+    Session::addMessageAfterRedirect(
+        __('A new subscription URL has been created. The previous one no longer works.', 'lagapenak')
+    );
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/calendar.php?ics=1');
+}
+
 Html::requireJs('fullcalendar');
 
 if (($_SESSION['glpiactiveprofile']['interface'] ?? '') === 'helpdesk') {
     Html::helpHeader(__('Lagapenak - Loan Calendar', 'lagapenak'));
 } else {
-    Html::header(__('Lagapenak - Loan Calendar', 'lagapenak'), $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
+    Html::header(__('Lagapenak - Loan Calendar', 'lagapenak'), plugin_lagapenak_web_dir() . '/front/calendar.php', 'tools', 'PluginLagapenakLoan');
 }
 
-$plugin_web      = Plugin::getWebDir('lagapenak', true);
+$plugin_web      = plugin_lagapenak_web_dir();
 $ajax_events_url = $plugin_web . '/ajax/calendar_events.php';
 $ajax_assets_url = $plugin_web . '/ajax/asset_list.php';
 $list_url        = $plugin_web . '/front/loan.php';
 $add_url         = $plugin_web . '/front/loan.form.php';
 
-$fc_css    = $CFG_GLPI['root_doc'] . '/public/lib/fullcalendar.css';
-$fc_locale = $CFG_GLPI['root_doc'] . '/public/lib/fullcalendar/core/locales/es.min.js';
+$fc_css    = plugin_lagapenak_core_lib_url('fullcalendar.css');
+$fc_locale = plugin_lagapenak_core_lib_url('fullcalendar/core/locales/es.min.js');
 ?>
 
 <link rel="stylesheet" href="<?= $fc_css ?>">
@@ -54,20 +71,22 @@ $fc_locale = $CFG_GLPI['root_doc'] . '/public/lib/fullcalendar/core/locales/es.m
 
     <!-- iCal subscription panel -->
     <?php
-    $cfg = Config::getConfigurationValues('plugin:lagapenak');
-    $ics_token = $cfg['ics_token'] ?? '';
-    if (!$ics_token) {
-        $ics_token = bin2hex(random_bytes(20));
-        Config::setConfigurationValues('plugin:lagapenak', ['ics_token' => $ics_token]);
-    }
+    $ics_token = $ics_general
+        ? PluginLagapenakIcsToken::getGeneralToken()
+        : PluginLagapenakIcsToken::getUserToken($ics_uid);
     // Use url_base explicitly to guarantee absolute URL for calendar clients
-    $url_base   = rtrim($CFG_GLPI['url_base'] ?? '', '/');
-    $ics_path   = '/' . ltrim(Plugin::getWebDir('lagapenak', false), '/') . '/front/loan.ics.php?token=' . urlencode($ics_token);
-    $url_loans  = $url_base . $ics_path . '&type=loans';
-    $url_assets = $url_base . $ics_path . '&type=assets';
+    $ics_url    = plugin_lagapenak_web_dir(true) . '/front/loan.ics.php?token=' . urlencode($ics_token);
+    $url_loans  = $ics_url . '&type=loans';
+    $url_assets = $ics_url . '&type=assets';
     ?>
-    <div class="collapse mb-3" id="ics-panel">
+    <div class="collapse mb-3<?= isset($_GET['ics']) ? ' show' : '' ?>" id="ics-panel">
         <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:16px 20px;">
+            <p class="mb-2" style="font-size:.875rem;">
+                <i class="fas fa-info-circle me-1"></i>
+                <?= $ics_general
+                    ? __('This URL shows <strong>all loans</strong>.', 'lagapenak')
+                    : __('This URL only shows <strong>the loans you have requested</strong>.', 'lagapenak') ?>
+            </p>
             <p class="mb-2" style="font-size:.875rem;font-weight:600;">
                 <?= __('Copy the URL and paste it into your calendar client:', 'lagapenak') ?>
             </p>
@@ -99,9 +118,18 @@ $fc_locale = $CFG_GLPI['root_doc'] . '/public/lib/fullcalendar/core/locales/es.m
                     </button>
                 </div>
             </div>
-            <p style="margin-top:10px;margin-bottom:0;font-size:.75rem;color:#6c757d;">
-                <i class="fas fa-lock me-1"></i><?= __('The URL includes a secret token. Do not share it publicly.', 'lagapenak') ?>
-            </p>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2" style="margin-top:10px;">
+                <span style="font-size:.75rem;color:#6c757d;">
+                    <i class="fas fa-lock me-1"></i><?= __('The URL includes a secret token. Do not share it publicly.', 'lagapenak') ?>
+                </span>
+                <form method="POST" action="<?= $plugin_web ?>/front/calendar.php" class="m-0"
+                      onsubmit="return confirm(<?= htmlspecialchars(json_encode(__('The current URL will stop working and calendars subscribed to it will have to be subscribed again. Continue?', 'lagapenak')), ENT_QUOTES) ?>);">
+                    <input type="hidden" name="_glpi_csrf_token" value="<?= Session::getNewCSRFToken() ?>">
+                    <button type="submit" name="regenerate_ics" value="1" class="btn btn-sm btn-outline-danger">
+                        <i class="fas fa-sync-alt me-1"></i><?= __('Regenerate URL', 'lagapenak') ?>
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 

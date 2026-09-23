@@ -9,12 +9,12 @@ Session::checkLoginUser();
 
 $ID = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 if ($ID <= 0) {
-    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.php');
 }
 
 $loan = new PluginLagapenakLoan();
 if (!$loan->getFromDB($ID)) {
-    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.php');
 }
 
 // Access check: supervisor always allowed; others need the albaran right AND
@@ -27,7 +27,7 @@ $_alb_has_right  = PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_albaran
 $_alb_allowed    = $_alb_supervise || ($_alb_has_right && ($_alb_is_req || $_alb_is_dest));
 
 if (!$_alb_allowed) {
-    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/loan.php');
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.php');
 }
 
 // ── CAMPOS ADICIONALES DEL ALBARÁN ──────────────────────────────────────────────
@@ -62,16 +62,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_signature'])) {
         ], ['id' => $ID]);
         plugin_lagapenak_send_signed_albaran($ID);
     }
-    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID . '&saved=1');
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&saved=1');
 }
 
 // ── Load display data ────────────────────────────────────────────────────────────
 $items          = PluginLagapenakLoanItem::getItemsForLoan($ID);
 $already_signed = !empty($loan->fields['signature_data']);
-$plugin_web     = Plugin::getWebDir('lagapenak', true);
+$plugin_web     = plugin_lagapenak_web_dir();
 
 $destinatario   = plugin_lagapenak_albaran_user_name($loan->fields['users_id_destinatario']);
-$fa_css         = rtrim($CFG_GLPI['root_doc'] ?? '', '/') . '/public/lib/fortawesome/fontawesome-free/css/all.min.css';
+$fa_css         = plugin_lagapenak_fontawesome_css_url();
 $csrf_token     = Session::getNewCSRFToken();
 
 $disp_name     = htmlspecialchars($loan->fields['signature_name']   ?? '');
@@ -106,7 +106,7 @@ $_alb_field_labels = PluginLagapenakLoan::getFieldLabels();
 // ── Action: PDF download ──────────────────────────────────────────────────────────
 if (isset($_GET['action']) && $_GET['action'] === 'pdf') {
     if (!$already_signed) {
-        Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID);
+        Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID);
     }
     $pdf      = plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $header_fs, $footer_fs, $albaran_loan_fields);
     $filename = 'albaran_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $loan->fields['name'] ?: 'loan') . '_' . $ID . '.pdf';
@@ -124,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_gen_token'])) 
         'sign_token'         => $token,
         'sign_token_expires' => $expires,
     ], ['id' => $ID]);
-    $sign_url  = rtrim($CFG_GLPI['url_base'], '/') . '/plugins/lagapenak/front/sign.php?token=' . $token;
+    $sign_url  = plugin_lagapenak_web_dir(true) . '/front/sign.php?token=' . $token;
     $loan_name = $loan->fields['name'] ?: __('Loan', 'lagapenak') . ' #' . $ID;
 
     if ($to_email && filter_var($to_email, FILTER_VALIDATE_EMAIL) && class_exists('GLPIMailer')) {
@@ -147,26 +147,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_gen_token'])) 
   </p>
 </body></html>
 HTML;
+        // Redirect outside the try: in GLPI 11 Html::redirect() throws an exception
+        $sign_result = 'sign_sent';
         try {
-            $mail = new GLPIMailer();
-            if ($from_email) $mail->setFrom($from_email, $from_name);
-            $mail->addAddress($to_email);
-            $mail->Subject  = $subject;
-            $mail->CharSet  = 'UTF-8';
-            $mail->Encoding = 'base64';
-            $mail->isHTML(true);
-            $mail->Body     = $body;
-            $mail->AltBody  = strip_tags($body_line) . "\n\n" . $sign_url;
-            $mail->send();
-            Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID . '&sign_sent=1');
-        } catch (\Exception $e) {
-            Toolbox::logError('[lagapenak] Error sending sign link email: ' . $e->getMessage());
-            Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID . '&sign_error=1');
+            plugin_lagapenak_send_mail([
+                'to_email'   => $to_email,
+                'from_email' => $from_email,
+                'from_name'  => $from_name,
+                'subject'    => $subject,
+                'html'       => $body,
+                'text'       => strip_tags($body_line) . "\n\n" . $sign_url,
+            ]);
+        } catch (\Throwable $e) {
+            plugin_lagapenak_log_error('[lagapenak] Error sending sign link email: ' . $e->getMessage());
+            $sign_result = 'sign_error';
         }
-        exit;
+        Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&' . $sign_result . '=1');
     }
     // No email provided — just show the link
-    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID . '&sign_link=' . urlencode($sign_url));
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&sign_link=' . urlencode($sign_url));
 }
 
 // ── Action: Send by email ─────────────────────────────────────────────────────────
@@ -183,31 +182,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
         $from_name  = $CFG_GLPI['admin_email_name'] ?? 'Lagapenak';
 
         if (class_exists('GLPIMailer')) {
+            $body_line = sprintf(
+                __('Please find attached the delivery note for loan <strong>%s</strong>.', 'lagapenak'),
+                htmlspecialchars($loan_name)
+            );
+            // Redirect outside the try: in GLPI 11 Html::redirect() throws an exception
+            $email_result = 'email_sent';
             try {
-                $mail = new GLPIMailer();
-                if ($from_email) $mail->setFrom($from_email, $from_name);
-                $mail->addAddress($to_email);
-                $mail->Subject  = sprintf(__('Delivery note — %s', 'lagapenak'), $loan_name);
-                $mail->CharSet  = 'UTF-8';
-                $mail->Encoding = 'base64';
-                $mail->isHTML(true);
-                $body_line = sprintf(
-                    __('Please find attached the delivery note for loan <strong>%s</strong>.', 'lagapenak'),
-                    htmlspecialchars($loan_name)
-                );
-                $mail->Body    = '<p>' . $body_line . '</p>';
-                $mail->AltBody = strip_tags($body_line);
-                $mail->addStringAttachment($pdf_content, $filename, 'base64', 'application/pdf');
-                $mail->send();
-                Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID . '&email_sent=1');
-            } catch (\Exception $e) {
-                Toolbox::logError('[lagapenak] Error sending albaran email: ' . $e->getMessage());
-                Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID . '&email_error=1');
+                plugin_lagapenak_send_mail([
+                    'to_email'    => $to_email,
+                    'from_email'  => $from_email,
+                    'from_name'   => $from_name,
+                    'subject'     => sprintf(__('Delivery note — %s', 'lagapenak'), $loan_name),
+                    'html'        => '<p>' . $body_line . '</p>',
+                    'text'        => strip_tags($body_line),
+                    'attachments' => [[$pdf_content, $filename, 'application/pdf']],
+                ]);
+            } catch (\Throwable $e) {
+                plugin_lagapenak_log_error('[lagapenak] Error sending albaran email: ' . $e->getMessage());
+                $email_result = 'email_error';
             }
-            exit;
+            Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&' . $email_result . '=1');
         }
     }
-    Html::redirect(Plugin::getWebDir('lagapenak') . '/front/albaran.php?id=' . $ID);
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID);
     exit;
 }
 ?>

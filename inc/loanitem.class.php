@@ -82,7 +82,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
             return [];
         }
         $ids_sql = implode(',', array_map('intval', $loan_ids));
-        $result  = $DB->query(
+        $result  = $DB->doQuery(
             "SELECT * FROM `glpi_plugin_lagapenak_loanitems`
              WHERE `loans_id` IN ({$ids_sql})
              ORDER BY `loans_id`, `id`"
@@ -109,7 +109,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
         }
 
         $ids    = [];
-        $result = $DB->query(
+        $result = $DB->doQuery(
             "SELECT `items_id` FROM `glpi_reservationitems`
              WHERE `itemtype` = '" . $DB->escape($itemtype) . "'
                AND `is_active` = 1"
@@ -141,6 +141,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
             PluginLagapenakLoan::STATUS_DELIVERED,
         ]);
 
+        // An item returned early no longer occupies the asset, even if its loan is still open
         $overlap = '';
         if (!empty($fecha_inicio) && !empty($fecha_fin)) {
             $fi = $DB->escape($fecha_inicio);
@@ -151,7 +152,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
                           AND COALESCE(li.date_checkin,  l.fecha_fin)    > '{$fi}')";
         }
 
-        $result = $DB->query(
+        $result = $DB->doQuery(
             "SELECT l.id, l.name, l.fecha_inicio, l.fecha_fin, l.status,
                     COALESCE(li.date_checkout, l.fecha_inicio) AS eff_start,
                     COALESCE(li.date_checkin,  l.fecha_fin)    AS eff_end
@@ -161,6 +162,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
                AND li.items_id = " . (int) $items_id . "
                AND li.loans_id != " . (int) $exclude_loans_id . "
                AND l.status IN ({$active_statuses})
+               AND li.status != " . self::STATUS_RETURNED . "
                {$overlap}"
         );
 
@@ -171,13 +173,134 @@ class PluginLagapenakLoanItem extends CommonDBTM {
         return $conflicts;
     }
 
+    /**
+     * Conflicts with other loans that a date change on this loan would create.
+     *
+     * Only items whose effective period grows (earlier start or later end) are checked,
+     * so editing other fields of a loan that already overlaps does not warn again.
+     * Returned items and closed loans are ignored.
+     *
+     * @param int         $loans_id
+     * @param string|null $new_loan_start      New loan fecha_inicio (null = unchanged)
+     * @param string|null $new_loan_end        New loan fecha_fin (null = unchanged)
+     * @param bool        $apply_end_to_items  true = every item's date_checkin becomes $new_loan_end
+     * @param array       $item_overrides      [loanitem_id => ['start' => ?string, 'end' => ?string]]
+     *                                         new item dates (empty = follow the loan dates)
+     *
+     * @return array List of ['itemtype', 'items_id', 'name', 'start', 'end', 'loans' => conflict rows]
+     */
+    static function getConflictsForDateChange(
+        int $loans_id,
+        ?string $new_loan_start = null,
+        ?string $new_loan_end = null,
+        bool $apply_end_to_items = false,
+        array $item_overrides = []
+    ): array {
+        $loan = new PluginLagapenakLoan();
+        if (!$loan->getFromDB($loans_id)) {
+            return [];
+        }
+        if (in_array((int) $loan->fields['status'], [
+            PluginLagapenakLoan::STATUS_RETURNED,
+            PluginLagapenakLoan::STATUS_CANCELLED,
+        ], true)) {
+            return [];
+        }
+
+        $old_loan_start = $loan->fields['fecha_inicio'] ?? null;
+        $old_loan_end   = $loan->fields['fecha_fin'] ?? null;
+        $new_loan_start = !empty($new_loan_start) ? $new_loan_start : $old_loan_start;
+        $new_loan_end   = !empty($new_loan_end) ? $new_loan_end : $old_loan_end;
+
+        $result = [];
+        foreach (self::getItemsForLoan($loans_id) as $item) {
+            if ((int) $item['status'] === self::STATUS_RETURNED) {
+                continue;
+            }
+
+            $item_start = $item['date_checkout'];
+            $item_end   = $item['date_checkin'];
+            if ($apply_end_to_items) {
+                $item_end = $new_loan_end;
+            }
+            if (isset($item_overrides[$item['id']])) {
+                $item_start = $item_overrides[$item['id']]['start'] ?? null;
+                $item_end   = $item_overrides[$item['id']]['end'] ?? null;
+            }
+
+            $new_start = !empty($item_start) ? $item_start : $new_loan_start;
+            $new_end   = !empty($item_end) ? $item_end : $new_loan_end;
+            if (empty($new_start) || empty($new_end)) {
+                continue;
+            }
+
+            $old_start = !empty($item['date_checkout']) ? $item['date_checkout'] : $old_loan_start;
+            $old_end   = !empty($item['date_checkin']) ? $item['date_checkin'] : $old_loan_end;
+            $grows = empty($old_start) || empty($old_end)
+                || strtotime($new_start) < strtotime($old_start)
+                || strtotime($new_end) > strtotime($old_end);
+            if (!$grows) {
+                continue;
+            }
+
+            $conflicts = self::getConflictingLoans($item['itemtype'], $item['items_id'], $loans_id, $new_start, $new_end);
+            if (!empty($conflicts)) {
+                $result[] = [
+                    'itemtype' => $item['itemtype'],
+                    'items_id' => (int) $item['items_id'],
+                    'name'     => self::getItemName($item['itemtype'], $item['items_id']),
+                    'start'    => $new_start,
+                    'end'      => $new_end,
+                    'loans'    => $conflicts,
+                ];
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * HTML description of a conflicting loan row (from getConflictingLoans()).
+     * Non-supervisors only see status and dates: other people's loan names stay private.
+     */
+    static function describeConflictingLoan(array $l, bool $can_supervise): string {
+        $fi = !empty($l['eff_start']) ? Html::convDateTime($l['eff_start']) : '—';
+        $ff = !empty($l['eff_end'])   ? Html::convDateTime($l['eff_end'])   : '—';
+        $label = $can_supervise
+            ? '<strong>#' . (int) $l['id'] . ' ' . htmlspecialchars($l['name']) . '</strong>'
+            : '<strong>' . __('Another loan', 'lagapenak') . '</strong>';
+        return $label . ' (' . PluginLagapenakLoan::getStatusName($l['status']) . ') · ' . $fi . ' → ' . $ff;
+    }
+
+    /**
+     * HTML list of the conflicts returned by getConflictsForDateChange().
+     */
+    static function renderDateConflicts(array $conflicts): string {
+        $can_open = PluginLagapenakLoan::canSupervise();
+        $out = '<ul class="mb-0">';
+        foreach ($conflicts as $c) {
+            $out .= '<li><strong>' . htmlspecialchars($c['name']) . '</strong> '
+                  . '<span class="text-muted">(' . Html::convDateTime($c['start']) . ' → ' . Html::convDateTime($c['end']) . ')</span>';
+            $out .= '<ul>';
+            foreach ($c['loans'] as $l) {
+                $desc = self::describeConflictingLoan($l, $can_open);
+                if ($can_open) {
+                    $desc = '<a href="' . plugin_lagapenak_web_dir() . '/front/loan.form.php?id=' . (int) $l['id']
+                          . '" target="_blank">' . $desc . '</a>';
+                }
+                $out .= '<li>' . $desc . '</li>';
+            }
+            $out .= '</ul></li>';
+        }
+        return $out . '</ul>';
+    }
+
     // ── CRUD ─────────────────────────────────────────────────────────────────
 
     static function getItemsForLoan($loans_id) {
         global $DB;
 
         $items  = [];
-        $result = $DB->query(
+        $result = $DB->doQuery(
             "SELECT * FROM `glpi_plugin_lagapenak_loanitems`
              WHERE `loans_id` = " . (int) $loans_id . "
              ORDER BY `id` ASC"
@@ -196,7 +319,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
         }
 
         // Avoid duplicates within the same loan
-        $exists = $DB->query(
+        $exists = $DB->doQuery(
             "SELECT id FROM `glpi_plugin_lagapenak_loanitems`
              WHERE `loans_id` = " . (int) $loans_id . "
                AND `itemtype` = '" . $DB->escape($itemtype) . "'
@@ -328,7 +451,7 @@ class PluginLagapenakLoanItem extends CommonDBTM {
 
     // ── Native GLPI search support ───────────────────────────────────────────
 
-    static function canView() {
+    static function canView(): bool {
         return PluginLagapenakLoan::hasPluginRight(PluginLagapenakLoan::$rightname, READ);
     }
 

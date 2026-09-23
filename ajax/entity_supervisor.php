@@ -39,7 +39,7 @@ $sql = "
     ORDER BY u.realname, u.firstname, u.name
 ";
 
-$result = $DB->query($sql);
+$result = $DB->doQuery($sql);
 $users  = [];
 while ($row = $DB->fetchAssoc($result)) {
     $name    = trim(($row['realname'] ?? '') . ' ' . ($row['firstname'] ?? ''));

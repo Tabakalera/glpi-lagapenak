@@ -42,20 +42,24 @@ function plugin_lagapenak_get_condiciones(): array {
 // ── Image helpers ─────────────────────────────────────────────────────────────
 function plugin_lagapenak_find_img($name) {
     foreach (['.png', '.jpg', '.jpeg'] as $ext) {
-        $fs = GLPI_ROOT . '/plugins/lagapenak/pics/' . $name . $ext;
+        $fs = plugin_lagapenak_public_path('pics/' . $name . $ext);
         if (file_exists($fs)) return $fs;
     }
     return null;
 }
 
 function plugin_lagapenak_img_web($name) {
-    global $CFG_GLPI;
-    $root_doc = rtrim($CFG_GLPI['root_doc'] ?? '', '/');
     foreach (['.png', '.jpg', '.jpeg'] as $ext) {
-        $fs = GLPI_ROOT . '/plugins/lagapenak/pics/' . $name . $ext;
-        if (file_exists($fs)) return $root_doc . '/plugins/lagapenak/pics/' . $name . $ext;
+        if (file_exists(plugin_lagapenak_public_path('pics/' . $name . $ext))) {
+            return plugin_lagapenak_public_url('pics/' . $name . $ext);
+        }
     }
     return null;
+}
+
+// Font Awesome is no longer shipped as a standalone file in GLPI 11
+function plugin_lagapenak_fontawesome_css_url() {
+    return 'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css';
 }
 
 // ── Name helpers ──────────────────────────────────────────────────────────────

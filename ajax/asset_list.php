@@ -20,7 +20,7 @@ $type_table = [
 
 // Raw SQL: all distinct assets in non-cancelled loans
 $cancelled = (int) PluginLagapenakLoan::STATUS_CANCELLED;
-$result = $DB->query(
+$result = $DB->doQuery(
     "SELECT DISTINCT li.itemtype, li.items_id
      FROM `glpi_plugin_lagapenak_loanitems` li
      JOIN `glpi_plugin_lagapenak_loans` l ON l.id = li.loans_id

@@ -1,13 +1,15 @@
 <?php
 
-define('PLUGIN_LAGAPENAK_VERSION', '1.5.0');
+define('PLUGIN_LAGAPENAK_VERSION', '1.6.0');
 
-// Requerido por GLPI 10 para activar el plugin
+include_once __DIR__ . '/inc/compat.php';
+
+// Requerido por GLPI 10 para activar el plugin (GLPI 11 lo ignora)
 global $PLUGIN_HOOKS;
 $PLUGIN_HOOKS['csrf_compliant']['lagapenak'] = true;
 $PLUGIN_HOOKS['menu_toadd']['lagapenak'] = ['tools' => 'PluginLagapenakLoan'];
-define('PLUGIN_LAGAPENAK_MIN_GLPI', '10.0.0');
-define('PLUGIN_LAGAPENAK_MAX_GLPI', '10.99.99');
+define('PLUGIN_LAGAPENAK_MIN_GLPI', '10.0.11'); // DBmysql::doQuery() exists since 10.0.11
+define('PLUGIN_LAGAPENAK_MAX_GLPI', '11.0.99');
 
 function plugin_version_lagapenak() {
     return [
@@ -57,6 +59,18 @@ function plugin_init_lagapenak() {
     Plugin::registerClass('PluginLagapenakProfile', ['addtabon' => ['Profile']]);
 
     include_once __DIR__ . '/inc/notification.php';
+
+    // GLPI 11: pages reachable without a GLPI session (they check their own token)
+    // (GLPI 10.0.x also has a Firewall class, but without this method)
+    if (method_exists(\Glpi\Http\Firewall::class, 'addPluginStrategyForLegacyScripts')) {
+        foreach (['#^/front/sign\.php#', '#^/front/loan\.ics\.php#'] as $pattern) {
+            \Glpi\Http\Firewall::addPluginStrategyForLegacyScripts(
+                'lagapenak',
+                $pattern,
+                \Glpi\Http\Firewall::STRATEGY_NO_CHECK
+            );
+        }
+    }
 
     // Register daily cron for return reminders (runs once, safe to call repeatedly)
     CronTask::register('PluginLagapenakLoan', 'LoanReminder', DAY_TIMESTAMP, [

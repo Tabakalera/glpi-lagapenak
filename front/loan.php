@@ -10,7 +10,7 @@ $tab           = isset($_GET['tab']) ? $_GET['tab'] : 'prestamos';
 if ($tab === 'activos' && !$can_supervise) {
     $tab = 'prestamos';
 }
-$plugin_web = Plugin::getWebDir('lagapenak', true);
+$plugin_web = plugin_lagapenak_web_dir();
 $avail_url  = $plugin_web . '/ajax/availability.php';
 $loan_form  = $plugin_web . '/front/loan.form.php';
 $cal_url    = $plugin_web . '/front/calendar.php';
@@ -19,7 +19,7 @@ $is_helpdesk = ($_SESSION['glpiactiveprofile']['interface'] ?? '') === 'helpdesk
 if ($is_helpdesk) {
     Html::helpHeader(__('Lagapenak - Loans', 'lagapenak'));
 } else {
-    Html::header(__('Lagapenak - Loans', 'lagapenak'), $_SERVER['PHP_SELF'], 'tools', 'PluginLagapenakLoan');
+    Html::header(__('Lagapenak - Loans', 'lagapenak'), plugin_lagapenak_web_dir() . '/front/loan.php', 'tools', 'PluginLagapenakLoan');
 }
 
 // Firefox fix: GLPI calls form.submit() programmatically (not via a submit event)
@@ -57,11 +57,11 @@ if(window.location.search.indexOf("tab=disponibilidad")!==-1){
     $now = $DB->escape(date('Y-m-d H:i:s'));
 
     $qc = function(string $extra) use ($DB, $entity_sql, $user_sql): int {
-        $r = $DB->query("SELECT COUNT(*) AS cpt FROM `glpi_plugin_lagapenak_loans` WHERE 1=1 {$extra} {$user_sql} {$entity_sql}");
+        $r = $DB->doQuery("SELECT COUNT(*) AS cpt FROM `glpi_plugin_lagapenak_loans` WHERE 1=1 {$extra} {$user_sql} {$entity_sql}");
         if ($r === false) return 0;
         return (int) ($DB->fetchAssoc($r)['cpt'] ?? 0);
     };
-    $r_mine = $DB->query("SELECT COUNT(*) AS cpt FROM `glpi_plugin_lagapenak_loans` WHERE `status` != {$s4} AND `users_id` = {$uid} {$entity_sql}");
+    $r_mine = $DB->doQuery("SELECT COUNT(*) AS cpt FROM `glpi_plugin_lagapenak_loans` WHERE `status` != {$s4} AND `users_id` = {$uid} {$entity_sql}");
 
     $cnt_total     = $qc(" AND `status` != {$s4}");
     $cnt_mine      = ($r_mine !== false) ? (int) ($DB->fetchAssoc($r_mine)['cpt'] ?? 0) : 0;
@@ -200,7 +200,7 @@ if ($tab === 'prestamos') {
     ];
     $all_device_types = [];
     foreach ($device_type_tables as $itemtype => $dttable) {
-        $dtr = $DB->query("SELECT `id`, `name` FROM `{$dttable}` WHERE `name` != '' AND `name` IS NOT NULL ORDER BY `name`");
+        $dtr = $DB->doQuery("SELECT `id`, `name` FROM `{$dttable}` WHERE `name` != '' AND `name` IS NOT NULL ORDER BY `name`");
         if ($dtr) {
             while ($dr = $DB->fetchAssoc($dtr)) {
                 $all_device_types[] = [
@@ -213,11 +213,12 @@ if ($tab === 'prestamos') {
     }
 
     // Loans for the "fill from loan" dropdown (active + pending, with dates)
-    $loans_res = $DB->query(
+    $loans_res = $DB->doQuery(
         "SELECT `id`, `name`, `status`, `fecha_inicio`, `fecha_fin`
          FROM `glpi_plugin_lagapenak_loans`
          WHERE `status` IN ({$s1},{$s5},{$s2})
            AND `fecha_inicio` IS NOT NULL AND `fecha_fin` IS NOT NULL
+           {$user_sql}
            {$entity_sql}
          ORDER BY `fecha_inicio` ASC"
     );
@@ -503,7 +504,7 @@ if ($tab === 'prestamos') {
                     + availEsc(data.fecha_fin) + '</strong>'
                     + ' &nbsp;|&nbsp; '
                     + '<span class="text-success fw-bold">' + free + ' libre' + (free !== 1 ? 's' : '') + '</span>'
-                    + (delivered > 0 ? ' + <span class="text-warning fw-bold">' + delivered + ' entregado' + (delivered !== 1 ? 's' : '') + '</span>' : '')
+                    + (delivered > 0 ? ' / <span class="text-warning fw-bold">' + delivered + ' entregado' + (delivered !== 1 ? 's' : '') + '</span>' : '')
                     + ' / '
                     + '<span class="text-danger fw-bold">' + occupied + ' ocupado' + (occupied !== 1 ? 's' : '') + '</span>'
                     + ' de ' + total + ' activos';
@@ -895,7 +896,7 @@ if ($tab === 'prestamos') {
         fetch(BULK_ADD_URL, {
             method: 'POST',
             body: body,
-            headers: { 'X-Glpi-Csrf-Token': BULK_CSRF }
+            headers: { 'X-Glpi-Csrf-Token': BULK_CSRF, 'X-Requested-With': 'XMLHttpRequest' }
         })
             .then(function(r) {
                 return r.text().then(function(text) {

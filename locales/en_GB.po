@@ -477,3 +477,52 @@ msgstr "No assets with loans"
 
 msgid "Error loading assets"
 msgstr "Error loading assets"
+
+# ── Date change conflicts ─────────────────────────────────────────────────────
+
+msgid "The change has expired, please make it again."
+msgstr "The change has expired, please make it again."
+
+msgid "The date change has not been saved yet."
+msgstr "The date change has not been saved yet."
+
+msgid "The request has not been sent yet."
+msgstr "The request has not been sent yet."
+
+msgid "The request has not been approved yet."
+msgstr "The request has not been approved yet."
+
+msgid "These assets are already booked in other loans for the new dates:"
+msgstr "These assets are already booked in other loans for the new dates:"
+
+msgid "If approved, these assets would overlap with other loans:"
+msgstr "If approved, these assets would overlap with other loans:"
+
+msgid "Save anyway"
+msgstr "Save anyway"
+
+msgid "Send anyway"
+msgstr "Send anyway"
+
+msgid "Approve anyway"
+msgstr "Approve anyway"
+
+msgid "Another loan"
+msgstr "Another loan"
+
+# ── iCal personal URL ───────────────────────────────────────────────────────
+
+msgid "A new subscription URL has been created. The previous one no longer works."
+msgstr "A new subscription URL has been created. The previous one no longer works."
+
+msgid "This URL shows <strong>all loans</strong>."
+msgstr "This URL shows <strong>all loans</strong>."
+
+msgid "This URL only shows <strong>the loans you have requested</strong>."
+msgstr "This URL only shows <strong>the loans you have requested</strong>."
+
+msgid "The current URL will stop working and calendars subscribed to it will have to be subscribed again. Continue?"
+msgstr "The current URL will stop working and calendars subscribed to it will have to be subscribed again. Continue?"
+
+msgid "Regenerate URL"
+msgstr "Regenerate URL"

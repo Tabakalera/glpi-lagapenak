@@ -31,7 +31,7 @@ function plugin_lagapenak_install() {
             KEY `users_id_destinatario` (`users_id_destinatario`),
             KEY `status` (`status`)
         ) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation}";
-        $DB->queryOrDie($query, $DB->error());
+        plugin_lagapenak_query_or_fail($query);
     }
 
     if (!$DB->tableExists('glpi_plugin_lagapenak_loanitems')) {
@@ -51,7 +51,7 @@ function plugin_lagapenak_install() {
             KEY `itemtype` (`itemtype`),
             KEY `items_id` (`items_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation}";
-        $DB->queryOrDie($query, $DB->error());
+        plugin_lagapenak_query_or_fail($query);
     }
 
     // Upgrade: add signature + albaran + beneficiary + signing-token columns if not present
@@ -73,9 +73,8 @@ function plugin_lagapenak_install() {
         'date_request_notes'       => "TEXT NULL DEFAULT NULL",
     ] as $col => $def) {
         if (!$DB->fieldExists('glpi_plugin_lagapenak_loans', $col)) {
-            $DB->queryOrDie(
-                "ALTER TABLE `glpi_plugin_lagapenak_loans` ADD COLUMN `$col` $def",
-                $DB->error()
+            plugin_lagapenak_query_or_fail(
+                "ALTER TABLE `glpi_plugin_lagapenak_loans` ADD COLUMN `$col` $def"
             );
         }
     }
@@ -83,16 +82,15 @@ function plugin_lagapenak_install() {
     // Fix: convert any DATETIME columns to TIMESTAMP (GLPI standard)
     foreach (['sign_token_expires', 'requested_date_end'] as $col) {
         if ($DB->fieldExists('glpi_plugin_lagapenak_loans', $col)) {
-            $DB->queryOrDie(
-                "ALTER TABLE `glpi_plugin_lagapenak_loans` MODIFY COLUMN `$col` TIMESTAMP NULL DEFAULT NULL",
-                $DB->error()
+            plugin_lagapenak_query_or_fail(
+                "ALTER TABLE `glpi_plugin_lagapenak_loans` MODIFY COLUMN `$col` TIMESTAMP NULL DEFAULT NULL"
             );
         }
     }
 
     // Comments table
     if (!$DB->tableExists('glpi_plugin_lagapenak_loancomments')) {
-        $DB->queryOrDie(
+        plugin_lagapenak_query_or_fail(
             "CREATE TABLE `glpi_plugin_lagapenak_loancomments` (
                 `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
                 `loans_id`    INT UNSIGNED NOT NULL DEFAULT 0,
@@ -102,12 +100,39 @@ function plugin_lagapenak_install() {
                 PRIMARY KEY (`id`),
                 KEY `loans_id` (`loans_id`),
                 KEY `users_id` (`users_id`)
-            ) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation}",
-            $DB->error()
+            ) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation}"
         );
     }
 
-    ProfileRight::addProfileRights(['plugin_lagapenak_loan']);
+    // Personal iCal tokens (one per user)
+    if (!$DB->tableExists('glpi_plugin_lagapenak_icstokens')) {
+        plugin_lagapenak_query_or_fail(
+            "CREATE TABLE `glpi_plugin_lagapenak_icstokens` (
+                `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `users_id`      INT UNSIGNED NOT NULL DEFAULT 0,
+                `token`         VARCHAR(64) NOT NULL DEFAULT '',
+                `date_creation` TIMESTAMP NULL DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `users_id` (`users_id`),
+                UNIQUE KEY `token` (`token`)
+            ) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation}"
+        );
+    }
+
+    // Only add missing rights: ProfileRight::addProfileRights() inserts blindly and, on GLPI 11,
+    // the duplicate-key error on plugin update is fatal.
+    foreach ($DB->request(['SELECT' => ['id'], 'FROM' => 'glpi_profiles']) as $profile) {
+        if (!countElementsInTable('glpi_profilerights', [
+            'profiles_id' => $profile['id'],
+            'name'        => 'plugin_lagapenak_loan',
+        ])) {
+            $DB->insert('glpi_profilerights', [
+                'profiles_id' => $profile['id'],
+                'name'        => 'plugin_lagapenak_loan',
+                'rights'      => 0,
+            ]);
+        }
+    }
 
     // Default display columns for loan list (users_id=0 = global default)
     // 3=Estado, 4=Solicitante, 5=Destinatario, 6=F.Inicio, 7=F.Fin
@@ -150,9 +175,14 @@ function plugin_lagapenak_set_display_prefs() {
 function plugin_lagapenak_uninstall() {
     global $DB;
 
-    foreach (['glpi_plugin_lagapenak_loans', 'glpi_plugin_lagapenak_loanitems', 'glpi_plugin_lagapenak_loancomments'] as $table) {
+    foreach ([
+        'glpi_plugin_lagapenak_loans',
+        'glpi_plugin_lagapenak_loanitems',
+        'glpi_plugin_lagapenak_loancomments',
+        'glpi_plugin_lagapenak_icstokens',
+    ] as $table) {
         if ($DB->tableExists($table)) {
-            $DB->queryOrDie("DROP TABLE `$table`", $DB->error());
+            plugin_lagapenak_query_or_fail("DROP TABLE `$table`");
         }
     }
 
