@@ -94,22 +94,22 @@ Estos campos aparecen en el formulario, el listado y el albarán.
 
 ## Datos del beneficiario
 
-El formulario de préstamo incluye una sección **Beneficiario** con tres campos:
+El **beneficiario** es la persona que recibe el material (artista, residente...). Normalmente **no** es el solicitante de GLPI (un trabajador de Tabakalera) ni necesariamente quien firma el albarán.
 
-| Campo              | Columna BD          | Descripción                                    |
-|--------------------|---------------------|------------------------------------------------|
-| Nombre completo    | `beneficiary_name`  | Pre-relleno con el nombre del solicitante GLPI |
-| Correo electrónico | `beneficiary_email` | Pre-relleno con el email del solicitante GLPI  |
-| Pasaporte / DNI    | `beneficiary_dni`   | Vacío por defecto, editable                    |
+| Campo              | Columna BD          | Regla                                                   |
+|--------------------|---------------------|---------------------------------------------------------|
+| Nombre completo    | `beneficiary_name`  | Opcional                                                |
+| Correo electrónico | `beneficiary_email` | Si se rellena, debe ser válido                          |
+| DNI/NIE o pasaporte| `beneficiary_dni`   | Si es DNI/NIE, se comprueban formato y letra            |
 
-Todos los campos son editables: sirve para el caso en que A solicita material en nombre de B (se rellenan los datos de B).
+- En los préstamos nuevos hace falta **al menos un identificador válido**: email o DNI/NIE. Con pasaporte u otro documento extranjero, el email es obligatorio.
+- El formulario **ya no se rellena con los datos del solicitante**. Si de verdad son la misma persona, el botón *El beneficiario es el solicitante* copia sus datos.
+- Los préstamos antiguos conservan sus datos tal cual; la regla se aplica cuando alguien cambia el beneficiario.
+- Estos datos se usan en el albarán (formulario de firma, envío por correo, documento impreso y PDF).
 
-Estos datos se usan en el albarán:
-- El formulario de firma se pre-rellena con nombre y DNI del beneficiario.
-- El correo modal de envío usa por defecto `beneficiary_email`.
-- El documento impreso y el PDF muestran email del beneficiario y los campos configurados en `$albaran_loan_fields`.
+## Cancelar una solicitud
 
-Los tres campos también están disponibles como **columnas y filtros en el buscador** nativo de GLPI.
+Un supervisor de la entidad del préstamo puede **cancelar** una solicitud cuyo material **no se ha entregado** (botón *Cancelar solicitud*, con motivo obligatorio). La solicitud se conserva con quién, cuándo y por qué, y ya no admite cambios de material, fechas ni firma. No se puede cancelar un préstamo con el albarán firmado ni con material entregado o devuelto. Cancelar no es borrar: la retirada de una solicitud intacta por quien la pidió sigue existiendo.
 
 ---
 
@@ -183,18 +183,14 @@ Requiere servidor SMTP configurado en **Configuración → Notificaciones**. Se 
 
 ## API de integración con Kide-Artean (en desarrollo)
 
-Kide-Artean (residencias y cesiones) consulta los préstamos de Lagapenak y los vincula a sus residencias y cesiones. Contrato completo: `docs/api/openapi-g1.yaml`.
+Kide-Artean (residencias y cesiones) **consulta** los préstamos de Lagapenak. Lagapenak no sabe a qué residencia o cesión corresponde un préstamo: Kide-Artean identifica al beneficiario y hace la asociación. Contrato completo: `docs/api/openapi-g1.yaml`.
 
-- **Qué puede hacer:** buscar un préstamo por su número, leer su estado, fechas y material, saber si el albarán está firmado y cuándo, y crear o retirar vínculos con una residencia y sus cesiones. **No** puede crear, cambiar, firmar, cancelar ni borrar préstamos.
-- **Qué nunca recibe:** nombre del préstamo, observaciones, campos personalizados, comentarios, personas, DNI, firmas ni documentos.
-- **Viene desactivada.** Para activarla, un Super-Admin entra en *Configuración › Complementos › Lagapenak › Configurar*:
-  1. Marca **API activada** (y deja **Exigir HTTPS** marcado).
-  2. Crea el cliente: entidades autorizadas, IP del servidor de Kide-Artean y caducidad (12 meses como máximo).
-  3. Copia la credencial que aparece: **solo se muestra una vez**. Se entrega a Kide-Artean por un canal seguro.
-- **Cambiar la credencial:** *Editar › Emitir nueva credencial*. La anterior sigue valiendo los días indicados (0 = deja de valer ya).
-- **Cortar el acceso:** *Editar › Revocar ahora*.
-- Cada llamada queda en *Últimas 50 llamadas* y en la tabla `glpi_plugin_lagapenak_apilogs` (365 días por defecto).
-- Si se borra un préstamo vinculado, Kide-Artean lo ve como `loan_deleted`; si se mueve a una entidad no autorizada, como `unavailable`.
+- **Qué recibe Kide-Artean:** número e identificador del préstamo, fechas previstas, estado del préstamo y del material (incluidas las devoluciones con incidencia y las cancelaciones), material (tipo, nombre, inventario), si el albarán está firmado y cuándo, y **huellas** del email y del DNI/NIE del beneficiario.
+- **Qué nunca recibe:** nombres, emails o DNI en claro, firmas, documentos, observaciones, campos libres, notas ni motivos.
+- **Huellas:** se calculan con una clave de la integración. Se genera en *Configurar › Claves de identificación*, se muestra **una sola vez** y se entrega a Kide-Artean por un canal seguro. Para cambiarla, *Rotar clave*: la anterior sigue funcionando los días indicados. Pendiente de validación del DPD.
+- **Viene desactivada.** Un Super-Admin la activa en *Configuración › Complementos › Lagapenak › Configurar*: marca **API activada**, genera la clave de identificación y crea el cliente (entidades autorizadas, IP del servidor de Kide-Artean, caducidad de 12 meses como máximo). La credencial del cliente también se muestra una sola vez.
+- **Sincronización:** préstamos activos desde el 01/01/2026 (configurable); los anteriores se pueden consultar por número.
+- Cada llamada queda en *Últimas 50 llamadas* y en `glpi_plugin_lagapenak_apilogs` (365 días por defecto).
 
 ---
 
@@ -208,6 +204,7 @@ lagapenak/
 ├── LICENSE
 ├── CHANGELOG.md
 ├── docs/api/openapi-g1.yaml       # Contrato de la API G1 / G1 API contract
+├── docs/api/g1-hmac-vectors.json  # Vectores de prueba de las huellas / fingerprint test vectors
 ├── ajax/
 │   ├── asset_list.php             # Listado de activos para selector
 │   ├── asset_timeline.php         # Retirado en 1.6.1 (responde 410)
@@ -226,7 +223,8 @@ lagapenak/
 ├── inc/
 │   ├── loan.class.php             # Clase principal del préstamo
 │   ├── loanitem.class.php         # Clase de ítem de préstamo
-│   ├── loanlink.class.php         # Vínculos con residencias y cesiones
+│   ├── beneficiary.class.php      # Identificación del beneficiario (huellas G1)
+│   ├── loanevent.class.php        # Borrados y cambios de entidad (API)
 │   ├── api.class.php              # API de integración
 │   ├── apiclient.class.php        # Clientes y credenciales de la API
 │   ├── profile.class.php          # Integración de permisos con perfiles GLPI
@@ -345,22 +343,22 @@ These fields appear in the form, the search list and the delivery note.
 
 ## Beneficiary fields
 
-The loan form includes a **Beneficiary** section with three fields:
+The **beneficiary** is the person who receives the material (artist, resident...). Usually **not** the GLPI requester (a Tabakalera worker) and not necessarily who signs the delivery note.
 
-| Field        | DB column           | Description                                        |
-|--------------|---------------------|----------------------------------------------------|
-| Full name    | `beneficiary_name`  | Pre-filled from the requester's GLPI display name  |
-| Email        | `beneficiary_email` | Pre-filled from the requester's GLPI email address |
-| Passport/ID  | `beneficiary_dni`   | Empty by default, editable                         |
+| Field          | DB column           | Rule                                          |
+|----------------|---------------------|-----------------------------------------------|
+| Full name      | `beneficiary_name`  | Optional                                      |
+| Email address  | `beneficiary_email` | Must be valid if filled in                    |
+| DNI/NIE or passport | `beneficiary_dni` | A DNI/NIE is checked (format and letter)   |
 
-All fields are editable — useful when person A requests equipment on behalf of person B (fill in B's details).
+- New loans need **at least one valid identifier**: email or DNI/NIE. With a passport or foreign document, the email is required.
+- The form is **no longer pre-filled with the requester's data**. When they really are the same person, *The beneficiary is the requester* copies it.
+- Older loans keep their data as is; the rule applies when someone changes the beneficiary.
+- The data is used in the delivery note (signing form, email, printout and PDF).
 
-These fields feed into the delivery note:
-- The signature form is pre-filled with the beneficiary's name and ID.
-- The email send modal defaults to `beneficiary_email`.
-- The printed document and PDF show the beneficiary's email and the fields configured in `$albaran_loan_fields`.
+## Cancelling a request
 
-All three fields are also available as **searchable / filterable columns** in the native GLPI search engine.
+A supervisor of the loan's entity can **cancel** a request whose material was **not delivered** (*Cancel request*, reason required). It is kept with who, when and why and no longer accepts changes to assets, dates or signature. Signed loans and loans with delivered or returned material cannot be cancelled. Cancelling is not deleting: requesters can still withdraw an untouched request.
 
 ---
 
@@ -448,18 +446,14 @@ If sending fails, the error is logged in `files/_log/`.
 
 ## Kide-Artean integration API (in development)
 
-Kide-Artean (residencies and assignments) reads Lagapenak loans and links them to its residencies and assignments. Full contract: `docs/api/openapi-g1.yaml`.
+Kide-Artean (residencies and assignments) **reads** Lagapenak loans. Lagapenak does not know which residency or assignment a loan belongs to: Kide-Artean identifies the beneficiary and makes the association. Full contract: `docs/api/openapi-g1.yaml`.
 
-- **What it can do:** find a loan by number, read its status, dates and assets, see whether and when the delivery note was signed, and create or remove links with a residency and its assignments. It can **not** create, change, sign, cancel or delete loans.
-- **What it never receives:** loan name, observations, custom fields, comments, people, ID numbers, signatures or documents.
-- **Disabled by default.** A Super-Admin enables it in *Setup › Plugins › Lagapenak › Configure*:
-  1. Tick **API enabled** (keep **Require HTTPS** ticked).
-  2. Create the client: authorised entities, Kide-Artean server IP and expiry (12 months at most).
-  3. Copy the credential shown: **it is shown only once**. Hand it to Kide-Artean through a secure channel.
-- **New credential:** *Edit › Issue new credential*. The previous one keeps working for the given days (0 = stops now).
-- **Cut access:** *Edit › Revoke now*.
-- Every call is listed in *Last 50 calls* and in table `glpi_plugin_lagapenak_apilogs` (365 days by default).
-- A deleted linked loan shows in Kide-Artean as `loan_deleted`; one moved to a non-authorised entity, as `unavailable`.
+- **What Kide-Artean receives:** loan number and identifier, planned dates, loan and material status (returns with incident and cancellations included), assets (type, name, inventory number), whether and when the delivery note was signed, and **fingerprints** of the beneficiary's email and DNI/NIE.
+- **What it never receives:** names, email addresses or ID numbers in clear, signatures, documents, observations, free fields, notes or reasons.
+- **Fingerprints** use an integration key generated in *Configure › Identification keys*, shown **once** and handed to Kide-Artean through a secure channel. *Rotate key* keeps the previous one working for the given days. Pending DPD validation.
+- **Disabled by default.** A Super-Admin enables it in *Setup › Plugins › Lagapenak › Configure*, generates the identification key and creates the client (authorised entities, Kide-Artean server IP, expiry of 12 months at most). The client credential is also shown once.
+- **Sync:** loans active from 2026-01-01 (configurable); older loans can be looked up by number.
+- Every call is listed in *Last 50 calls* and in `glpi_plugin_lagapenak_apilogs` (365 days by default).
 
 ---
 
@@ -473,6 +467,7 @@ lagapenak/
 ├── LICENSE
 ├── CHANGELOG.md
 ├── docs/api/openapi-g1.yaml       # Contrato de la API G1 / G1 API contract
+├── docs/api/g1-hmac-vectors.json  # Vectores de prueba de las huellas / fingerprint test vectors
 ├── ajax/
 │   ├── asset_list.php             # Asset list for selector
 │   ├── asset_timeline.php         # Retired in 1.6.1 (answers 410)
@@ -491,7 +486,8 @@ lagapenak/
 ├── inc/
 │   ├── loan.class.php             # Main loan class
 │   ├── loanitem.class.php         # Loan item class
-│   ├── loanlink.class.php         # Links with residencies and assignments
+│   ├── beneficiary.class.php      # Beneficiary identification (G1 fingerprints)
+│   ├── loanevent.class.php        # Deletions and entity moves (API)
 │   ├── api.class.php              # Integration API
 │   ├── apiclient.class.php        # API clients and credentials
 │   ├── profile.class.php          # GLPI profile permissions integration

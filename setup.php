@@ -8,6 +8,8 @@ include_once __DIR__ . '/inc/compat.php';
 // Requerido por GLPI 10 para activar el plugin (GLPI 11 lo ignora)
 global $PLUGIN_HOOKS;
 $PLUGIN_HOOKS['csrf_compliant']['lagapenak'] = true;
+// G1 integration keys: GLPI encrypts this configuration value with its own key (GLPIKey)
+$PLUGIN_HOOKS['secured_configs']['lagapenak'] = ['api_hmac_keys'];
 $PLUGIN_HOOKS['menu_toadd']['lagapenak'] = ['tools' => 'PluginLagapenakLoan'];
 define('PLUGIN_LAGAPENAK_MIN_GLPI', '10.0.11'); // DBmysql::doQuery() exists since 10.0.11
 define('PLUGIN_LAGAPENAK_MAX_GLPI', '11.0.99');

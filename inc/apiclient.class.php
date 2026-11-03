@@ -12,13 +12,15 @@ class PluginLagapenakApiClient {
 
     const TABLE = 'glpi_plugin_lagapenak_apiclients';
 
-    const SCOPES = ['loans:read', 'links:read', 'links:write'];
+    // G1 is read-only: one scope
+    const SCOPES = ['loans:read'];
 
     const MAX_VALIDITY_DAYS = 366;
 
     static function getConfig(): array {
         $c = Config::getConfigurationValues('plugin:lagapenak', [
             'api_enabled', 'api_require_https', 'api_trusted_proxies', 'api_rate_per_minute', 'api_log_retention_days',
+            'api_sync_from',
         ]);
         return [
             'enabled'            => (int) ($c['api_enabled'] ?? 0) === 1,
@@ -26,6 +28,8 @@ class PluginLagapenakApiClient {
             'trusted_proxies'    => self::parseList($c['api_trusted_proxies'] ?? ''),
             'rate_per_minute'    => max(1, (int) ($c['api_rate_per_minute'] ?? 120)),
             'log_retention_days' => max(30, (int) ($c['api_log_retention_days'] ?? 365)),
+            // First day of the change feed (G1: 2026-01-01); older loans stay reachable by number
+            'sync_from'          => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($c['api_sync_from'] ?? '')) ? $c['api_sync_from'] : '2026-01-01',
         ];
     }
 

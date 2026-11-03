@@ -740,3 +740,102 @@ msgstr "previous credential valid until %s"
 
 msgid "sub-entities"
 msgstr "sub-entities"
+
+msgid "A loan with a signed delivery note cannot be cancelled: the material was handed over."
+msgstr "A loan with a signed delivery note cannot be cancelled: the material was handed over."
+
+msgid "A new key changes every fingerprint: Kide-Artean must load it before the transition ends. Continue?"
+msgstr "A new key changes every fingerprint: Kide-Artean must load it before the transition ends. Continue?"
+
+msgid "Beneficiary identification keys (HMAC)"
+msgstr "Beneficiary identification keys (HMAC)"
+
+msgid "Cancel request"
+msgstr "Cancel request"
+
+msgid "Cancelled request"
+msgstr "Cancelled request"
+
+msgid "Change feed from (loans active from this date)"
+msgstr "Change feed from (loans active from this date)"
+
+msgid "Copy this identification key now: it will not be shown again. Hand it to Kide-Artean through a secure channel."
+msgstr "Copy this identification key now: it will not be shown again. Hand it to Kide-Artean through a secure channel."
+
+msgid "DNI/NIE or passport"
+msgstr "DNI/NIE or passport"
+
+msgid "Days the current key keeps working"
+msgstr "Days the current key keeps working"
+
+msgid "Enter the beneficiary's email address or DNI/NIE (at least one)."
+msgstr "Enter the beneficiary's email address or DNI/NIE (at least one)."
+
+msgid "Enter the reason for the cancellation."
+msgstr "Enter the reason for the cancellation."
+
+msgid "Generate key"
+msgstr "Generate key"
+
+msgid "No key yet: the API sends no fingerprints until one is generated."
+msgstr "No key yet: the API sends no fingerprints until one is generated."
+
+msgid "Only requests whose material has not been delivered can be cancelled."
+msgstr "Only requests whose material has not been delivered can be cancelled."
+
+msgid "Person who receives the material (artist, resident...), not who requests it. Email or DNI/NIE required (at least one); with a passport or foreign document, the email."
+msgstr "Person who receives the material (artist, resident...), not who requests it. Email or DNI/NIE required (at least one); with a passport or foreign document, the email."
+
+msgid "Previous identification keys retired."
+msgstr "Previous identification keys retired."
+
+msgid "Read-only access to the loans of the authorised entities: change feed with beneficiary fingerprints, and detail. Contract: docs/api/openapi-g1.yaml in the plugin folder."
+msgstr "Read-only access to the loans of the authorised entities: change feed with beneficiary fingerprints, and detail. Contract: docs/api/openapi-g1.yaml in the plugin folder."
+
+msgid "Reason"
+msgstr "Reason"
+
+msgid "Retire previous keys now"
+msgstr "Retire previous keys now"
+
+msgid "Retired"
+msgstr "Retired"
+
+msgid "Rotate key"
+msgstr "Rotate key"
+
+msgid "The API sends fingerprints of the beneficiary's email and DNI/NIE, never the values. Kide-Artean needs the same key to compare them. Pending DPD validation before production."
+msgstr "The API sends fingerprints of the beneficiary's email and DNI/NIE, never the values. Kide-Artean needs the same key to compare them. Pending DPD validation before production."
+
+msgid "The beneficiary is the requester"
+msgstr "The beneficiary is the requester"
+
+msgid "The beneficiary's DNI/NIE is not valid: check the number and the letter."
+msgstr "The beneficiary's DNI/NIE is not valid: check the number and the letter."
+
+msgid "The beneficiary's email address is not valid."
+msgstr "The beneficiary's email address is not valid."
+
+msgid "The loan is already cancelled."
+msgstr "The loan is already cancelled."
+
+msgid "The loan is cancelled: it can no longer be changed."
+msgstr "The loan is cancelled: it can no longer be changed."
+
+msgid "The request has been cancelled. It stays in the list with its history."
+msgstr "The request has been cancelled. It stays in the list with its history."
+
+msgid "The request stays in the list with its history and can no longer be changed. Use it when the material will not be delivered."
+msgstr "The request stays in the list with its history and can no longer be changed. Use it when the material will not be delivered."
+
+msgid "The sync start date is not valid."
+msgstr "The sync start date is not valid."
+
+msgid "Transition"
+msgstr "Transition"
+
+msgid "Valid until"
+msgstr "Valid until"
+
+msgid "With a passport or foreign document, the beneficiary's email address is required."
+msgstr "With a passport or foreign document, the beneficiary's email address is required."

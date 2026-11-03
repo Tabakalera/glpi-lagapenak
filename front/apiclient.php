@@ -25,8 +25,13 @@ if (isset($in['save_config'])) {
             $flash_errors[] = sprintf(__('Invalid IP address or range: %s', 'lagapenak'), $rule);
         }
     }
+    $sync_from = trim((string) ($in['api_sync_from'] ?? ''));
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $sync_from) || strtotime($sync_from) === false) {
+        $flash_errors[] = __('The sync start date is not valid.', 'lagapenak');
+    }
     if (!$flash_errors) {
         Config::setConfigurationValues('plugin:lagapenak', [
+            'api_sync_from'          => $sync_from,
             'api_enabled'            => !empty($in['api_enabled']) ? 1 : 0,
             'api_require_https'      => !empty($in['api_require_https']) ? 1 : 0,
             'api_trusted_proxies'    => implode(' ', $proxies),
@@ -60,6 +65,19 @@ if (isset($in['rotate_client'])) {
     Html::redirect($self);
 }
 
+// Identification keys (HMAC): shown once; the previous one keeps working during the transition
+if (isset($in['rotate_hmac_key'])) {
+    $new_key = PluginLagapenakBeneficiary::rotateKey(max(0, min(90, (int) ($in['transition_days'] ?? 30))));
+    $_SESSION['plugin_lagapenak_new_hmac'] = $new_key;
+    Html::redirect($self);
+}
+
+if (isset($in['retire_hmac_keys'])) {
+    PluginLagapenakBeneficiary::retirePreviousKeys();
+    Session::addMessageAfterRedirect(__('Previous identification keys retired.', 'lagapenak'));
+    Html::redirect($self);
+}
+
 if (isset($in['revoke_client'])) {
     PluginLagapenakApiClient::revoke((int) $in['id']);
     Session::addMessageAfterRedirect(__('Credential revoked: it stopped working immediately.', 'lagapenak'));
@@ -77,7 +95,7 @@ $edit    = isset($_GET['id']) ? PluginLagapenakApiClient::getById((int) $_GET['i
 
 echo '<div class="container-fluid" style="max-width:1100px">';
 echo '<h2 class="mt-3">' . __('Integration API (Kide-Artean)', 'lagapenak') . '</h2>';
-echo '<p class="text-muted">' . __('Read-only access to loans of the authorised entities and links with residencies and assignments. Contract: docs/api/openapi-g1.yaml in the plugin folder.', 'lagapenak') . '</p>';
+echo '<p class="text-muted">' . __('Read-only access to the loans of the authorised entities: change feed with beneficiary fingerprints, and detail. Contract: docs/api/openapi-g1.yaml in the plugin folder.', 'lagapenak') . '</p>';
 
 foreach ($flash_errors as $e) {
     echo '<div class="alert alert-danger">' . $h($e) . '</div>';
@@ -87,6 +105,13 @@ if (!empty($_SESSION['plugin_lagapenak_new_token'])) {
     echo '<div class="alert alert-warning"><strong>' . __('Copy this credential now: it will not be shown again.', 'lagapenak') . '</strong>'
         . '<pre class="mt-2 mb-0 user-select-all">' . $h($_SESSION['plugin_lagapenak_new_token']) . '</pre></div>';
     unset($_SESSION['plugin_lagapenak_new_token']);
+}
+
+if (!empty($_SESSION['plugin_lagapenak_new_hmac'])) {
+    $nk = $_SESSION['plugin_lagapenak_new_hmac'];
+    echo '<div class="alert alert-warning"><strong>' . __('Copy this identification key now: it will not be shown again. Hand it to Kide-Artean through a secure channel.', 'lagapenak') . '</strong>'
+        . '<pre class="mt-2 mb-0 user-select-all">kid: ' . $h($nk['kid']) . "\n" . 'key (base64): ' . $h($nk['key']) . '</pre></div>';
+    unset($_SESSION['plugin_lagapenak_new_hmac']);
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────────
@@ -101,11 +126,44 @@ echo '<div class="col-md-6"><label class="form-label">' . __('Trusted reverse pr
     . '<input class="form-control" name="api_trusted_proxies" value="' . $h(implode(' ', $config['trusted_proxies'])) . '"></div>';
 echo '<div class="col-md-3"><label class="form-label">' . __('Requests per minute per client', 'lagapenak') . '</label>'
     . '<input class="form-control" type="number" min="1" max="10000" name="api_rate_per_minute" value="' . (int) $config['rate_per_minute'] . '"></div>';
+echo '<div class="col-md-3"><label class="form-label">' . __('Change feed from (loans active from this date)', 'lagapenak') . '</label>'
+    . '<input class="form-control" type="date" name="api_sync_from" value="' . $h($config['sync_from']) . '"></div>';
 echo '<div class="col-md-3"><label class="form-label">' . __('Keep API log (days)', 'lagapenak') . '</label>'
     . '<input class="form-control" type="number" min="30" max="3650" name="api_log_retention_days" value="' . (int) $config['log_retention_days'] . '"></div>';
 echo '</div>';
 echo '<button class="btn btn-primary mt-3" type="submit" name="save_config" value="1">' . __('Save') . '</button>';
 Html::closeForm();
+echo '</div></div>';
+
+// ── Identification keys ──────────────────────────────────────────────────────
+echo '<div class="card mb-3"><div class="card-header"><strong>' . __('Beneficiary identification keys (HMAC)', 'lagapenak') . '</strong></div><div class="card-body">';
+echo '<p class="text-muted small">' . __('The API sends fingerprints of the beneficiary\'s email and DNI/NIE, never the values. Kide-Artean needs the same key to compare them. Pending DPD validation before production.', 'lagapenak') . '</p>';
+$hmac_keys = PluginLagapenakBeneficiary::getStoredKeys();
+if ($hmac_keys) {
+    echo '<table class="table table-sm"><thead><tr><th>kid</th><th>' . __('Status') . '</th><th>' . __('Creation date') . '</th><th>' . __('Valid until', 'lagapenak') . '</th></tr></thead><tbody>';
+    foreach ($hmac_keys as $k) {
+        $expired = $k['state'] === 'previous' && (string) $k['retire_at'] <= date('Y-m-d H:i:s');
+        echo '<tr><td><code>' . $h($k['kid']) . '</code></td><td>'
+            . ($k['state'] === 'active' ? '<span class="badge bg-success">' . __('Active') . '</span>'
+                : '<span class="badge bg-' . ($expired ? 'secondary' : 'warning text-dark') . '">' . ($expired ? __('Retired', 'lagapenak') : __('Transition', 'lagapenak')) . '</span>')
+            . '</td><td>' . $h(Html::convDateTime($k['created'])) . '</td><td>' . $h(Html::convDateTime($k['retire_at'] ?? '')) . '</td></tr>';
+    }
+    echo '</tbody></table>';
+} else {
+    echo '<p class="text-muted">' . __('No key yet: the API sends no fingerprints until one is generated.', 'lagapenak') . '</p>';
+}
+echo '<form method="post" action="' . $h($self) . '" class="d-inline-flex align-items-end gap-2">';
+echo '<div><label class="form-label">' . __('Days the current key keeps working', 'lagapenak') . '</label>'
+    . '<input class="form-control" type="number" min="0" max="90" name="transition_days" value="30" style="width:8em"></div>';
+echo '<button class="btn btn-warning" type="submit" name="rotate_hmac_key" value="1"'
+    . ' onclick="return confirm(\'' . $h(__('A new key changes every fingerprint: Kide-Artean must load it before the transition ends. Continue?', 'lagapenak')) . '\')">'
+    . ($hmac_keys ? __('Rotate key', 'lagapenak') : __('Generate key', 'lagapenak')) . '</button>';
+Html::closeForm();
+if (count($hmac_keys) > 1) {
+    echo ' <form method="post" action="' . $h($self) . '" class="d-inline">';
+    echo '<button class="btn btn-outline-danger" type="submit" name="retire_hmac_keys" value="1">' . __('Retire previous keys now', 'lagapenak') . '</button>';
+    Html::closeForm();
+}
 echo '</div></div>';
 
 // ── Clients ──────────────────────────────────────────────────────────────────

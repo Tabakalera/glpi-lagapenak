@@ -302,12 +302,142 @@ class PluginLagapenakLoan extends CommonDBTM {
             unset($input[$field]);
         }
         // Only supervisors may choose the initial status
-        if (!self::canSupervise()) {
+        // A new loan is never born cancelled: cancelling records who, when and why (cancel())
+        if (!self::canSupervise() || (int) ($input['status'] ?? 0) === self::STATUS_CANCELLED) {
             $input['status'] = self::STATUS_PENDING;
         }
+        unset($input['beneficiary_validated']);
+        foreach (self::getCancellationFields() as $field) {
+            unset($input[$field]);
+        }
+        // G1-ID01: the beneficiary is entered expressly, with at least one valid identifier
+        $error = PluginLagapenakBeneficiary::checkForForm($input['beneficiary_email'] ?? '', $input['beneficiary_dni'] ?? '');
+        if ($error !== '') {
+            Session::addMessageAfterRedirect($error, false, ERROR);
+            return false;
+        }
+        $input['beneficiary_validated'] = 1;
         // Public identifier for the integration API, never taken from the form
         $input['uuid'] = self::newUuid();
         return self::sanitizeDates($input);
+    }
+
+    /** Written only by cancel(), never by a form or a massive action. */
+    static function getCancellationFields(): array {
+        return ['cancel_date', 'cancel_users_id', 'cancel_reason'];
+    }
+
+    // ── Material status (computed from the asset lines) ─────────────────────
+
+    const MATERIAL_PENDING_DELIVERY     = 'pending_delivery';     // nothing delivered yet
+    const MATERIAL_PARTIALLY_DELIVERED  = 'partially_delivered';  // some lines delivered, others still to deliver
+    const MATERIAL_DELIVERED            = 'delivered';            // everything delivered, nothing back yet
+    const MATERIAL_PARTIALLY_RETURNED   = 'partially_returned';   // everything delivered, part of it back
+    const MATERIAL_RETURNED             = 'returned';             // everything back without incident
+    const MATERIAL_RETURNED_INCIDENT    = 'returned_with_incident';
+    const MATERIAL_CANCELLED            = 'cancelled';            // cancelled with nothing out
+
+    /**
+     * Where the loaned material is. Lines win over the loan status: a cancelled loan with an asset still
+     * delivered reports that asset as out.
+     *
+     * @param int[] $item_statuses PluginLagapenakLoanItem::STATUS_* of every line
+     */
+    static function materialStatus(int $loan_status, array $item_statuses): string {
+        $n = array_count_values(array_map('intval', $item_statuses)) + [1 => 0, 2 => 0, 3 => 0, 4 => 0];
+        [$pending, $out, $back, $incident] = [
+            $n[PluginLagapenakLoanItem::STATUS_PENDING], $n[PluginLagapenakLoanItem::STATUS_DELIVERED],
+            $n[PluginLagapenakLoanItem::STATUS_RETURNED], $n[PluginLagapenakLoanItem::STATUS_INCIDENT],
+        ];
+        if ($loan_status === self::STATUS_CANCELLED && $out === 0) {
+            return self::MATERIAL_CANCELLED;
+        }
+        if ($out + $back + $incident === 0) {
+            return self::MATERIAL_PENDING_DELIVERY;
+        }
+        if ($pending > 0) {
+            return self::MATERIAL_PARTIALLY_DELIVERED;
+        }
+        if ($out > 0) {
+            return $back + $incident > 0 ? self::MATERIAL_PARTIALLY_RETURNED : self::MATERIAL_DELIVERED;
+        }
+        return $incident > 0 ? self::MATERIAL_RETURNED_INCIDENT : self::MATERIAL_RETURNED;
+    }
+
+    static function materialStatusOfLoan(int $loans_id, int $loan_status): string {
+        global $DB;
+        $items = [];
+        foreach ($DB->request(['SELECT' => ['status'], 'FROM' => 'glpi_plugin_lagapenak_loanitems', 'WHERE' => ['loans_id' => $loans_id]]) as $i) {
+            $items[] = (int) $i['status'];
+        }
+        return self::materialStatus($loan_status, $items);
+    }
+
+    // ── Cancellation (explicit, keeps the loan) ─────────────────────────────
+
+    static function isCancelled(array $fields): bool {
+        return (int) ($fields['status'] ?? 0) === self::STATUS_CANCELLED;
+    }
+
+    /**
+     * Why this loan cannot be cancelled, or '' if it can: only a request whose material was never handed
+     * over (no line delivered or returned) and whose delivery note is not signed.
+     */
+    static function getCancelBlocker(array $fields): string {
+        if (self::isCancelled($fields)) {
+            return __('The loan is already cancelled.', 'lagapenak');
+        }
+        if (self::isSigned($fields)) {
+            return __('A loan with a signed delivery note cannot be cancelled: the material was handed over.', 'lagapenak');
+        }
+        if (self::materialStatusOfLoan((int) $fields['id'], (int) $fields['status']) !== self::MATERIAL_PENDING_DELIVERY) {
+            return __('Only requests whose material has not been delivered can be cancelled.', 'lagapenak');
+        }
+        return '';
+    }
+
+    /** Supervisor of the loan's entity, on a cancellable request. */
+    static function canCancelLoan(PluginLagapenakLoan $loan): bool {
+        return self::canManageLoan($loan) && self::getCancelBlocker($loan->fields) === '';
+    }
+
+    /**
+     * Cancel the request: status, who, when and why are kept; the loan, its lines and comments stay.
+     */
+    function cancel(string $reason): bool {
+        global $DB;
+        $reason = trim($reason);
+        if ($reason === '' || !self::canCancelLoan($this)) {
+            return false;
+        }
+        $now = date('Y-m-d H:i:s');
+        $uid = (int) Session::getLoginUserID();
+        $DB->update($this->getTable(), [
+            'status'             => self::STATUS_CANCELLED,
+            'cancel_date'        => $now,
+            'cancel_users_id'    => $uid,
+            'cancel_reason'      => mb_substr($reason, 0, 1000),
+            'sign_token'         => null,   // a cancelled request is not signed
+            'sign_token_expires' => null,
+            'date_mod'           => $now,
+        ], ['id' => $this->getID(), 'status' => (int) $this->fields['status']]);
+        if ($DB->affectedRows() !== 1) {
+            return false;
+        }
+        \Glpi\Event::log($this->getID(), 'PluginLagapenakLoan', 4, 'lagapenak',
+            sprintf('%s cancelled loan #%d', $_SESSION['glpiname'] ?? $uid, $this->getID()));
+        return $this->getFromDB($this->getID());
+    }
+
+    /** Entity moves are recorded for the integration API (a loan may leave a client's scope). */
+    function post_updateItem($history = true) {
+        if (in_array('entities_id', $this->updates ?? [], true) && isset($this->oldvalues['entities_id'])) {
+            PluginLagapenakLoanEvent::record(
+                PluginLagapenakLoanEvent::ENTITY_CHANGED, $this->fields,
+                (int) $this->oldvalues['entities_id'], (int) $this->fields['entities_id']
+            );
+        }
+        parent::post_updateItem($history);
     }
 
     /**
@@ -380,7 +510,34 @@ class PluginLagapenakLoan extends CommonDBTM {
 
     function prepareInputForUpdate($input) {
         // Solicitante and the public identifier cannot be changed after creation
-        unset($input['users_id'], $input['uuid']);
+        unset($input['users_id'], $input['uuid'], $input['beneficiary_validated']);
+        foreach (self::getCancellationFields() as $field) {
+            unset($input[$field]);
+        }
+        // Cancelling goes through cancel() (who, when, why); a cancelled loan stays cancelled
+        if (isset($input['status'])
+            && ((int) $input['status'] === self::STATUS_CANCELLED) !== self::isCancelled($this->fields)) {
+            unset($input['status']);
+        }
+        // G1-ID01: when the beneficiary changes, the same rule as for new loans applies. Loans created
+        // before the rule keep their data as is until someone edits the beneficiary.
+        $ben_changed = false;
+        foreach (['beneficiary_name', 'beneficiary_email', 'beneficiary_dni'] as $field) {
+            if (array_key_exists($field, $input) && (string) $input[$field] !== (string) ($this->fields[$field] ?? '')) {
+                $ben_changed = true;
+            }
+        }
+        if ($ben_changed) {
+            $error = PluginLagapenakBeneficiary::checkForForm(
+                $input['beneficiary_email'] ?? $this->fields['beneficiary_email'] ?? '',
+                $input['beneficiary_dni'] ?? $this->fields['beneficiary_dni'] ?? ''
+            );
+            if ($error !== '') {
+                Session::addMessageAfterRedirect($error, false, ERROR);
+                return false;
+            }
+            $input['beneficiary_validated'] = 1;
+        }
         // A signature is only ever written by the signing workflow, which updates the row directly.
         // Without this, saving the loan form could rewrite or back-date a signed delivery note.
         foreach (self::getSignatureFields() as $field) {
@@ -674,7 +831,8 @@ class PluginLagapenakLoan extends CommonDBTM {
      * The caller (loan.form.php) wraps this in its own <form>.
      */
     function renderFields($ID) {
-        $loan   = ($ID > 0) ? $this->fields : [];
+        // A new loan rejected by validation is shown again with what was typed (loan.form.php fills fields)
+        $loan   = ($ID > 0) ? $this->fields : ($this->fields ?: []);
         $labels = self::getFieldLabels();
 
         // ── Row 1: Name + Status ───────────────────────────────────────
@@ -801,25 +959,34 @@ class PluginLagapenakLoan extends CommonDBTM {
         $ben_email = $loan['beneficiary_email'] ?? '';
         $ben_dni   = $loan['beneficiary_dni']   ?? '';
 
-        if ($ID <= 0) {
-            // New form: pre-fill from requester's GLPI data
-            $req = new User();
-            if ($req->getFromDB((int)($_SESSION['glpiID'] ?? 0))) {
-                if (empty($ben_name)) {
-                    $rn = trim(($req->fields['realname'] ?? '') . ' ' . ($req->fields['firstname'] ?? ''));
-                    $ben_name = $rn ?: ($req->fields['name'] ?? '');
-                }
-                if (empty($ben_email)) {
-                    $ben_email = UserEmail::getDefaultForUser($req->getID()) ?: '';
-                }
-            }
+        // G1-ID01: the beneficiary (who receives the material) is entered expressly. It is usually not the
+        // requester, so nothing is pre-filled; a button copies the requester's data when they are the same.
+        $req_id = $ID > 0 ? (int) ($loan['users_id'] ?? 0) : (int) ($_SESSION['glpiID'] ?? 0);
+        $req    = new User();
+        $req_name = $req_email = '';
+        if ($req_id > 0 && $req->getFromDB($req_id)) {
+            $req_name  = trim(($req->fields['realname'] ?? '') . ' ' . ($req->fields['firstname'] ?? '')) ?: ($req->fields['name'] ?? '');
+            $req_email = UserEmail::getDefaultForUser($req_id) ?: '';
         }
 
         echo '<div class="row g-3 mb-1 mt-1">';
-        echo '<div class="col-12">';
+        echo '<div class="col-12 d-flex align-items-center gap-3">';
         echo '<p class="mb-0 fw-bold text-secondary" style="font-size:.78rem;text-transform:uppercase;letter-spacing:.6px;">';
         echo '<i class="fas fa-user me-1"></i>' . __('Beneficiary', 'lagapenak') . '</p>';
+        if ($req_name !== '' || $req_email !== '') {
+            echo '<button type="button" class="btn btn-sm btn-outline-secondary" id="lagapenak-ben-requester"'
+                . ' data-name="' . htmlspecialchars($req_name) . '" data-email="' . htmlspecialchars($req_email) . '">'
+                . '<i class="fas fa-user-check me-1"></i>' . __('The beneficiary is the requester', 'lagapenak') . '</button>';
+            echo Html::scriptBlock("document.getElementById('lagapenak-ben-requester').addEventListener('click', function () {
+                var f = this.closest('form');
+                f.querySelector('[name=beneficiary_name]').value  = this.dataset.name;
+                f.querySelector('[name=beneficiary_email]').value = this.dataset.email;
+            });");
+        }
         echo '</div>';
+        echo '<div class="col-12"><small class="text-muted">'
+            . __('Person who receives the material (artist, resident...), not who requests it. Email or DNI/NIE required (at least one); with a passport or foreign document, the email.', 'lagapenak')
+            . '</small></div>';
         echo '</div>';
 
         echo '<div class="row g-3 mb-3">';
@@ -832,7 +999,7 @@ class PluginLagapenakLoan extends CommonDBTM {
         echo '<input type="email" class="form-control" name="beneficiary_email" value="' . htmlspecialchars($ben_email) . '">';
         echo '</div>';
         echo '<div class="col-md-3">';
-        echo '<label class="form-label fw-bold">' . __('Passport / ID', 'lagapenak') . '</label>';
+        echo '<label class="form-label fw-bold">' . __('DNI/NIE or passport', 'lagapenak') . '</label>';
         echo '<input type="text" class="form-control" name="beneficiary_dni" value="' . htmlspecialchars($ben_dni) . '">';
         echo '</div>';
         echo '</div>';
@@ -999,12 +1166,15 @@ class PluginLagapenakLoan extends CommonDBTM {
 
     public function cleanDBonPurge() {
         global $DB;
+        // The integration API reports the deletion, with where the material was at that moment
+        // (computed before the asset lines are deleted)
+        PluginLagapenakLoanEvent::record(
+            PluginLagapenakLoanEvent::DELETED, $this->fields,
+            (int) $this->fields['entities_id'], (int) $this->fields['entities_id'],
+            self::materialStatusOfLoan($this->getID(), (int) $this->fields['status'])
+        );
         $DB->delete('glpi_plugin_lagapenak_loanitems',    ['loans_id' => $this->getID()]);
         $DB->delete('glpi_plugin_lagapenak_loancomments', ['loans_id' => $this->getID()]);
-        // Links are kept as tombstones so that Kide-Artean learns the loan is gone
-        if ($DB->tableExists('glpi_plugin_lagapenak_loanlinks')) {
-            PluginLagapenakLoanLink::markLoanDeleted($this->getID());
-        }
     }
 
     // ── Cron: recordatorio de devolución ─────────────────────────────────────

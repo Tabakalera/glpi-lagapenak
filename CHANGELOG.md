@@ -4,21 +4,42 @@ All notable changes to this project will be documented in this file.
 
 ## [1.7.0-dev] - Unreleased (branch `feature/api-g1`, number to be decided at release)
 
-Integration API G1 for Kide-Artean. Contract: `docs/api/openapi-g1.yaml`. Built on 1.6.1, which is unchanged.
+Integration API G1 for Kide-Artean (read-only), beneficiary identification (G1-ID01) and explicit
+cancellation. Contract: `docs/api/openapi-g1.yaml`. Built on 1.6.1, which is unchanged.
+Pending: security review, DPD validation of the fingerprint mechanism, release authorisation.
 
 ### Added
-- `front/api.php/v1/...`: server-to-server API, read-only for loans. Six operations: `meta`, loan search (by number, by linked residency or assignment, or by changes since a cursor), one loan, create/remove a link (idempotent) and link changes. No operation creates, edits, signs, cancels or deletes loans
-- Exposes only identifiers, material, dates, statuses and whether/when the delivery note was signed. Never the loan name, observations, custom fields, comments, people, ID numbers, signatures or documents
-- Links between a loan and one Kide-Artean residency plus assignments of that same residency (`glpi_plugin_lagapenak_loanlinks`). Removed links are kept with who and when; links of a deleted loan become `loan_deleted`; a loan moved out of the client's entities shows as `unavailable`
-- Every loan gets a random UUID (`uuid` column, filled in for existing loans on update); it cannot be changed from the form
-- API clients (`glpi_plugin_lagapenak_apiclients`): bearer token stored as a SHA-256 hash and shown once, expiry of 12 months at most, rotation with a grace period, immediate revocation, scopes, authorised entities (optionally with sub-entities) checked on every request, allowed source IPs, HTTPS required, trusted reverse proxies, per-client rate limit and a lockout of 5 minutes after 20 failed credentials from one IP
-- API log (`glpi_plugin_lagapenak_apilogs`): client, date, method, route, result, IP, request id and Kide-Artean user. No bodies. Kept 365 days by default (daily task `ApiLogClean`)
-- *Setup › Plugins › Lagapenak › Configure* (Super-Admin): enable the API, manage clients, see the last 50 calls
+- `front/api.php/v1/...`: read-only server-to-server API, four operations: `meta`, `loan-events` (level 1,
+  incremental discovery), `loans?number=` / `loans?uuids=` and `loans/{uuid}` (level 2, detail). Lagapenak
+  does not know residencies or assignments: Kide-Artean identifies the beneficiary and associates loans
+- Beneficiary identification without personal data: HMAC-SHA256 fingerprints of the normalised email and
+  DNI/NIE ("g1-v1", shared test vectors in `docs/api/g1-hmac-vectors.json`), with a key that belongs to the
+  integration, stored encrypted with GLPI's key, identified by `kid`, rotated with a transition period
+- Computed material status: pending delivery, partially delivered, delivered, partially returned, returned,
+  returned with incident, cancelled (G1-F01, G1-F02)
+- Change feed from 2026-01-01 (loans active from that date, including older loans still running), with
+  deletions and moves out of the authorised entities; total order and opaque cursor; changes of the client's
+  entities or of the keys send every loan again
+- Explicit cancellation of requests whose material was never handed over (supervisor of the loan's entity,
+  reason required): the loan is kept with who, when and why; a cancelled loan can no longer be changed,
+  signed or receive material. Not available on signed loans or once any material was delivered
+- Every loan gets a random UUID (filled in for existing loans on update), not editable
+- API clients (one scope `loans:read`), API log without bodies (parameters logged only with their expected
+  format), daily task `ApiLogClean`, Super-Admin page (*Setup › Plugins › Lagapenak › Configure*)
+
+### Changed
+- Loan form: the beneficiary is no longer pre-filled with the requester's data; a button copies it when they
+  really are the same person. New loans need at least one valid identifier: a valid email or a valid DNI/NIE
+  (format and letter). Passports and foreign documents are accepted, with an email. Editing the beneficiary
+  of an existing loan applies the same rule; older loans keep their data until someone edits the beneficiary
+- A loan can no longer be created already cancelled, nor cancelled or reopened through the loan form
 
 ### Notes
 - The API is **disabled** after install or update until a Super-Admin enables it
-- GLPI 11: the API path is declared stateless in `plugin_lagapenak_boot()` (no session, cookie, CSRF token or session firewall). GLPI 10: the script disables session cookies itself
-- Uninstall removes API clients (credentials) and keeps links and the API log (records), like loans
+- GLPI 11: the API path is declared stateless in `plugin_lagapenak_boot()`; GLPI 10: the script disables
+  session cookies itself
+- Uninstall removes API clients and integration keys (credentials) and keeps loans, the loan event log and
+  the API log (records)
 
 ## [1.6.1] - Unreleased
 

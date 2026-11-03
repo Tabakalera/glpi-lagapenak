@@ -148,7 +148,8 @@ function plugin_lagapenak_install() {
 }
 
 /**
- * G1 integration API (Kide-Artean): loan UUIDs, links, API clients and API log.
+ * G1 integration API (Kide-Artean): loan UUIDs, beneficiary check flag, cancellation record, loan events,
+ * API clients and API log.
  * Idempotent: only creates what is missing. The API stays disabled until a Super-Admin enables it.
  */
 function plugin_lagapenak_install_api() {
@@ -177,30 +178,34 @@ function plugin_lagapenak_install_api() {
         );
     }
 
-    if (!$DB->tableExists('glpi_plugin_lagapenak_loanlinks')) {
+    // G1-ID01: beneficiary entered and checked with the current rules (0 = created before them)
+    // Cancellation: who, when and why (status CANCELLED alone existed before, without record)
+    foreach ([
+        'beneficiary_validated' => "TINYINT(1) NOT NULL DEFAULT 0",
+        'cancel_date'           => "TIMESTAMP NULL DEFAULT NULL",
+        'cancel_users_id'       => "INT UNSIGNED NOT NULL DEFAULT 0",
+        'cancel_reason'         => "TEXT NULL DEFAULT NULL",
+    ] as $col => $def) {
+        if (!$DB->fieldExists('glpi_plugin_lagapenak_loans', $col)) {
+            plugin_lagapenak_query_or_fail("ALTER TABLE `glpi_plugin_lagapenak_loans` ADD COLUMN `$col` $def");
+        }
+    }
+
+    // Deletions and entity moves, for the API change feed (no personal data)
+    if (!$DB->tableExists('glpi_plugin_lagapenak_loanevents')) {
         plugin_lagapenak_query_or_fail(
-            "CREATE TABLE `glpi_plugin_lagapenak_loanlinks` (
-                `id`                  INT UNSIGNED NOT NULL AUTO_INCREMENT,
-                `loans_id`            INT UNSIGNED NOT NULL DEFAULT 0,
-                `loan_uuid`           CHAR(36) NOT NULL DEFAULT '',
-                `loan_number`         INT UNSIGNED NOT NULL DEFAULT 0,
-                `source`              VARCHAR(32) NOT NULL DEFAULT '',
-                `object_type`         VARCHAR(20) NOT NULL DEFAULT '',
-                `object_id`           CHAR(36) NOT NULL DEFAULT '',
-                `parent_residency_id` CHAR(36) NULL DEFAULT NULL,
-                `label`               VARCHAR(40) NOT NULL DEFAULT '',
-                `state`               VARCHAR(16) NOT NULL DEFAULT 'active',
-                `created_by`          CHAR(36) NULL DEFAULT NULL,
-                `removed_by`          CHAR(36) NULL DEFAULT NULL,
-                `apiclients_id`       INT UNSIGNED NOT NULL DEFAULT 0,
-                `date_creation`       TIMESTAMP NULL DEFAULT NULL,
-                `date_mod`            TIMESTAMP NULL DEFAULT NULL,
-                `date_removed`        TIMESTAMP NULL DEFAULT NULL,
+            "CREATE TABLE `glpi_plugin_lagapenak_loanevents` (
+                `id`               INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `loans_id`         INT UNSIGNED NOT NULL DEFAULT 0,
+                `loan_uuid`        CHAR(36) NOT NULL DEFAULT '',
+                `event`            VARCHAR(20) NOT NULL DEFAULT '',
+                `entities_id_from` INT UNSIGNED NOT NULL DEFAULT 0,
+                `entities_id_to`   INT UNSIGNED NOT NULL DEFAULT 0,
+                `material_status`  VARCHAR(24) NULL DEFAULT NULL,
+                `date`             TIMESTAMP NULL DEFAULT NULL,
                 PRIMARY KEY (`id`),
-                UNIQUE KEY `unicity` (`loans_id`, `source`, `object_type`, `object_id`),
-                KEY `object` (`source`, `object_type`, `object_id`),
                 KEY `loan_uuid` (`loan_uuid`),
-                KEY `date_mod` (`date_mod`)
+                KEY `date` (`date`)
             ) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation}"
         );
     }
@@ -265,6 +270,7 @@ function plugin_lagapenak_install_api() {
         'api_trusted_proxies'    => '',
         'api_rate_per_minute'    => 120,
         'api_log_retention_days' => 365,
+        'api_sync_from'          => '2026-01-01',
     ];
     $current = Config::getConfigurationValues('plugin:lagapenak', array_keys($defaults));
     $missing = array_diff_key($defaults, $current);
@@ -300,8 +306,8 @@ function plugin_lagapenak_set_display_prefs() {
  * Uninstall keeps the loan records: loans (with their signed delivery notes), asset lines and comments
  * are evidence of handovers and must not disappear with a click. Reinstalling the plugin finds them
  * again (install only creates what is missing). Deleting them for good is a manual, documented step
- * (README, "Uninstalling"). Personal iCal tokens and API clients are access credentials, not records: they
- * are removed. Kide-Artean links and the API log are records and are kept, like the loans.
+ * (README, "Uninstalling"). Personal iCal tokens, API clients and the integration keys are credentials, not
+ * records: they are removed. The loan event log and the API log are records and are kept, like the loans.
  */
 function plugin_lagapenak_uninstall() {
     global $DB;
@@ -321,6 +327,7 @@ function plugin_lagapenak_uninstall() {
     // A reinstall starts with the API disabled again
     Config::deleteConfigurationValues('plugin:lagapenak', [
         'api_enabled', 'api_require_https', 'api_trusted_proxies', 'api_rate_per_minute', 'api_log_retention_days',
+        'api_sync_from', 'api_hmac_keys', 'api_hmac_keys_mod',
     ]);
 
     // Remove display preferences

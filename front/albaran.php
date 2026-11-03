@@ -45,6 +45,13 @@ $footer_fs    = plugin_lagapenak_find_img('albaran_footer');
 $header_web   = plugin_lagapenak_img_web('albaran_header');
 $footer_web   = plugin_lagapenak_img_web('albaran_footer');
 
+// A cancelled request is never signed and gets no signing link
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_signature']) || isset($_POST['action_gen_token']))
+    && PluginLagapenakLoan::isCancelled($loan->fields)) {
+    Session::addMessageAfterRedirect(__('The loan is cancelled: it can no longer be changed.', 'lagapenak'), false, ERROR);
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . (int) $loan->getID());
+}
+
 // ── POST: save signature ──────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_signature'])) {
     $sig_data     = $_POST['signature_data']          ?? '';

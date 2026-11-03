@@ -3,9 +3,10 @@
 /**
  * Integration API G1 (contract: docs/api/openapi-g1.yaml).
  *
- * Read-only access to loans in the client's entities and creation/removal of links with Kide-Artean
- * objects. Never exposes loan names, free texts, people, ID numbers, signatures or documents (G1 · D4).
- * Every request is logged without bodies.
+ * Read-only access to the loans of the client's entities, in two levels: discovery (change feed with
+ * identification fingerprints) and detail. Lagapenak does not know residencies or assignments: Kide-Artean
+ * identifies the beneficiary and associates the loan (G1-ID01). Never exposes names, email addresses, ID
+ * numbers, signatures, documents or free texts. Every request is logged without bodies.
  */
 class PluginLagapenakApi {
 
@@ -16,6 +17,7 @@ class PluginLagapenakApi {
     const AUTH_FAILURES = 20;   // failed authentications per IP within AUTH_WINDOW before 429
     const AUTH_WINDOW   = 300;
     const SETTLE_SECONDS = 2;   // changes younger than this are not returned yet (concurrent writes)
+    const UUIDS_MAX      = 50;  // loans per detail request by UUID
 
     const LOAN_STATUS = [
         PluginLagapenakLoan::STATUS_PENDING     => 'pending',
@@ -40,11 +42,6 @@ class PluginLagapenakApi {
         'not_found'                 => 'Not found',
         'method_not_allowed'        => 'Method not allowed',
         'loan_deleted'              => 'Loan deleted',
-        'residency_conflict'        => 'The loan is already linked to another residency',
-        'parent_residency_mismatch' => 'The assignment is not under the residency linked to this loan',
-        'dependent_links'           => 'The residency link has active assignment links',
-        'unsupported_media_type'    => 'Unsupported media type',
-        'validation_failed'         => 'Validation failed',
         'rate_limited'              => 'Too many requests',
         'internal_error'            => 'Internal error',
     ];
@@ -76,7 +73,7 @@ class PluginLagapenakApi {
         $pos  = strpos($path, '/front/api.php');
         $this->route = $pos === false ? '' : substr($path, $pos + strlen('/front/api.php'));
         $this->route = substr(preg_replace('#[^A-Za-z0-9/._-]#', '?', $this->route), 0, 255);
-        $this->query = substr(preg_replace('#[^A-Za-z0-9=&_.:%+-]#', '?', (string) ($_SERVER['QUERY_STRING'] ?? '')), 0, 255);
+        $this->query = self::loggableQuery();
 
         $rid = $this->header('X-Request-Id');
         $this->request_id = ($rid !== null && preg_match('/^[A-Za-z0-9._:-]{1,64}$/', $rid))
@@ -139,10 +136,9 @@ class PluginLagapenakApi {
         $u = '([0-9A-Za-z-]+)';
         $routes = [
             ['#^/v1/meta$#', ['GET' => 'getMeta'], null],
+            ['#^/v1/loan-events$#', ['GET' => 'listEvents'], 'loans:read'],
             ['#^/v1/loans$#', ['GET' => 'listLoans'], 'loans:read'],
             ["#^/v1/loans/$u$#", ['GET' => 'getLoan'], 'loans:read'],
-            ["#^/v1/loans/$u/links/([a-z]+)/$u$#", ['PUT' => 'putLink', 'DELETE' => 'deleteLink'], 'links:write'],
-            ['#^/v1/links$#', ['GET' => 'listLinks'], 'links:read'],
         ];
         foreach ($routes as [$pattern, $methods, $scope]) {
             if (!preg_match($pattern, $r, $args)) {
@@ -163,6 +159,14 @@ class PluginLagapenakApi {
     // ── Operations ──────────────────────────────────────────────────────────
 
     private function getMeta(): array {
+        $keys = [];
+        $active = null;
+        foreach (PluginLagapenakBeneficiary::getUsableKeys() as $k) {
+            $keys[] = ['kid' => $k['kid'], 'state' => $k['state'], 'retire_at' => self::iso($k['retire_at'] ?? null)];
+            if ($k['state'] === 'active') {
+                $active = $k['kid'];
+            }
+        }
         return $this->ok([
             'api_version'    => self::API_VERSION,
             'plugin_version' => PLUGIN_LAGAPENAK_VERSION,
@@ -170,281 +174,217 @@ class PluginLagapenakApi {
             'server_time'    => self::iso(date('Y-m-d H:i:s')),
             'client'         => [
                 'name'                   => $this->client['name'],
-                'source'                 => $this->client['source'],
                 'scopes'                 => PluginLagapenakApiClient::getScopes($this->client),
                 'expires_at'             => self::iso($this->client['expires_at']),
                 'token_rotation_pending' => (bool) $this->client['using_previous_token'],
+                'scope_changed_at'       => self::iso($this->client['scope_mod']),
+            ],
+            'identification' => [
+                'algorithm'       => PluginLagapenakBeneficiary::ALGORITHM,
+                'normalization'   => PluginLagapenakBeneficiary::NORMALIZATION,
+                'active_kid'      => $active,
+                'keys'            => $keys,
+                'keys_changed_at' => self::iso(PluginLagapenakBeneficiary::getKeysChangedAt()),
+            ],
+            'sync'           => [
+                'from'           => $this->config['sync_from'],
+                'settle_seconds' => self::SETTLE_SECONDS,
             ],
             'limits'         => [
                 'page_size_max'       => self::PAGE_MAX,
+                'uuids_max'           => self::UUIDS_MAX,
                 'requests_per_minute' => $this->config['rate_per_minute'],
             ],
         ]);
     }
 
-    private function listLoans(): array {
-        $modes = array_values(array_filter([
-            isset($_GET['number']) ? 'number' : null,
-            (isset($_GET['link_type']) || isset($_GET['link_id'])) ? 'link' : null,
-            isset($_GET['changed_since']) ? 'changes' : null,
-        ]));
-        if (count($modes) !== 1) {
-            return $this->problem(400, 'invalid_request', 'Use exactly one of: number, link_type+link_id, changed_since.');
+    /**
+     * Level 1 (discovery): what changed since the cursor, with identification fingerprints and the minimum
+     * needed to decide whether the detail is needed. Loans of the authorised entities within the sync
+     * window, deletions and moves out of the authorised entities, in one ordered stream.
+     */
+    private function listEvents(): array {
+        if (!isset($_GET['since'])) {
+            return $this->problem(400, 'invalid_request', 'since is required.');
         }
-        if ($modes[0] === 'number') {
-            return $this->searchByNumber();
-        }
-        if ($modes[0] === 'link') {
-            return $this->listByLink();
-        }
-        return $this->listLoanChanges();
-    }
-
-    private function searchByNumber(): array {
-        $number = (string) $_GET['number'];
-        if (!ctype_digit($number) || (int) $number < 1) {
-            return $this->problem(400, 'invalid_request', 'number must be a positive integer.');
-        }
-        if ($this->acting_user === null) {
-            return $this->problem(400, 'invalid_request', 'X-Acting-User is required to search by number.');
-        }
-        $rows = $this->loadLoans('l.`id` = ' . (int) $number);
-        return $this->ok(['data' => $this->serializeLoans($rows)]);
-    }
-
-    private function listByLink(): array {
-        $type = (string) ($_GET['link_type'] ?? '');
-        $id   = (string) ($_GET['link_id'] ?? '');
-        if (!in_array($type, PluginLagapenakLoanLink::getObjectTypes(), true) || !preg_match(self::UUID_RE, $id)) {
-            return $this->problem(400, 'invalid_request', 'link_type must be residency or assignment and link_id a UUID.');
-        }
-        $limit = $this->limit();
-        if ($limit === null) {
-            return $this->problem(400, 'invalid_request', 'limit must be between 1 and ' . self::PAGE_MAX . '.');
-        }
-        $after = 0;
-        if (isset($_GET['page_token'])) {
-            $decoded = self::b64dec((string) $_GET['page_token']);
-            if ($decoded === null || !preg_match('/^p\|(\d+)$/', $decoded, $m)) {
-                return $this->problem(400, 'invalid_request', 'Invalid page_token.');
-            }
-            $after = (int) $m[1];
-        }
-
-        $links = $this->select(
-            "SELECT k.*, l.`entities_id` AS loan_entity, l.`id` AS loan_exists
-             FROM `glpi_plugin_lagapenak_loanlinks` k
-             LEFT JOIN `glpi_plugin_lagapenak_loans` l ON l.`id` = k.`loans_id`
-             WHERE k.`source` = " . $this->q($this->client['source']) . "
-               AND k.`object_type` = " . $this->q($type) . "
-               AND k.`object_id` = " . $this->q(strtolower($id)) . "
-               AND k.`state` <> 'removed' AND k.`id` > $after
-             ORDER BY k.`id` LIMIT " . ($limit + 1)
-        );
-        $more  = count($links) > $limit;
-        $links = array_slice($links, 0, $limit);
-
-        $visible = [];
-        foreach ($links as $k) {
-            if ($this->linkState($k) === PluginLagapenakLoanLink::STATE_ACTIVE) {
-                $visible[] = (int) $k['loans_id'];
-            }
-        }
-        $loans = [];
-        foreach ($visible ? $this->serializeLoans($this->loadLoans('l.`id` IN (' . implode(',', $visible) . ')')) : [] as $loan) {
-            $loans[$loan['number']] = $loan;
-        }
-        $data = [];
-        foreach ($links as $k) {
-            $data[] = [
-                'link' => $this->serializeLink($k),
-                'loan' => $loans[(int) $k['loans_id']] ?? null,
-            ];
-        }
-        $this->count = count($data);
-        return $this->ok([
-            'data'            => $data,
-            'next_page_token' => $more ? self::b64enc('p|' . end($links)['id']) : null,
-        ]);
-    }
-
-    private function listLoanChanges(): array {
-        $cursor = self::parseCursor((string) $_GET['changed_since']);
+        $cursor = self::parseCursor((string) $_GET['since']);
         $limit  = $this->limit();
         if ($cursor === null || $limit === null) {
-            return $this->problem(400, 'invalid_request', 'Invalid changed_since or limit.');
+            return $this->problem(400, 'invalid_request', 'Invalid since or limit.');
         }
-        [$since, $after] = $cursor;
-        $rows = [];
+        [$since, $kind, $after] = $cursor;
+        $until = $this->q(self::settled());
+        $ts    = $this->q($since);
+        $rows  = [];
+
         if ($this->entities) {
-            $src  = $this->q($this->client['source']);
-            $rows = $this->select(
+            $in   = implode(',', $this->entities);
+            $from = $this->q($this->config['sync_from'] . ' 00:00:00');
+            // Loans: kind 0
+            $after_loan = $kind === 0 ? "(t.changed_at > $ts OR (t.changed_at = $ts AND t.id > $after))" : "t.changed_at > $ts";
+            foreach ($this->select(
                 'SELECT * FROM (SELECT ' . self::LOAN_COLUMNS . ', ' . $this->loanChangedAt() . " AS changed_at
                    FROM `glpi_plugin_lagapenak_loans` l
-                   WHERE l.`entities_id` IN (" . implode(',', $this->entities) . ")
-                     AND EXISTS (SELECT 1 FROM `glpi_plugin_lagapenak_loanlinks` k
-                                 WHERE k.`loans_id` = l.`id` AND k.`source` = $src AND k.`state` = 'active')
+                   WHERE l.`entities_id` IN ($in) AND (" . self::syncWindow($from) . ")
                  ) t
-                 WHERE (t.changed_at > " . $this->q($since) . ' OR (t.changed_at = ' . $this->q($since) . " AND t.id > $after))
-                   AND t.changed_at <= " . $this->q(self::settled()) . '
-                 ORDER BY t.changed_at, t.id LIMIT ' . ($limit + 1)
-            );
-        }
-        $more = count($rows) > $limit;
-        $rows = array_slice($rows, 0, $limit);
-        $last = end($rows);
-        return $this->ok([
-            'data'       => $this->serializeLoans($rows),
-            'next_since' => $last ? self::cursor($last['changed_at'], (int) $last['id']) : self::cursor($since, $after),
-            'has_more'   => $more,
-        ]);
-    }
-
-    private function getLoan(string $uuid): array {
-        $loan = $this->findLoan($uuid);
-        if (!is_array($loan)) {
-            return $loan === 410 ? $this->problem(410, 'loan_deleted') : $this->problem(404, 'not_found');
-        }
-        return $this->ok($this->serializeLoans([$loan])[0]);
-    }
-
-    private function putLink(string $uuid, string $type, string $object_id): array {
-        if ($this->acting_user === null) {
-            return $this->problem(400, 'invalid_request', 'X-Acting-User is required.');
-        }
-        if (!in_array($type, PluginLagapenakLoanLink::getObjectTypes(), true)) {
-            return $this->problem(404, 'not_found');
-        }
-        if (!preg_match(self::UUID_RE, $object_id)) {
-            return $this->problem(400, 'invalid_request', 'object_id must be a UUID.');
-        }
-        $raw = (string) file_get_contents('php://input');
-        if (trim($raw) !== '' && stripos((string) ($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) {
-            return $this->problem(415, 'unsupported_media_type');
-        }
-        $body = trim($raw) === '' ? [] : json_decode($raw, true);
-        if (!is_array($body) || (trim($raw) !== '' && substr(ltrim($raw), 0, 1) !== '{')) {
-            return $this->problem(422, 'validation_failed', 'The body must be a JSON object.');
-        }
-        $errors = [];
-        foreach (array_diff(array_keys($body), ['label', 'parent_residency_id']) as $field) {
-            $errors[] = ['field' => (string) $field, 'message' => 'Unknown field.'];
-        }
-        $label = $body['label'] ?? '';
-        if (!is_string($label) || strlen($label) > 40 || !preg_match('#^[A-Za-z0-9._/-]*$#', $label)) {
-            $errors[] = ['field' => 'label', 'message' => 'At most 40 characters: letters, digits, . _ / -'];
-        }
-        $parent = $body['parent_residency_id'] ?? null;
-        if ($type === PluginLagapenakLoanLink::TYPE_ASSIGNMENT) {
-            if (!is_string($parent) || !preg_match(self::UUID_RE, $parent)) {
-                $errors[] = ['field' => 'parent_residency_id', 'message' => 'Required UUID for an assignment link.'];
+                 WHERE $after_loan AND t.changed_at <= $until
+                 ORDER BY t.changed_at, t.id LIMIT " . ($limit + 1)
+            ) as $l) {
+                $rows[] = ['k' => 0, 'id' => (int) $l['id'], 'ts' => $l['changed_at'], 'loan' => $l];
             }
-        } elseif ($parent !== null) {
-            $errors[] = ['field' => 'parent_residency_id', 'message' => 'Not allowed for a residency link.'];
+            // Deletions and moves out of the client's entities: kind 1
+            $after_event = $kind === 0 ? "e.`date` >= $ts" : "(e.`date` > $ts OR (e.`date` = $ts AND e.`id` > $after))";
+            foreach ($this->select(
+                "SELECT e.* FROM `glpi_plugin_lagapenak_loanevents` e
+                 WHERE ((e.`event` = 'deleted' AND e.`entities_id_from` IN ($in))
+                     OR (e.`event` = 'entity_changed' AND e.`entities_id_from` IN ($in) AND e.`entities_id_to` NOT IN ($in)))
+                   AND $after_event AND e.`date` <= $until
+                 ORDER BY e.`date`, e.`id` LIMIT " . ($limit + 1)
+            ) as $e) {
+                $rows[] = ['k' => 1, 'id' => (int) $e['id'], 'ts' => $e['date'], 'event' => $e];
+            }
         }
-        if ($errors) {
-            return $this->problem(422, 'validation_failed', null, [], $errors);
-        }
-
-        $loan = $this->findLoan($uuid);
-        if (!is_array($loan)) {
-            return $loan === 410 ? $this->problem(410, 'loan_deleted') : $this->problem(404, 'not_found');
-        }
-        [$status, $result] = PluginLagapenakLoanLink::put(
-            $loan, $this->client, $type, strtolower($object_id),
-            is_string($parent) ? strtolower($parent) : null, (string) $label, $this->acting_user
-        );
-        if (is_string($result)) {
-            return $this->problem($status, $result);
-        }
-        $result['loan_entity'] = $loan['entities_id'];
-        $result['loan_exists'] = $loan['id'];
-        return $this->ok($this->serializeLink($result), $status);
-    }
-
-    private function deleteLink(string $uuid, string $type, string $object_id): array {
-        if ($this->acting_user === null) {
-            return $this->problem(400, 'invalid_request', 'X-Acting-User is required.');
-        }
-        if (!preg_match(self::UUID_RE, $uuid) || !in_array($type, PluginLagapenakLoanLink::getObjectTypes(), true)
-            || !preg_match(self::UUID_RE, $object_id)
-        ) {
-            return $this->problem(404, 'not_found');
-        }
-        $link = PluginLagapenakLoanLink::findByLoanUuid(strtolower($uuid), $this->client['source'], $type, strtolower($object_id));
-        if (!$link) {
-            return $this->problem(404, 'not_found');
-        }
-        [$status, $result] = PluginLagapenakLoanLink::remove($link, $this->acting_user);
-        if (is_string($result)) {
-            return $this->problem($status, $result);
-        }
-        $loan = $this->select('SELECT `id`, `entities_id` FROM `glpi_plugin_lagapenak_loans` WHERE `id` = ' . (int) $result['loans_id']);
-        $result['loan_exists'] = $loan[0]['id'] ?? null;
-        $result['loan_entity'] = $loan[0]['entities_id'] ?? null;
-        return $this->ok($this->serializeLink($result), $status);
-    }
-
-    private function listLinks(): array {
-        if (!isset($_GET['changed_since'])) {
-            return $this->problem(400, 'invalid_request', 'changed_since is required.');
-        }
-        $cursor = self::parseCursor((string) $_GET['changed_since']);
-        $limit  = $this->limit();
-        if ($cursor === null || $limit === null) {
-            return $this->problem(400, 'invalid_request', 'Invalid changed_since or limit.');
-        }
-        [$since, $after] = $cursor;
-        // A link "changes" with itself, with its loan (entity moves) and with the client's authorisations
-        $scope_mod = $this->q((string) ($this->client['scope_mod'] ?: '1970-01-02 00:00:00'));
-        $rows = $this->select(
-            "SELECT * FROM (SELECT k.*, l.`entities_id` AS loan_entity, l.`id` AS loan_exists,
-                    GREATEST(COALESCE(k.`date_mod`, k.`date_creation`),
-                             COALESCE(l.`date_mod`, k.`date_mod`, k.`date_creation`), $scope_mod) AS changed_at
-               FROM `glpi_plugin_lagapenak_loanlinks` k
-               LEFT JOIN `glpi_plugin_lagapenak_loans` l ON l.`id` = k.`loans_id`
-               WHERE k.`source` = " . $this->q($this->client['source']) . "
-             ) t
-             WHERE (t.changed_at > " . $this->q($since) . ' OR (t.changed_at = ' . $this->q($since) . " AND t.id > $after))
-               AND t.changed_at <= " . $this->q(self::settled()) . '
-             ORDER BY t.changed_at, t.id LIMIT ' . ($limit + 1)
-        );
+        usort($rows, function ($a, $b) {
+            return [$a['ts'], $a['k'], $a['id']] <=> [$b['ts'], $b['k'], $b['id']];
+        });
         $more = count($rows) > $limit;
         $rows = array_slice($rows, 0, $limit);
-        $last = end($rows);
-        $data = [];
-        foreach ($rows as $k) {
-            $data[] = $this->serializeLink($k, $k['changed_at']);
+
+        $loans = array_column(array_filter($rows, function ($r) { return $r['k'] === 0; }), 'loan');
+        $ctx   = $this->loanContext($loans);
+        $data  = [];
+        foreach ($rows as $r) {
+            if ($r['k'] === 0) {
+                $l = $r['loan'];
+                $data[] = [
+                    'event'           => 'upsert',
+                    'loan_uuid'       => $l['uuid'],
+                    'number'          => (int) $l['id'],
+                    'changed_at'      => self::iso($l['changed_at']),
+                    'period'          => ['start' => self::iso($l['fecha_inicio']), 'end' => self::iso($l['fecha_fin'])],
+                    'material_status' => $ctx['material'][(int) $l['id']],
+                    'beneficiary'     => $ctx['beneficiary'][(int) $l['id']],
+                ];
+            } else {
+                $e = $r['event'];
+                $data[] = [
+                    'event'                       => $e['event'] === PluginLagapenakLoanEvent::DELETED ? 'deleted' : 'unavailable',
+                    'loan_uuid'                   => $e['loan_uuid'],
+                    'number'                      => (int) $e['loans_id'],
+                    'changed_at'                  => self::iso($e['date']),
+                    'material_status_at_deletion' => $e['event'] === PluginLagapenakLoanEvent::DELETED ? $e['material_status'] : null,
+                ];
+            }
         }
+        $last = end($rows);
         $this->count = count($data);
         return $this->ok([
             'data'       => $data,
-            'next_since' => $last ? self::cursor($last['changed_at'], (int) $last['id']) : self::cursor($since, $after),
+            'next_since' => $last ? self::cursor($last['ts'], $last['k'], $last['id']) : self::cursor($since, $kind, $after),
             'has_more'   => $more,
         ]);
+    }
+
+    /**
+     * Level 2 (detail) by number (a person looking for a loan, any date) or by a list of UUIDs (loans
+     * selected after discovery, or reconciliation). Never a full listing.
+     */
+    private function listLoans(): array {
+        $by_number = isset($_GET['number']);
+        $by_uuids  = isset($_GET['uuids']);
+        if ($by_number === $by_uuids) {
+            return $this->problem(400, 'invalid_request', 'Use exactly one of: number, uuids.');
+        }
+        if ($by_number) {
+            $number = (string) $_GET['number'];
+            if (!ctype_digit($number) || (int) $number < 1) {
+                return $this->problem(400, 'invalid_request', 'number must be a positive integer.');
+            }
+            if ($this->acting_user === null) {
+                return $this->problem(400, 'invalid_request', 'X-Acting-User is required to search by number.');
+            }
+            return $this->ok(['data' => $this->serializeLoans($this->loadLoans('l.`id` = ' . (int) $number))]);
+        }
+
+        $uuids = array_values(array_unique(array_map('strtolower', explode(',', (string) $_GET['uuids']))));
+        if (!$uuids || count($uuids) > self::UUIDS_MAX) {
+            return $this->problem(400, 'invalid_request', 'uuids: between 1 and ' . self::UUIDS_MAX . ' UUIDs.');
+        }
+        foreach ($uuids as $u) {
+            if (!preg_match(self::UUID_RE, $u)) {
+                return $this->problem(400, 'invalid_request', 'uuids must be UUIDs separated by commas.');
+            }
+        }
+        $rows = $this->loadLoans('l.`uuid` IN (' . implode(',', array_map([$this, 'q'], $uuids)) . ')');
+        $found = array_column($rows, 'uuid');
+        $not_found = [];
+        foreach (array_diff($uuids, $found) as $u) {
+            $deletion = PluginLagapenakLoanEvent::findDeletion($u, $this->entities);
+            $not_found[] = [
+                'uuid'                        => $u,
+                'reason'                      => $deletion ? 'deleted' : 'not_available',
+                'material_status_at_deletion' => $deletion['material_status'] ?? null,
+            ];
+        }
+        return $this->ok(['data' => $this->serializeLoans($rows), 'not_found' => $not_found]);
+    }
+
+    private function getLoan(string $uuid): array {
+        if (!preg_match(self::UUID_RE, $uuid)) {
+            return $this->problem(404, 'not_found');
+        }
+        $uuid = strtolower($uuid);
+        $rows = $this->loadLoans('l.`uuid` = ' . $this->q($uuid));
+        if ($rows) {
+            return $this->ok($this->serializeLoans($rows)[0]);
+        }
+        return PluginLagapenakLoanEvent::findDeletion($uuid, $this->entities)
+            ? $this->problem(410, 'loan_deleted')
+            : $this->problem(404, 'not_found');
     }
 
     // ── Data ────────────────────────────────────────────────────────────────
 
-    // Only what the contract exposes: no name, texts, people, signature image or ID numbers
-    const LOAN_COLUMNS = "l.`id`, l.`uuid`, l.`entities_id`, l.`status`, l.`fecha_inicio`, l.`fecha_fin`,
+    // Only what the contract exposes and what is needed to compute it. Beneficiary values are read to
+    // compute fingerprints and are never returned.
+    const LOAN_COLUMNS = "l.`id`, l.`uuid`, l.`entities_id`, l.`users_id`, l.`status`, l.`fecha_inicio`, l.`fecha_fin`,
         l.`date_request_status`, l.`requested_date_end`, l.`signature_date`,
         (l.`signature_data` IS NOT NULL AND l.`signature_data` <> '') AS is_signed,
+        l.`cancel_date`, l.`beneficiary_email`, l.`beneficiary_dni`, l.`beneficiary_validated`,
         l.`date_creation`, l.`date_mod`";
 
-    private function loanChangedAt(): string {
-        $src = $this->q($this->client['source']);
-        $min = "'1970-01-02 00:00:00'";
-        return "GREATEST(
-            COALESCE(l.`date_mod`, l.`date_creation`, $min),
-            COALESCE(l.`signature_date`, $min),
-            COALESCE((SELECT MAX(i.`date_mod`) FROM `glpi_plugin_lagapenak_loanitems` i WHERE i.`loans_id` = l.`id`), $min),
-            COALESCE((SELECT MAX(k.`date_mod`) FROM `glpi_plugin_lagapenak_loanlinks` k
-                      WHERE k.`loans_id` = l.`id` AND k.`source` = $src), $min))";
+    /**
+     * Loans that belong to the change feed: anything that was or is active from the sync date on, so that a
+     * loan started before and still running (or returned late) is not lost.
+     */
+    private static function syncWindow(string $from): string {
+        return "l.`fecha_fin` IS NULL OR l.`fecha_fin` >= $from OR l.`fecha_inicio` >= $from
+            OR l.`date_creation` >= $from OR l.`date_mod` >= $from OR l.`cancel_date` >= $from
+            OR l.`status` IN (" . PluginLagapenakLoan::STATUS_PENDING . ',' . PluginLagapenakLoan::STATUS_IN_PROGRESS . ','
+            . PluginLagapenakLoan::STATUS_DELIVERED . ")
+            OR EXISTS (SELECT 1 FROM `glpi_plugin_lagapenak_loanitems` iw WHERE iw.`loans_id` = l.`id`
+                       AND (iw.`status` = " . PluginLagapenakLoanItem::STATUS_DELIVERED . " OR iw.`date_mod` >= $from))";
     }
 
     /**
-     * Loans matching a condition, restricted to the client's entities.
+     * Version of a loan as the API sees it: the loan, its lines, the signature, the cancellation, and also
+     * the client's authorisations and the integration keys (a change there sends every loan again).
+     */
+    private function loanChangedAt(): string {
+        $min = "'1970-01-02 00:00:00'";
+        $scope = $this->q((string) ($this->client['scope_mod'] ?: '1970-01-02 00:00:00'));
+        $keys  = $this->q((string) (PluginLagapenakBeneficiary::getKeysChangedAt() ?: '1970-01-02 00:00:00'));
+        return "GREATEST(
+            COALESCE(l.`date_mod`, l.`date_creation`, $min),
+            COALESCE(l.`signature_date`, $min),
+            COALESCE(l.`cancel_date`, $min),
+            COALESCE((SELECT MAX(i.`date_mod`) FROM `glpi_plugin_lagapenak_loanitems` i WHERE i.`loans_id` = l.`id`), $min),
+            $scope, $keys)";
+    }
+
+    /**
+     * Loans matching a condition, restricted to the client's entities (no date window: the detail of an
+     * older loan stays available).
      */
     private function loadLoans(string $where): array {
         if (!$this->entities) {
@@ -459,46 +399,50 @@ class PluginLagapenakApi {
     }
 
     /**
-     * Loan row in scope, 410 if this client's links show it was purged, 404 otherwise.
-     *
-     * @return array|int
+     * Asset lines, material status and beneficiary block of a set of loans, in three queries.
      */
-    private function findLoan(string $uuid) {
-        if (!preg_match(self::UUID_RE, $uuid)) {
-            return 404;
-        }
-        $uuid = strtolower($uuid);
-        $rows = $this->loadLoans('l.`uuid` = ' . $this->q($uuid));
-        if ($rows) {
-            return $rows[0];
-        }
-        if (countElementsInTable('glpi_plugin_lagapenak_loans', ['uuid' => $uuid]) === 0
-            && PluginLagapenakLoanLink::hasTombstone($uuid, $this->client['source'])
-        ) {
-            return 410;
-        }
-        return 404;
-    }
-
-    private function serializeLoans(array $rows): array {
+    private function loanContext(array $rows): array {
+        $ctx = ['items' => [], 'material' => [], 'beneficiary' => []];
         if (!$rows) {
-            return [];
+            return $ctx;
         }
-        $ids   = array_map(function ($r) { return (int) $r['id']; }, $rows);
-        $items = [];
+        $ids = array_map(function ($r) { return (int) $r['id']; }, $rows);
         foreach ($this->select(
             'SELECT `loans_id`, `itemtype`, `items_id`, `status`, `date_checkout`, `date_checkin`
              FROM `glpi_plugin_lagapenak_loanitems` WHERE `loans_id` IN (' . implode(',', $ids) . ') ORDER BY `id`'
         ) as $it) {
-            $items[(int) $it['loans_id']][] = $it;
+            $ctx['items'][(int) $it['loans_id']][] = $it;
         }
-        $assets = $this->assetLabels(array_merge([], ...array_values($items)));
-
-        $out = [];
+        $requesters = array_unique(array_map(function ($r) { return (int) $r['users_id']; }, $rows));
+        $emails = [];
+        foreach ($this->select(
+            'SELECT `users_id`, `email` FROM `glpi_useremails` WHERE `users_id` IN (' . implode(',', $requesters) . ')'
+        ) as $e) {
+            [$st, $norm] = PluginLagapenakBeneficiary::normalizeEmail($e['email']);
+            if ($norm !== null) {
+                $emails[(int) $e['users_id']][] = $norm;
+            }
+        }
+        $keys = PluginLagapenakBeneficiary::getUsableKeys();
         foreach ($rows as $l) {
+            $id = (int) $l['id'];
+            $ctx['material'][$id] = PluginLagapenakLoan::materialStatus(
+                (int) $l['status'], array_column($ctx['items'][$id] ?? [], 'status')
+            );
+            $ctx['beneficiary'][$id] = PluginLagapenakBeneficiary::describe($l, $emails[(int) $l['users_id']] ?? [], $keys);
+        }
+        return $ctx;
+    }
+
+    private function serializeLoans(array $rows): array {
+        $ctx    = $this->loanContext($rows);
+        $assets = $this->assetLabels(array_merge([], ...array_values($ctx['items'])));
+        $out    = [];
+        foreach ($rows as $l) {
+            $id      = (int) $l['id'];
             $list    = [];
             $summary = ['total' => 0, 'pending' => 0, 'delivered' => 0, 'returned' => 0, 'returned_with_incident' => 0];
-            foreach ($items[(int) $l['id']] ?? [] as $it) {
+            foreach ($ctx['items'][$id] ?? [] as $it) {
                 $status = self::ITEM_STATUS[(int) $it['status']] ?? 'pending';
                 $summary['total']++;
                 $summary[$status]++;
@@ -517,25 +461,22 @@ class PluginLagapenakApi {
             } elseif ((int) $l['date_request_status'] === PluginLagapenakLoan::DATE_REQUEST_REJECTED) {
                 $request = ['status' => 'rejected', 'requested_end' => self::iso($l['requested_date_end'])];
             }
-            $links = [];
-            foreach (PluginLagapenakLoanLink::getForLoan((int) $l['id'], $this->client['source']) as $k) {
-                $k['loan_exists'] = $l['id'];
-                $k['loan_entity'] = $l['entities_id'];
-                $links[] = $this->serializeLink($k);
-            }
-            $signed = (bool) $l['is_signed'];
-            $out[]  = [
+            $signed    = (bool) $l['is_signed'];
+            $cancelled = (int) $l['status'] === PluginLagapenakLoan::STATUS_CANCELLED;
+            $out[] = [
                 'uuid'              => $l['uuid'],
-                'number'            => (int) $l['id'],
-                'glpi_url'          => plugin_lagapenak_web_dir(true) . '/front/loan.form.php?id=' . (int) $l['id'],
+                'number'            => $id,
+                'glpi_url'          => plugin_lagapenak_web_dir(true) . '/front/loan.form.php?id=' . $id,
                 'status'            => self::LOAN_STATUS[(int) $l['status']] ?? 'pending',
+                'material_status'   => $ctx['material'][$id],
+                'created_at'        => self::iso($l['date_creation']),
                 'period'            => ['start' => self::iso($l['fecha_inicio']), 'end' => self::iso($l['fecha_fin'])],
                 'extension_request' => $request,
                 'delivery_note'     => ['signed' => $signed, 'signed_at' => $signed ? self::iso($l['signature_date']) : null],
+                'cancellation'      => $cancelled ? ['cancelled_at' => self::iso($l['cancel_date'])] : null,
+                'beneficiary'       => $ctx['beneficiary'][$id],
                 'items_summary'     => $summary,
                 'items'             => $list,
-                'links'             => $links,
-                'created_at'        => self::iso($l['date_creation']),
                 'changed_at'        => self::iso($l['changed_at']),
             ];
         }
@@ -568,36 +509,32 @@ class PluginLagapenakApi {
         return $out;
     }
 
-    /**
-     * Effective state: an active link whose loan is outside the client's entities is "unavailable".
-     */
-    private function linkState(array $k): string {
-        if ($k['state'] === PluginLagapenakLoanLink::STATE_ACTIVE
-            && (empty($k['loan_exists']) || !in_array((int) $k['loan_entity'], $this->entities, true))
-        ) {
-            return PluginLagapenakLoanLink::STATE_UNAVAILABLE;
-        }
-        return $k['state'];
-    }
-
-    private function serializeLink(array $k, ?string $changed_at = null): array {
-        return [
-            'loan_uuid'           => $k['loan_uuid'],
-            'loan_number'         => (int) $k['loan_number'],
-            'object_type'         => $k['object_type'],
-            'object_id'           => $k['object_id'],
-            'parent_residency_id' => $k['parent_residency_id'],
-            'label'               => $k['label'],
-            'state'               => $this->linkState($k),
-            'created_at'          => self::iso($k['date_creation']),
-            'created_by'          => $k['created_by'],
-            'removed_at'          => self::iso($k['date_removed']),
-            'removed_by'          => $k['removed_by'],
-            'changed_at'          => self::iso($changed_at ?? ($k['date_mod'] ?: $k['date_creation'])),
-        ];
-    }
-
     // ── Helpers ─────────────────────────────────────────────────────────────
+
+    /**
+     * Query string for the log: only the contract's parameters, and only values with their expected format
+     * (anything else a client sends, personal data included, is logged as "?").
+     */
+    private static function loggableQuery(): string {
+        $formats = [
+            'since'  => '/^[A-Za-z0-9_:.+-]{1,60}$/',
+            'limit'  => '/^\d{1,4}$/',
+            'number' => '/^\d{1,10}$/',
+            'uuids'  => '/^[0-9a-fA-F,-]{1,2000}$/',
+        ];
+        $parts = [];
+        foreach ($_GET as $name => $value) {
+            $name = (string) $name;
+            if (!isset($formats[$name])) {
+                $parts[] = preg_match('/^[a-z_]{1,20}$/', $name) ? $name . '=?' : '?';
+            } elseif (is_string($value) && preg_match($formats[$name], $value)) {
+                $parts[] = $name . '=' . $value;
+            } else {
+                $parts[] = $name . '=?';
+            }
+        }
+        return substr(implode('&', $parts), 0, 255);
+    }
 
     private function select(string $sql): array {
         global $DB;
@@ -640,14 +577,14 @@ class PluginLagapenakApi {
         return date('Y-m-d H:i:s', time() - self::SETTLE_SECONDS);
     }
 
-    private static function cursor(string $ts, int $id): string {
-        return self::b64enc('c|' . $ts . '|' . $id);
+    private static function cursor(string $ts, int $kind, int $id): string {
+        return self::b64enc('c2|' . $ts . '|' . $kind . '|' . $id);
     }
 
     /**
      * Opaque cursor from a previous page, or an RFC 3339 date to start from.
      *
-     * @return array{0:string,1:int}|null [local timestamp, last id]
+     * @return array{0:string,1:int,2:int}|null [local timestamp, kind of the last row, its id]
      */
     static function parseCursor(string $value): ?array {
         if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/', $value)) {
@@ -658,11 +595,11 @@ class PluginLagapenakApi {
             }
             $d->setTimezone(new DateTimeZone(date_default_timezone_get()));
             $ts = $d->format('Y-m-d H:i:s');
-            return [$ts < '1970-01-02 00:00:00' ? '1970-01-02 00:00:00' : $ts, 0];
+            return [$ts < '1970-01-02 00:00:00' ? '1970-01-02 00:00:00' : $ts, 0, 0];
         }
         $decoded = self::b64dec($value);
-        if ($decoded !== null && preg_match('/^c\|(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\|(\d+)$/', $decoded, $m)) {
-            return [$m[1], (int) $m[2]];
+        if ($decoded !== null && preg_match('/^c2\|(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\|([01])\|(\d+)$/', $decoded, $m)) {
+            return [$m[1], (int) $m[2], (int) $m[3]];
         }
         return null;
     }

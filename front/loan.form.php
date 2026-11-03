@@ -91,6 +91,11 @@ if (isset($_POST['save_loan'])) {
                 (int) $_POST['entities_id'], (int) $_POST['users_id_destinatario']
             )) !== '') {
             $form_error = $recipient_error;
+        } elseif ($is_new
+            && ($beneficiary_error = PluginLagapenakBeneficiary::checkForForm(
+                $_POST['beneficiary_email'] ?? '', $_POST['beneficiary_dni'] ?? ''
+            )) !== '') {
+            $form_error = $beneficiary_error;
         } else {
             $conflicts = ($ID > 0 && !$conflicts_confirmed)
                 ? PluginLagapenakLoanItem::getConflictsForDateChange(
@@ -124,6 +129,34 @@ if (isset($_POST['delete_loan'])) {
     // pre_deleteItem() checks again and leaves the message
     if (!$loan->delete(['id' => $ID])) { Html::back(); }
     Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.php');
+}
+
+// ── Cancel a request (kept with who, when and why; not a deletion) ──────────
+if (isset($_POST['cancel_loan'])) {
+    if (!$loan->getFromDB($ID) || !PluginLagapenakLoan::canCancelLoan($loan)) {
+        $blocker = $loan->isNewItem() ? '' : PluginLagapenakLoan::getCancelBlocker($loan->fields);
+        Session::addMessageAfterRedirect($blocker !== '' ? $blocker : __('Access denied'), false, ERROR);
+        Html::back();
+    }
+    if (trim(PluginLagapenakBeneficiary::raw($_POST['cancel_reason'] ?? '')) === '') {
+        Session::addMessageAfterRedirect(__('Enter the reason for the cancellation.', 'lagapenak'), false, ERROR);
+        Html::back();
+    }
+    if ($loan->cancel(PluginLagapenakBeneficiary::raw($_POST['cancel_reason']))) {
+        Session::addMessageAfterRedirect(__('The request has been cancelled. It stays in the list with its history.', 'lagapenak'));
+    }
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.form.php?id=' . $ID);
+}
+
+// A cancelled loan is closed: its material and dates no longer change
+if ($ID > 0 && PluginLagapenakLoan::isCancelled($current_loan->fields)
+    && array_intersect(array_keys($_POST), [
+        'add_loanitem', 'remove_loanitem', 'update_loanitem', 'bulk_update_items',
+        'save_date_request', 'approve_date_request',
+    ])
+) {
+    Session::addMessageAfterRedirect(__('The loan is cancelled: it can no longer be changed.', 'lagapenak'), false, ERROR);
+    Html::back();
 }
 
 // ── Handle loan item CRUD ────────────────────────────────────────────────────
@@ -438,6 +471,30 @@ echo '<div class="card-body">';
 
 if ($form_error) {
     echo '<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>' . htmlspecialchars($form_error) . '</div>';
+    if ($ID == 0) {
+        $loan->fields = array_map(
+            [PluginLagapenakBeneficiary::class, 'raw'],
+            array_intersect_key($_POST, array_flip([
+                'name', 'entities_id', 'users_id_destinatario', 'fecha_inicio', 'fecha_fin', 'observaciones',
+                'field_1', 'field_2', 'field_3', 'field_4', 'field_5',
+                'beneficiary_name', 'beneficiary_email', 'beneficiary_dni',
+            ]))
+        );
+    }
+}
+
+// ── Cancelled request: who, when and why ────────────────────────────────────
+if ($ID > 0 && PluginLagapenakLoan::isCancelled($loan->fields)) {
+    $cancel_user = new User();
+    $cancel_who  = !empty($loan->fields['cancel_users_id']) && $cancel_user->getFromDB((int) $loan->fields['cancel_users_id'])
+        ? $cancel_user->getFriendlyName() : '';
+    echo '<div class="alert alert-secondary"><i class="fas fa-ban me-2"></i><strong>' . __('Cancelled request', 'lagapenak') . '</strong>';
+    if (!empty($loan->fields['cancel_date'])) {
+        echo ' · ' . htmlspecialchars(Html::convDateTime($loan->fields['cancel_date']))
+            . ($cancel_who !== '' ? ' · ' . htmlspecialchars($cancel_who) : '');
+        echo '<div class="mt-1">' . nl2br(htmlspecialchars((string) $loan->fields['cancel_reason'])) . '</div>';
+    }
+    echo '</div>';
 }
 
 // ── Date change held because of conflicts: ask for confirmation ─────────────
@@ -530,14 +587,34 @@ if ($can_supervise || $ID == 0) {
         echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
         echo '<i class="fas fa-file-signature me-1"></i>' . __('Delivery note', 'lagapenak') . '</a>';
     }
+    $can_cancel = $ID > 0 && PluginLagapenakLoan::canCancelLoan($loan);
+    if ($can_cancel) {
+        echo '<button type="button" class="btn btn-outline-danger ms-auto" data-bs-toggle="modal" data-bs-target="#cancelLoanModal">';
+        echo '<i class="fas fa-ban me-1"></i>' . __('Cancel request', 'lagapenak') . '</button>';
+    }
     if ($ID > 0 && PluginLagapenakLoan::canDeleteLoan($loan)) {
-        echo '<button type="submit" name="delete_loan" class="btn btn-danger ms-auto"
+        echo '<button type="submit" name="delete_loan" class="btn btn-danger' . ($can_cancel ? '' : ' ms-auto') . '"
                       onclick="return confirm(\'' . __('Delete this loan?', 'lagapenak') . '\')">';
         echo '<i class="fas fa-trash me-1"></i>' . __('Delete', 'lagapenak');
         echo '</button>';
     }
     echo '</div>';
     echo '</form>';
+
+    if ($can_cancel) {
+        echo '<div class="modal fade" id="cancelLoanModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">';
+        echo '<form method="POST" action="' . plugin_lagapenak_web_dir() . '/front/loan.form.php?id=' . $ID . '">';
+        echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
+        echo '<div class="modal-header"><h5 class="modal-title">' . __('Cancel request', 'lagapenak') . '</h5>'
+            . '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>';
+        echo '<div class="modal-body"><p class="text-muted small">'
+            . __('The request stays in the list with its history and can no longer be changed. Use it when the material will not be delivered.', 'lagapenak')
+            . '</p><label class="form-label fw-bold">' . __('Reason', 'lagapenak') . ' <span class="text-danger">*</span></label>'
+            . '<textarea class="form-control" name="cancel_reason" rows="3" maxlength="1000" required></textarea></div>';
+        echo '<div class="modal-footer"><button type="submit" name="cancel_loan" value="1" class="btn btn-danger">'
+            . '<i class="fas fa-ban me-1"></i>' . __('Cancel request', 'lagapenak') . '</button></div>';
+        echo '</form></div></div></div>';
+    }
 
 } else {
     // ── Read-only view (requester with existing loan) ─────────────────────────

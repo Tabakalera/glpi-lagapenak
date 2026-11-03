@@ -41,6 +41,10 @@ if (PluginLagapenakLoan::isSigned($row)) {
 $loan = new PluginLagapenakLoan();
 $loan->getFromDB((int) $row['id']);
 $ID = $loan->getID();
+if (PluginLagapenakLoan::isCancelled($loan->fields)) {
+    $DB->update('glpi_plugin_lagapenak_loans', ['sign_token' => null, 'sign_token_expires' => null], ['id' => $ID]);
+    die('<p style="font-family:sans-serif;padding:40px;">Este préstamo está cancelado. El enlace ya no es válido.</p>');
+}
 
 // ── POST: save signature ──────────────────────────────────────────────────────
 $signed_ok = false;
