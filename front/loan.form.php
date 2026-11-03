@@ -115,7 +115,8 @@ if (isset($_POST['delete_loan'])) {
     $is_own_pending = ((int)($loan->fields['users_id'] ?? 0) === (int)($_SESSION['glpiID'] ?? 0))
                       && (int)($loan->fields['status'] ?? 0) === PluginLagapenakLoan::STATUS_PENDING;
     if (!$can_supervise && !$is_own_pending) { Html::back(); }
-    $loan->delete(['id' => $ID]);
+    // pre_deleteItem() refuses signed loans for non-supervisors and leaves a message
+    if (!$loan->delete(['id' => $ID])) { Html::back(); }
     Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.php');
 }
 
@@ -575,10 +576,11 @@ if ($can_supervise || $ID == 0) {
         echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
         echo '<i class="fas fa-file-signature me-1"></i>' . __('Delivery note', 'lagapenak') . '</a>';
     }
-    // Solicitante can delete their own loan while still Pending
+    // Solicitante can delete their own loan while still Pending and not signed
     if ($ID > 0
         && (int)($loan->fields['users_id'] ?? 0) === (int)($_SESSION['glpiID'] ?? 0)
         && (int)($loan->fields['status'] ?? 0) === PluginLagapenakLoan::STATUS_PENDING
+        && !PluginLagapenakLoan::isSigned($loan->fields)
     ) {
         echo '<form method="POST" action="' . plugin_lagapenak_web_dir() . '/front/loan.form.php' . '?id=' . $ID . '" class="ms-auto">';
         echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';

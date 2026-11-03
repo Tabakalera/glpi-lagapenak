@@ -547,3 +547,36 @@ msgstr "This delivery note is already signed. A signed delivery note cannot be s
 
 msgid "The signature could not be saved: a name and a drawn signature are required."
 msgstr "The signature could not be saved: a name and a drawn signature are required."
+
+msgid "shown on screen"
+msgstr "shown on screen"
+
+msgid "exceptional recipient, reason: %s"
+msgstr "exceptional recipient, reason: %s"
+
+msgid "Signing link"
+msgstr "Signing link"
+
+msgid "Signed delivery note"
+msgstr "Signed delivery note"
+
+msgid "The link will be sent to the signer"
+msgstr "The link will be sent to the signer"
+
+msgid "The signer has no email address: add the beneficiary's email to the loan."
+msgstr "The signer has no email address: add the beneficiary's email to the loan."
+
+msgid "Show link on screen"
+msgstr "Show link on screen"
+
+msgid "Other address (exceptional)"
+msgstr "Other address (exceptional)"
+
+msgid "Reason (required for another address, recorded in the log)"
+msgstr "Reason (required for another address, recorded in the log)"
+
+msgid "Not sent: the delivery note can only be sent to addresses linked to the loan, and the signing link only to the signer. A supervisor may use another address by stating the reason."
+msgstr "Not sent: the delivery note can only be sent to addresses linked to the loan, and the signing link only to the signer. A supervisor may use another address by stating the reason."
+
+msgid "A loan with a signed delivery note cannot be deleted by its requester."
+msgstr "A loan with a signed delivery note cannot be deleted by its requester."

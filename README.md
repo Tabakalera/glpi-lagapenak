@@ -18,7 +18,18 @@ Plugin para GLPI 10.0.x y 11.0.x que permite gestionar préstamos de activos (or
 2. Ve a **Configuración → Plugins**
 3. Localiza **Lagapenak** y pulsa **Instalar**, luego **Activar**
 
-Para desinstalar, pulsa **Desactivar** y luego **Desinstalar** desde el mismo menú. Las tablas de base de datos se eliminan automáticamente.
+Para desinstalar, pulsa **Desactivar** y luego **Desinstalar** desde el mismo menú.
+
+Desde la versión 1.6.1, desinstalar **conserva** los préstamos, sus líneas de material, los comentarios y las firmas de los albaranes, porque son el registro de las entregas. Sí se eliminan los tokens iCal (general y personales), las preferencias de visualización y el derecho `plugin_lagapenak_loan` de los perfiles. Al reinstalar, los préstamos vuelven a aparecer y hay que volver a asignar los derechos en los perfiles.
+
+Actualizar el plugin (copiar una versión nueva y pulsar **Actualizar**) nunca borra datos: la instalación solo crea las tablas y columnas que faltan.
+
+Borrado definitivo de los datos: solo con autorización y tras una copia de seguridad de la base de datos, ejecutar con el plugin desinstalado:
+
+```sql
+DROP TABLE glpi_plugin_lagapenak_loancomments, glpi_plugin_lagapenak_loanitems, glpi_plugin_lagapenak_loans;
+DELETE FROM glpi_profilerights WHERE name = 'plugin_lagapenak_albaran';
+```
 
 ---
 
@@ -212,7 +223,18 @@ Plugin for GLPI 10.0.x and 11.0.x to manage asset loans (computers, peripherals,
 2. Go to **Setup → Plugins**
 3. Find **Lagapenak**, click **Install** then **Enable**
 
-To uninstall: click **Disable** then **Uninstall**. Database tables are removed automatically.
+To uninstall: click **Disable** then **Uninstall**.
+
+Since 1.6.1, uninstalling **keeps** the loans, their asset lines, comments and signed delivery notes, because they are the record of the handovers. The iCal tokens (general and personal), display preferences and the `plugin_lagapenak_loan` profile right are removed. After a reinstall the loans are back and the rights have to be granted again in the profiles.
+
+Updating the plugin (copying a new version and clicking **Update**) never deletes data: install only creates missing tables and columns.
+
+Deleting the data for good: only with authorization and after a database backup, with the plugin uninstalled:
+
+```sql
+DROP TABLE glpi_plugin_lagapenak_loancomments, glpi_plugin_lagapenak_loanitems, glpi_plugin_lagapenak_loans;
+DELETE FROM glpi_profilerights WHERE name = 'plugin_lagapenak_albaran';
+```
 
 ---
 

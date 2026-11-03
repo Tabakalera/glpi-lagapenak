@@ -657,3 +657,36 @@ msgstr "Este albarán ya está firmado. Un albarán firmado no se puede volver a
 
 msgid "The signature could not be saved: a name and a drawn signature are required."
 msgstr "No se ha podido guardar la firma: se necesitan el nombre y la firma dibujada."
+
+msgid "shown on screen"
+msgstr "mostrado en pantalla"
+
+msgid "exceptional recipient, reason: %s"
+msgstr "destinatario excepcional, motivo: %s"
+
+msgid "Signing link"
+msgstr "Enlace de firma"
+
+msgid "Signed delivery note"
+msgstr "Albarán firmado"
+
+msgid "The link will be sent to the signer"
+msgstr "El enlace se enviará a la persona firmante"
+
+msgid "The signer has no email address: add the beneficiary's email to the loan."
+msgstr "La persona firmante no tiene correo: añade el correo del beneficiario en el préstamo."
+
+msgid "Show link on screen"
+msgstr "Mostrar el enlace en pantalla"
+
+msgid "Other address (exceptional)"
+msgstr "Otra dirección (excepcional)"
+
+msgid "Reason (required for another address, recorded in the log)"
+msgstr "Motivo (obligatorio para otra dirección; queda registrado)"
+
+msgid "Not sent: the delivery note can only be sent to addresses linked to the loan, and the signing link only to the signer. A supervisor may use another address by stating the reason."
+msgstr "No enviado: el albarán solo se puede enviar a direcciones vinculadas al préstamo, y el enlace de firma solo a la persona firmante. Un supervisor puede usar otra dirección indicando el motivo."
+
+msgid "A loan with a signed delivery note cannot be deleted by its requester."
+msgstr "El solicitante no puede borrar un préstamo con el albarán firmado."

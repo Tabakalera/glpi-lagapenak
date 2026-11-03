@@ -4,6 +4,7 @@ class PluginLagapenakLoan extends CommonDBTM {
 
     static $rightname = 'plugin_lagapenak_loan';
 
+
     const STATUS_PENDING     = 1;  // Pendiente   — reserva creada, aún no entregada
     const STATUS_IN_PROGRESS = 5;  // En curso    — algunos activos entregados, otros pendientes
     const STATUS_DELIVERED   = 2;  // Entregado   — todos los activos entregados
@@ -110,6 +111,54 @@ class PluginLagapenakLoan extends CommonDBTM {
         return !empty($fields['signature_data']);
     }
 
+    /**
+     * Email addresses linked to a loan, as [lower-cased address => role label]: every GLPI address of
+     * the requester and of the recipient (supervisor), and the beneficiary's address.
+     * Non-supervisors may only send the delivery note to these.
+     */
+    static function getLinkedEmails(PluginLagapenakLoan $loan): array {
+        $linked = [];
+        $add = function (string $email, string $role) use (&$linked) {
+            $email = strtolower(trim($email));
+            if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) && !isset($linked[$email])) {
+                $linked[$email] = $role;
+            }
+        };
+        foreach (UserEmail::getAllForUser((int) ($loan->fields['users_id'] ?? 0)) as $email) {
+            $add($email, __('Requester', 'lagapenak'));
+        }
+        $add((string) ($loan->fields['beneficiary_email'] ?? ''), __('Beneficiary', 'lagapenak'));
+        foreach (UserEmail::getAllForUser((int) ($loan->fields['users_id_destinatario'] ?? 0)) as $email) {
+            $add($email, __('Recipient', 'lagapenak'));
+        }
+        return $linked;
+    }
+
+    /**
+     * Address of the person who signs: the beneficiary when the loan names one, otherwise the requester
+     * (who then picks the material up). '' when the signer has no known address.
+     */
+    static function getSignerEmail(PluginLagapenakLoan $loan): string {
+        if (trim($loan->fields['beneficiary_name'] ?? '') !== '' || trim($loan->fields['beneficiary_email'] ?? '') !== '') {
+            $email = strtolower(trim($loan->fields['beneficiary_email'] ?? ''));
+        } else {
+            $email = strtolower(trim((string) UserEmail::getDefaultForUser((int) ($loan->fields['users_id'] ?? 0))));
+        }
+        return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
+    }
+
+    /**
+     * Audit trail of every delivery-note document sent by hand (GLPI event log: Administration > Logs).
+     * Records who sent what to which address and, for an address not linked to the loan, the reason.
+     */
+    static function logDocumentSend(int $loans_id, string $what, string $to, string $reason = ''): void {
+        $message = sprintf('%s: %s → %s', $_SESSION['glpiname'] ?? '?', $what, $to !== '' ? $to : __('shown on screen', 'lagapenak'));
+        if ($reason !== '') {
+            $message .= ' · ' . sprintf(__('exceptional recipient, reason: %s', 'lagapenak'), $reason);
+        }
+        \Glpi\Event::log($loans_id, 'PluginLagapenakLoan', 3, 'lagapenak', $message);
+    }
+
     /** The canvas sends a PNG data URL; anything else (or an oversized payload) is rejected. */
     static function isValidSignatureImage(string $data): bool {
         return strlen($data) <= 2 * 1024 * 1024
@@ -212,6 +261,23 @@ class PluginLagapenakLoan extends CommonDBTM {
             $input['status'] = self::STATUS_PENDING;
         }
         return self::sanitizeDates($input);
+    }
+
+    /**
+     * A signed delivery note is evidence of the handover: the requester can no longer delete the loan.
+     * Checked here so it applies to every deletion route. (1.7.0 replaces deletion with cancellation
+     * and keeps the signed versions.)
+     */
+    function pre_deleteItem() {
+        if (self::isSigned($this->fields) && !self::canManageLoan($this)) {
+            Session::addMessageAfterRedirect(
+                __('A loan with a signed delivery note cannot be deleted by its requester.', 'lagapenak'),
+                false,
+                ERROR
+            );
+            return false;
+        }
+        return true;
     }
 
     function prepareInputForUpdate($input) {
