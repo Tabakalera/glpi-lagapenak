@@ -114,11 +114,12 @@ class PluginLagapenakLoan extends CommonDBTM {
     /**
      * Single deletion rule for every route (loan form, GLPI massive actions, API…):
      * - a signed loan is never deleted;
+     * - a cancelled loan is never deleted (G1-F06): it is kept for consultation and audit;
      * - the requester may withdraw their own untouched request (READ + CREATE, entity access), no PURGE needed;
      * - anybody else needs READ + UPDATE + PURGE and access to the loan's entity.
      */
     static function canDeleteLoan(PluginLagapenakLoan $loan): bool {
-        if (empty($loan->fields['id']) || self::isSigned($loan->fields)) {
+        if (empty($loan->fields['id']) || self::isSigned($loan->fields) || self::isCancelled($loan->fields)) {
             return false;
         }
         if (self::isRequester($loan)) {
@@ -229,8 +230,9 @@ class PluginLagapenakLoan extends CommonDBTM {
             'sign_token'         => null,
             'sign_token_expires' => null,
         ], [
-            'id' => $loans_id,
-            'OR' => [['signature_data' => null], ['signature_data' => '']],
+            'id'  => $loans_id,
+            'OR'  => [['signature_data' => null], ['signature_data' => '']],
+            'NOT' => ['status' => self::STATUS_CANCELLED],   // G1-F07: a cancelled request is never signed
         ]);
         return $DB->affectedRows() === 1;
     }
@@ -311,7 +313,9 @@ class PluginLagapenakLoan extends CommonDBTM {
             unset($input[$field]);
         }
         // G1-ID01: the beneficiary is entered expressly, with at least one valid identifier
-        $error = PluginLagapenakBeneficiary::checkForForm($input['beneficiary_email'] ?? '', $input['beneficiary_dni'] ?? '');
+        $error = PluginLagapenakBeneficiary::checkForForm(
+            $input['beneficiary_name'] ?? '', $input['beneficiary_email'] ?? '', $input['beneficiary_dni'] ?? ''
+        );
         if ($error !== '') {
             Session::addMessageAfterRedirect($error, false, ERROR);
             return false;
@@ -396,9 +400,18 @@ class PluginLagapenakLoan extends CommonDBTM {
         return '';
     }
 
-    /** Supervisor of the loan's entity, on a cancellable request. */
+    /**
+     * Who may cancel (G1-F05): the supervisor of the loan's entity, or the original requester for their own
+     * request (READ + CREATE and access to its entity). Either way only a cancellable request.
+     */
     static function canCancelLoan(PluginLagapenakLoan $loan): bool {
-        return self::canManageLoan($loan) && self::getCancelBlocker($loan->fields) === '';
+        if (empty($loan->fields['id'])) {
+            return false;
+        }
+        $allowed = self::canManageLoan($loan)
+            || (self::isRequester($loan) && self::canView() && self::canCreate()
+                && Session::haveAccessToEntity((int) $loan->fields['entities_id']));
+        return $allowed && self::getCancelBlocker($loan->fields) === '';
     }
 
     /**
@@ -420,13 +433,25 @@ class PluginLagapenakLoan extends CommonDBTM {
             'sign_token'         => null,   // a cancelled request is not signed
             'sign_token_expires' => null,
             'date_mod'           => $now,
-        ], ['id' => $this->getID(), 'status' => (int) $this->fields['status']]);
+        ], [
+            // Conditions repeated in the UPDATE itself: a delivery or a signature recorded meanwhile wins
+            'id'     => $this->getID(),
+            'status' => (int) $this->fields['status'],
+            'OR'     => [['signature_data' => null], ['signature_data' => '']],
+            self::expression('NOT EXISTS (SELECT 1 FROM `glpi_plugin_lagapenak_loanitems` ci WHERE ci.`loans_id` = '
+                . (int) $this->getID() . ' AND ci.`status` <> ' . PluginLagapenakLoanItem::STATUS_PENDING . ')'),
+        ]);
         if ($DB->affectedRows() !== 1) {
             return false;
         }
         \Glpi\Event::log($this->getID(), 'PluginLagapenakLoan', 4, 'lagapenak',
             sprintf('%s cancelled loan #%d', $_SESSION['glpiname'] ?? $uid, $this->getID()));
         return $this->getFromDB($this->getID());
+    }
+
+    /** Raw SQL condition for $DB criteria (QueryExpression moved to Glpi\DBAL in GLPI 11). */
+    private static function expression(string $sql) {
+        return class_exists('Glpi\DBAL\QueryExpression') ? new \Glpi\DBAL\QueryExpression($sql) : new \QueryExpression($sql);
     }
 
     /** Entity moves are recorded for the integration API (a loan may leave a client's scope). */
@@ -476,6 +501,14 @@ class PluginLagapenakLoan extends CommonDBTM {
             );
             return false;
         }
+        if (self::isCancelled($this->fields)) {
+            Session::addMessageAfterRedirect(
+                __('A cancelled loan cannot be deleted: it is kept with its history.', 'lagapenak'),
+                false,
+                ERROR
+            );
+            return false;
+        }
         if (!self::canDeleteLoan($this)) {
             Session::addMessageAfterRedirect(
                 __('You cannot delete this loan. A request can only be withdrawn by its requester while nobody has acted on it.', 'lagapenak'),
@@ -509,6 +542,12 @@ class PluginLagapenakLoan extends CommonDBTM {
     }
 
     function prepareInputForUpdate($input) {
+        // G1-F07: a cancelled loan is never reopened nor changed (form, massive actions, GLPI API...).
+        // A new request is created instead.
+        if (self::isCancelled($this->fields)) {
+            Session::addMessageAfterRedirect(__('The loan is cancelled: it can no longer be changed.', 'lagapenak'), false, ERROR);
+            return false;
+        }
         // Solicitante and the public identifier cannot be changed after creation
         unset($input['users_id'], $input['uuid'], $input['beneficiary_validated']);
         foreach (self::getCancellationFields() as $field) {
@@ -521,14 +560,9 @@ class PluginLagapenakLoan extends CommonDBTM {
         }
         // G1-ID01: when the beneficiary changes, the same rule as for new loans applies. Loans created
         // before the rule keep their data as is until someone edits the beneficiary.
-        $ben_changed = false;
-        foreach (['beneficiary_name', 'beneficiary_email', 'beneficiary_dni'] as $field) {
-            if (array_key_exists($field, $input) && (string) $input[$field] !== (string) ($this->fields[$field] ?? '')) {
-                $ben_changed = true;
-            }
-        }
-        if ($ben_changed) {
+        if (PluginLagapenakBeneficiary::isChanged($this->fields, $input)) {
             $error = PluginLagapenakBeneficiary::checkForForm(
+                $input['beneficiary_name'] ?? $this->fields['beneficiary_name'] ?? '',
                 $input['beneficiary_email'] ?? $this->fields['beneficiary_email'] ?? '',
                 $input['beneficiary_dni'] ?? $this->fields['beneficiary_dni'] ?? ''
             );
@@ -985,14 +1019,14 @@ class PluginLagapenakLoan extends CommonDBTM {
         }
         echo '</div>';
         echo '<div class="col-12"><small class="text-muted">'
-            . __('Person who receives the material (artist, resident...), not who requests it. Email or DNI/NIE required (at least one); with a passport or foreign document, the email.', 'lagapenak')
+            . __('Person who receives the material (artist, resident...), not who requests it. Full name required, and email or DNI/NIE (at least one); with a passport or foreign document, the email.', 'lagapenak')
             . '</small></div>';
         echo '</div>';
 
         echo '<div class="row g-3 mb-3">';
         echo '<div class="col-md-5">';
-        echo '<label class="form-label fw-bold">' . __('Full name', 'lagapenak') . '</label>';
-        echo '<input type="text" class="form-control" name="beneficiary_name" value="' . htmlspecialchars($ben_name) . '">';
+        echo '<label class="form-label fw-bold">' . __('Full name', 'lagapenak') . ' <span class="text-danger">*</span></label>';
+        echo '<input type="text" class="form-control" name="beneficiary_name" maxlength="255" value="' . htmlspecialchars($ben_name) . '">';
         echo '</div>';
         echo '<div class="col-md-4">';
         echo '<label class="form-label fw-bold">' . __('Email address', 'lagapenak') . '</label>';
@@ -1003,6 +1037,43 @@ class PluginLagapenakLoan extends CommonDBTM {
         echo '<input type="text" class="form-control" name="beneficiary_dni" value="' . htmlspecialchars($ben_dni) . '">';
         echo '</div>';
         echo '</div>';
+
+        // G1-F08: same checks as PluginLagapenakBeneficiary::checkForForm(), before sending. The server checks
+        // again. Existing loans are only checked when their beneficiary is changed.
+        $ben_msgs = [
+            'name'    => __("Enter the beneficiary's full name.", 'lagapenak'),
+            'email'   => __("The beneficiary's email address is not valid.", 'lagapenak'),
+            'tax'     => __("The beneficiary's DNI/NIE is not valid: check the number and the letter.", 'lagapenak'),
+            'other'   => __('With a passport or foreign document, the beneficiary\'s email address is required.', 'lagapenak'),
+            'missing' => __('Enter the beneficiary\'s email address or DNI/NIE (at least one).', 'lagapenak'),
+        ];
+        echo Html::scriptBlock("(function () {
+            var form = document.querySelector('[name=beneficiary_name]').closest('form');
+            var msgs = " . json_encode($ben_msgs) . ";
+            var initial = ['beneficiary_name', 'beneficiary_email', 'beneficiary_dni'].map(function (n) { return form.querySelector('[name=' + n + ']').value; }).join('|');
+            var isNew = " . ($ID > 0 ? 'false' : 'true') . ";
+            function taxStatus(v) {
+                v = v.toUpperCase().replace(/[ \\t\\n\\r\\f\\v._\\/-]+/g, '');
+                if (v === '') return 'missing';
+                var m = v.match(/^([0-9]{1,8})([A-Z]?)$/), n, x = /^([XYZ])([0-9]{1,7})([A-Z]?)$/.exec(v);
+                if (m) { n = parseInt(m[1], 10); }
+                else if (x) { n = parseInt('XYZ'.indexOf(x[1]) + ('0000000' + x[2]).slice(-7), 10); m = [null, null, x[3]]; }
+                else return 'other';
+                return m[2] !== '' && 'TRWAGMYFPDXBNJZSQVHLCKE'.charAt(n % 23) === m[2] ? 'valid' : 'invalid';
+            }
+            form.addEventListener('submit', function (e) {
+                if (!e.submitter || e.submitter.name !== 'save_loan') return;
+                var name = form.querySelector('[name=beneficiary_name]'), email = form.querySelector('[name=beneficiary_email]'), tax = form.querySelector('[name=beneficiary_dni]');
+                if (!isNew && [name.value, email.value, tax.value].join('|') === initial) return;
+                var ev = email.value.trim().toLowerCase(), ts = taxStatus(tax.value), msg = '';
+                var es = ev === '' ? 'missing' : (ev.length <= 254 && /^[a-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(ev) ? 'valid' : 'invalid');
+                if (name.value.trim() === '') { msg = msgs.name; name.focus(); }
+                else if (es === 'invalid') { msg = msgs.email; email.focus(); }
+                else if (ts === 'invalid') { msg = msgs.tax; tax.focus(); }
+                else if (es !== 'valid' && ts !== 'valid') { msg = ts === 'other' ? msgs.other : msgs.missing; email.focus(); }
+                if (msg !== '') { e.preventDefault(); alert(msg); }
+            });
+        })();");
 
         // ── Campos adicionales (colapsados por defecto si están vacíos) ──
         $has_extra = array_filter(array_map('trim', [

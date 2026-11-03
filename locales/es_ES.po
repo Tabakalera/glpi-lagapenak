@@ -949,3 +949,21 @@ msgstr "Válida hasta"
 
 msgid "With a passport or foreign document, the beneficiary's email address is required."
 msgstr "Con pasaporte o documento extranjero, el email del beneficiario es obligatorio."
+
+msgid "%d with personal data"
+msgstr "%d con datos personales"
+
+msgid "A cancelled loan cannot be deleted: it is kept with its history."
+msgstr "Un préstamo cancelado no se puede borrar: se conserva con su historial."
+
+msgid "Enter the beneficiary's full name."
+msgstr "Introduce el nombre completo del beneficiario."
+
+msgid "Loans, material, states, dates, entity, staff and operational fields; beneficiary fingerprints"
+msgstr "Préstamos, material, estados, fechas, entidad, personal y campos de gestión; huellas del beneficiario"
+
+msgid "Person who receives the material (artist, resident...), not who requests it. Full name required, and email or DNI/NIE (at least one); with a passport or foreign document, the email."
+msgstr "Persona que recibe el material (artista, residente...), no quien lo solicita. Nombre completo obligatorio, y email o DNI/NIE (al menos uno); con pasaporte o documento extranjero, el email."
+
+msgid "Personal data: beneficiary's name and email, signer's name. Every response that carries them is logged"
+msgstr "Datos personales: nombre y email del beneficiario y nombre del firmante. Cada respuesta que los incluye queda registrada"

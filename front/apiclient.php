@@ -199,7 +199,7 @@ echo '</tbody></table></div></div>';
 
 // ── Client form (new or edit) ────────────────────────────────────────────────
 $f = $edit ?: [
-    'name' => 'Kide-Artean', 'source' => 'kide-artean', 'scopes' => implode(' ', PluginLagapenakApiClient::SCOPES),
+    'name' => 'Kide-Artean', 'source' => 'kide-artean', 'scopes' => 'loans:read',
     'entities' => '[]', 'is_recursive' => 0, 'allowed_ips' => '', 'is_active' => 1,
     'expires_at' => date('Y-m-d', time() + 365 * DAY_TIMESTAMP),
 ];
@@ -219,9 +219,14 @@ echo '<div class="col-md-4"><label class="form-label">' . __('Source', 'lagapena
 echo '<div class="col-md-4"><label class="form-label">' . __('Expires (12 months at most)', 'lagapenak') . '</label><input class="form-control" type="date" name="expires_at" value="'
     . $h(substr((string) $f['expires_at'], 0, 10)) . '"></div>';
 echo '</div><div class="row g-2 mt-1"><div class="col-md-4"><label class="form-label">' . __('Scopes', 'lagapenak') . '</label>';
+$scope_help = [
+    'loans:read'          => __('Loans, material, states, dates, entity, staff and operational fields; beneficiary fingerprints', 'lagapenak'),
+    'loans:read:personal' => __("Personal data: beneficiary's name and email, signer's name. Every response that carries them is logged", 'lagapenak'),
+];
 foreach (PluginLagapenakApiClient::SCOPES as $s) {
     echo '<div class="form-check"><input class="form-check-input" type="checkbox" name="scopes[]" value="' . $h($s) . '"'
-        . (in_array($s, $f_scopes, true) ? ' checked' : '') . '><label class="form-check-label">' . $h($s) . '</label></div>';
+        . (in_array($s, $f_scopes, true) ? ' checked' : '') . '><label class="form-check-label"><code>' . $h($s) . '</code>'
+        . '<div class="small text-muted">' . $h($scope_help[$s] ?? '') . '</div></label></div>';
 }
 echo '<div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="is_active" value="1"' . ((int) $f['is_active'] ? ' checked' : '') . '>'
     . '<label class="form-check-label">' . __('Active') . '</label></div>';
@@ -266,7 +271,8 @@ echo '<table class="table table-sm mb-0"><thead><tr><th>' . __('Date') . '</th><
 foreach ($DB->request(['FROM' => 'glpi_plugin_lagapenak_apilogs', 'ORDER' => 'id DESC', 'LIMIT' => 50]) as $l) {
     echo '<tr><td class="text-nowrap">' . $h(Html::convDateTime($l['date'])) . '</td><td>' . $h($client_names[$l['apiclients_id']] ?? '—') . '</td><td>'
         . $h($l['ip']) . '</td><td><code>' . $h($l['method'] . ' ' . $l['route'] . ($l['query'] !== '' ? '?' . $l['query'] : '')) . '</code></td><td>'
-        . (int) $l['status'] . ($l['code'] !== '' ? ' ' . $h($l['code']) : '') . ((int) $l['result_count'] ? ' · ' . (int) $l['result_count'] : '') . '</td><td><code>'
+        . (int) $l['status'] . ($l['code'] !== '' ? ' ' . $h($l['code']) : '') . ((int) $l['result_count'] ? ' · ' . (int) $l['result_count'] : '')
+        . ((int) ($l['personal_count'] ?? 0) ? ' · ' . sprintf(__('%d with personal data', 'lagapenak'), (int) $l['personal_count']) : '') . '</td><td><code>'
         . $h($l['acting_user']) . '</code></td><td><code>' . $h($l['request_id']) . '</code></td></tr>';
 }
 echo '</tbody></table></div></div>';

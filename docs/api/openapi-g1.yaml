@@ -1,30 +1,35 @@
 openapi: 3.1.0
 info:
-  title: Lagapenak · API de integración G1 (Kide-Artean)
-  version: 2.0.0-draft
-  summary: Consulta de solo lectura de préstamos de material, con identificación seudonimizada del beneficiario.
+  title: Lagapenak · API de consulta de préstamos G1
+  version: 3.0.0-draft
+  summary: Interfaz de solo lectura con la información estructurada de los préstamos de material de Lagapenak.
   description: |
-    Contrato funcional único para Lagapenak (plugin GLPI) y Kide-Artean. Cada proyecto lo implementa por
-    separado.
+    Contrato funcional único de la API de préstamos de Lagapenak (plugin GLPI). Su primer consumidor es
+    Kide-Artean; cada proyecto lo implementa por separado.
 
-    **Arquitectura.** Lagapenak es responsable de los préstamos, beneficiarios, material, entregas,
-    devoluciones, incidencias y cancelaciones. La API es **de solo lectura**. Lagapenak no conoce residencias,
-    cesiones ni personas de Kide-Artean: Kide-Artean identifica al beneficiario con las huellas que recibe
-    (G1-ID01) y asocia el préstamo a una residencia o cesión por su cuenta.
+    **Arquitectura.** Lagapenak es responsable de proporcionar datos fiables, completos y estructurados de sus
+    préstamos: identificación, beneficiario, fechas, material, estados, entregas, devoluciones, incidencias,
+    ampliaciones, cancelaciones, firmas (existencia y fecha), cambios y bajas. La API es **de solo lectura**.
+    Lagapenak no conoce residencias, cesiones ni personas del consumidor. El consumidor decide qué préstamos
+    incorpora, cómo identifica a los beneficiarios (G1-ID01), qué asocia automáticamente, qué pasa a revisión
+    manual y qué muestra a cada uno de sus usuarios.
 
     **Dos niveles.**
     - Nivel 1, descubrimiento (`GET /v1/loan-events`): qué préstamos han cambiado, con las huellas del
-      beneficiario y el mínimo para decidir si hace falta el detalle (periodo y estado del material).
-    - Nivel 2, detalle (`GET /v1/loans/{uuid}`, `GET /v1/loans?uuids=…`, `GET /v1/loans?number=…`): solo de
-      los préstamos que Kide-Artean selecciona (coincidentes, en revisión o buscados por número).
+      beneficiario y lo mínimo para decidir (periodo y estado del material). Sin datos personales en claro.
+    - Nivel 2, detalle completo (`GET /v1/loans/{uuid}`, `GET /v1/loans?uuids=…`, `GET /v1/loans?number=…`) de
+      cualquier préstamo de las entidades autorizadas, haya reconocido o no el consumidor al beneficiario.
 
-    **Nunca se expone:** DNI/NIE ni email en claro, nombres de beneficiario, solicitante, firmante o
-    supervisor, firmas, documentos, observaciones, campos libres, notas ni el texto del motivo de cancelación
-    o de las incidencias. Validación del DPD pendiente: el mecanismo de huellas no está aprobado para producción.
+    **Clases de datos** (ver `x-data-classification`): operativos (ámbito `loans:read`), personales del
+    beneficiario y del firmante (ámbito adicional `loans:read:personal`) y datos que nunca se exponen (firmas,
+    documentos, enlaces de firma, DNI/NIE en claro, observaciones, notas, comentarios, motivos, textos de
+    incidencia). Validación del DPD y revisión de seguridad pendientes antes de producción (ver `x-privacy`).
 
     **Decisiones funcionales:** G1-ID01 (identificación), G1-F01 (devuelto con incidencia: cierre ordinario
-    con aviso), G1-F02 (solicitado y no entregado: pendiente hasta cancelación), cancelación explícita en
-    Lagapenak, histórico desde el 01/01/2026.
+    con aviso), G1-F02 (solicitado y no entregado: pendiente hasta cancelación), G1-F04 (revisión manual en el
+    consumidor), G1-F05 (cancelan supervisor de la entidad y solicitante original), G1-F06 (un cancelado no se
+    borra), G1-F07 (un cancelado no se reabre), G1-F08 (nombre del beneficiario obligatorio en préstamos
+    nuevos), histórico desde el 01/01/2026.
 
     **Compatibilidad:** GLPI 10.0.11 – 10.0.x y 11.0.x (probado en 10.0.20, 10.0.24 y 11.0.9). Sin sesión,
     cookie ni token CSRF de GLPI: en GLPI 11 la ruta se declara *stateless* en `plugin_lagapenak_boot()`; en
@@ -33,22 +38,86 @@ info:
     **Activación:** desactivada al instalar o actualizar; la activa un Super-Admin en
     *Configuración › Complementos › Lagapenak › Configurar*. Desactivada, todo responde 404.
 
+    **Estabilidad:** dentro de `v1` solo se añaden campos opcionales o valores nuevos documentados; el
+    consumidor debe ignorar los campos que no conozca. Cualquier cambio incompatible será `v2`.
+
+  x-data-classification:
+    operational:
+      scope: loans:read
+      fields: |
+        Préstamo: uuid, número, referencia, enlace a GLPI, entidad (id y nombre), ticket vinculado, estado,
+        estado del material, alta, periodo previsto, campos de gestión (`details`: convocatoria, proyecto,
+        ubicación, área, departamento), ampliación de fecha (estado, fecha pedida, si se aplica al material),
+        albarán (firmado, fecha de firma, proyecto del albarán, enlace de firma pendiente y su caducidad, nunca
+        el enlace), cancelación (fecha y quién), comentarios (número y fecha del último), fecha de versión.
+        Personal de Tabakalera: solicitante, supervisor destinatario y quien canceló, como id de GLPI y nombre
+        (sin email ni teléfono). Material: id de línea, tipo, id del activo en GLPI, nombre, número de
+        inventario, número de serie, estado, periodo previsto, fecha de último cambio. Beneficiario: estado de
+        los identificadores, avisos de calidad y huellas HMAC.
+      note: |
+        La referencia y los campos de gestión los escribe el personal a mano: pueden contener nombres. Se
+        envían tal como están, sin caracteres de control y con un máximo de 255 caracteres.
+    personal:
+      scope: loans:read:personal (además de loans:read)
+      fields: |
+        Nombre y email del beneficiario tal como constan (`beneficiary.contact`) y nombre de quien firmó el
+        albarán (`delivery_note.signer_name`), solo en el detalle. Sin el ámbito, `contact` y `signer_name` son
+        null. Cada respuesta que los incluye queda contada en el registro (`personal_count`).
+    never:
+      fields: |
+        DNI/NIE en claro (solo su huella), imagen de la firma, documentos y PDF, enlace o token de firma,
+        documento del firmante, observaciones, notas de ampliación, notas de cada material (texto de las
+        incidencias), texto de los comentarios, motivo de la cancelación, credenciales.
+    not_in_model: |
+      Lagapenak no guarda fechas reales de entrega ni de devolución (solo las previstas de cada línea y la
+      fecha de firma) ni un estado propio de la incidencia (solo «devuelto con incidencia» en la línea).
+
+  x-privacy:
+    purpose: |
+      Permitir que el consumidor incorpore los préstamos de material, identifique a sus beneficiarios y
+      resuelva los que no coinciden automáticamente sin depender de acceder a GLPI.
+    minimisation: |
+      Descubrimiento sin datos personales en claro (solo huellas). Datos personales solo en el detalle, solo
+      con el ámbito `loans:read:personal`, y solo nombre y email del beneficiario y nombre del firmante.
+      DNI/NIE nunca en claro. Ningún texto libre sensible.
+    access: |
+      Credencial por cliente (SHA-256 almacenado, caducidad máxima 12 meses, rotación y revocación), entidades
+      GLPI autorizadas comprobadas en cada petición, IP de origen permitidas, HTTPS obligatorio, límite de
+      peticiones y bloqueo por intentos fallidos. Gestión solo por Super-Admin. El ámbito personal se concede
+      expresamente; un cliente nuevo solo tiene `loans:read`.
+    audit: |
+      Cada petición queda registrada (cliente, IP, ruta, parámetros del contrato con formato válido, resultado,
+      número de préstamos, número de préstamos con datos personales, usuario del consumidor si se indica en
+      `X-Acting-User`, identificador de petición). Nunca cuerpos, nombres, emails ni huellas. Conservación
+      configurable (365 días por defecto).
+    consumer_duties: |
+      El consumidor decide qué muestra a cada uno de sus usuarios, registra sus propias consultas y asociaciones
+      y no usa una coincidencia de email marcada con `requester_autofill_possible` como asociación automática.
+    pending: Validación formal del DPD y revisión de seguridad antes de cualquier puesta en producción.
+
   x-identification:
     rule: |
-      G1-ID01, aplicada por Kide-Artean: 1) huella del email; 2) si no hay coincidencia inequívoca, huella del
+      G1-ID01, aplicada por el consumidor: 1) huella del email; 2) si no hay coincidencia inequívoca, huella del
       DNI/NIE; 3) si apuntan a personas distintas, discrepancia y revisión manual; 4) sin coincidencia,
       revisión manual; 5) pasaportes y documentos extranjeros: solo email. La API no decide coincidencias.
+    historical_autofill: |
+      Hasta la 1.6.1 el formulario rellenaba el nombre y el email del beneficiario con los del solicitante
+      (nunca el DNI/NIE). `requester_autofill_possible = true` (email igual a uno del solicitante en un
+      préstamo no revisado con las reglas actuales) indica que el email puede no ser del beneficiario real: el
+      consumidor no debe asociar automáticamente por ese email. Si `tax_id_status = valid`, la huella del
+      DNI/NIE sí es fiable y puede usarse según G1-ID01; si no, revisión manual. Lagapenak no corrige esos datos.
     normalization_g1_v1:
-      email: Quitar espacios ASCII (espacio, tab, CR, LF, NUL, VT) al principio y al final; pasar A-Z a a-z (nada más); validar con la expresión EMAIL_RE de `PluginLagapenakBeneficiary` (solo ASCII, máx. 254); si no cumple, `invalid` y sin huella.
+      email: Quitar espacios ASCII (espacio, tab, CR, LF, NUL, VT) al principio y al final; pasar A-Z a a-z (nada más); validar con `email_regex` (solo ASCII, máx. 254 caracteres); si no cumple, `invalid` y sin huella.
+      email_regex: '^[a-z0-9.!#$%&''*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$'
       tax_id: Pasar a-z a A-Z; quitar espacios ASCII, puntos, guiones, guiones bajos y barras. DNI = 1–8 cifras ASCII + letra, completado con ceros a 8 cifras. NIE = X/Y/Z + 1–7 cifras + letra, completado a 7 cifras (X=0, Y=1, Z=2 para el cálculo). Letra de control obligatoria y correcta (`TRWAGMYFPDXBNJZSQVHLCKE`, número módulo 23); si falta o no cuadra, `invalid`. Cualquier otro formato (pasaporte, documento extranjero) es `other` y no tiene huella.
       message: "lagapenak-g1|v1|<email|tax_id>|<valor normalizado>"
       output: HMAC-SHA256 en hexadecimal en minúsculas.
       vectors: docs/api/g1-hmac-vectors.json (generados con una implementación de referencia independiente en Python; la de PHP coincide en los 28 casos).
     keys: |
-      Clave propia de la integración (32 bytes aleatorios), nunca una clave interna de Kide-Artean. La genera
-      un Super-Admin en Lagapenak, se muestra una sola vez (kid + clave en base64) y se entrega a Kide-Artean
-      por un canal seguro. Lagapenak la guarda cifrada con la clave de GLPI (GLPIKey, `secured_configs`);
-      Kide-Artean, en su almacén de secretos. Cada huella lleva su `kid`.
+      Clave propia de la integración (32 bytes aleatorios), nunca una clave interna del consumidor. La genera
+      un Super-Admin en Lagapenak, se muestra una sola vez (kid + clave en base64) y se entrega al consumidor
+      por un canal seguro. Lagapenak la guarda cifrada con la clave de GLPI (GLPIKey, `secured_configs`); el
+      consumidor, en su almacén de secretos. Cada huella lleva su `kid`.
       Rotación: se genera una clave nueva; la anterior queda en transición los días indicados (30 por
       defecto, máx. 90) y la API envía huellas con las dos. El cambio de claves vuelve a entregar todos los
       préstamos en el descubrimiento (su `changed_at` pasa a ser la fecha del cambio). Al terminar la
@@ -59,7 +128,7 @@ info:
   x-state-matrix:
     description: |
       Estado del préstamo (`status`, el que calcula Lagapenak) y estado del material (`material_status`,
-      calculado aquí a partir de las líneas). El cierre de residencia (lo decide Kide-Artean) debe usar
+      calculado aquí a partir de las líneas). El cierre de residencia (lo decide el consumidor) debe usar
       `material_status`. Líneas: P = pendiente de entrega, E = entregada, D = devuelta, I = devuelta con incidencia.
     material_status:
       pending_delivery: Solicitado y no entregado. Sin líneas, o todas P. Interno - préstamo Pendiente (1). Cierre - bloquea (G1-F02).
@@ -69,11 +138,18 @@ info:
       returned: Devuelto. Todas D. Interno - Devuelto (3). Cierre - permite.
       returned_with_incident: Devuelto con incidencia. Todas D/I y al menos una I. Interno - Devuelto (3). Cierre - permite con aviso (G1-F01).
       cancelled: Préstamo cancelado y ninguna línea E. Interno - Cancelado (4). Cierre - permite.
+    cancellation: |
+      Acción explícita en Lagapenak (G1-F05): supervisor de la entidad del préstamo o solicitante original de
+      su propia solicitud, con motivo obligatorio, solo si no se ha entregado material y el albarán no está
+      firmado (comprobado también en la propia escritura, frente a cambios concurrentes). Se conservan el
+      préstamo, quién, cuándo y por qué. Un cancelado no se borra (G1-F06) ni se reabre por ninguna vía
+      (G1-F07). Cancelar y borrar son operaciones distintas: el borrado de una solicitud intacta por su
+      solicitante sigue existiendo y se comunica como `deleted`.
     special_cases:
       - Un préstamo histórico en estado Cancelado con alguna línea E devuelve `status = cancelled` y el `material_status` de sus líneas (material fuera). La cancelación nueva no lo permite.
       - "Borrado: evento `deleted` en el descubrimiento (con `material_status_at_deletion`), 410 en el detalle, `reason: deleted` en el lote."
       - "Fuera de las entidades autorizadas: evento `unavailable`, 404 en el detalle, `reason: not_available` en el lote."
-      - "Sin respuesta, 5xx, 429, respuesta no JSON o paginación incompleta: no verificable (lo decide Kide-Artean)."
+      - "Sin respuesta, 5xx, 429, respuesta no JSON o paginación incompleta: no verificable (lo decide el consumidor)."
 
   x-sync:
     description: |
@@ -82,9 +158,15 @@ info:
       - Entran en el descubrimiento los préstamos de las entidades autorizadas que estuvieron o están activos
         desde `sync.from` (01/01/2026): fin previsto, inicio, alta, modificación o cancelación desde esa fecha,
         sin fin previsto, estado Pendiente/En curso/Entregado, alguna línea entregada o alguna línea cambiada
-        desde esa fecha. Los anteriores siguen disponibles por número.
-      - Un préstamo vuelve a aparecer cuando cambian el préstamo, sus líneas, la firma o la cancelación, las
-        entidades autorizadas del cliente o las claves de identificación.
+        desde esa fecha. Los anteriores siguen disponibles por número. Un préstamo que ha entrado no sale de
+        la ventana (cualquier cambio posterior lo mantiene).
+      - Un préstamo vuelve a aparecer (`upsert`) cuando cambian el préstamo (beneficiario, fechas, referencia,
+        campos, entidad dentro de las autorizadas, ampliación), sus líneas (estado del material), la firma, la
+        cancelación o sus comentarios, y también las entidades o ámbitos del cliente o las claves de
+        identificación. El cambio de nombre de un usuario, una entidad o un activo en GLPI no genera evento: se
+        refleja en la siguiente aparición del préstamo o en el detalle.
+      - Borrado → `deleted`; paso a una entidad no autorizada → `unavailable`. Ningún préstamo conocido
+        desaparece sin evento, salvo si se reducen las entidades del cliente: ver la reconciliación.
       - Orden total (`changed_at`, tipo, id) y cursor opaco: sin duplicados ni pérdidas al paginar. No se
         entregan cambios de los últimos `settle_seconds` (2 s) para no saltarse escrituras concurrentes.
       - Si `meta.client.scope_changed_at` es posterior a la última reconciliación, comprobar los préstamos
@@ -137,7 +219,8 @@ paths:
       summary: Nivel 1 — descubrimiento incremental
       description: |
         Eventos ordenados desde el cursor: `upsert` (estado actual del préstamo, mínimo), `deleted` (borrado
-        en GLPI) y `unavailable` (movido a una entidad no autorizada). Sin nombres, emails ni DNI.
+        en GLPI) y `unavailable` (movido a una entidad no autorizada). Sin nombres, emails ni DNI en claro,
+        con cualquier ámbito.
       parameters:
         - $ref: '#/components/parameters/RequestId'
         - name: since
@@ -166,11 +249,14 @@ paths:
       summary: Nivel 2 — detalle por número o por lote de UUID
       description: |
         Exactamente uno de:
-        - `number`: búsqueda de una persona (incorporación manual a la revisión). Cualquier fecha; solo
-          entidades autorizadas. Exige `X-Acting-User`, que queda registrado. 0 o 1 resultado.
-        - `uuids`: hasta 50 UUID separados por comas (préstamos seleccionados tras el descubrimiento o
-          reconciliación). Los que no se devuelven aparecen en `not_found` con su motivo.
-        Sin ninguno: 400 (no hay listado completo). No existe búsqueda por huella.
+        - `number`: búsqueda de una persona (incorporación manual). Cualquier fecha; solo entidades
+          autorizadas. Exige `X-Acting-User`, que queda registrado. 0 o 1 resultado.
+        - `uuids`: hasta 50 UUID separados por comas (préstamos seleccionados tras el descubrimiento, en
+          revisión manual o en reconciliación), reconozca o no el consumidor al beneficiario. Los que no se
+          devuelven aparecen en `not_found` con su motivo.
+        Sin ninguno: 400 (no hay listado completo). No existe búsqueda por huella ni por datos personales.
+        Con el ámbito `loans:read:personal`, cada préstamo incluye el nombre y el email del beneficiario y el
+        nombre del firmante.
       parameters:
         - $ref: '#/components/parameters/RequestId'
         - $ref: '#/components/parameters/ActingUser'
@@ -227,11 +313,12 @@ components:
       scheme: bearer
       description: |
         Credencial de servidor a servidor emitida por un Super-Admin (`lgk_<8>_<40>`), mostrada una vez; se
-        guarda su SHA-256. Caducidad máxima de 12 meses, rotación con gracia, revocación inmediata. Ámbito único
-        `loans:read`. Entidades GLPI autorizadas (con o sin subentidades) comprobadas en cada petición. IP de
-        origen permitidas. HTTPS obligatorio (desactivable solo en pruebas). Proxies de confianza para
-        `X-Forwarded-For`/`X-Forwarded-Proto`. Límite por cliente y bloqueo de 5 min tras 20 credenciales
-        fallidas desde una IP. Cualquier credencial no válida → el mismo 401.
+        guarda su SHA-256. Caducidad máxima de 12 meses, rotación con gracia, revocación inmediata. Ámbitos:
+        `loans:read` (obligatorio para las operaciones de préstamos) y `loans:read:personal` (añade los datos
+        personales del detalle; se concede expresamente). Entidades GLPI autorizadas (con o sin subentidades)
+        comprobadas en cada petición. IP de origen permitidas. HTTPS obligatorio (desactivable solo en
+        pruebas). Proxies de confianza para `X-Forwarded-For`/`X-Forwarded-Proto`. Límite por cliente y
+        bloqueo de 5 min tras 20 credenciales fallidas desde una IP. Cualquier credencial no válida → el mismo 401.
 
   headers:
     RequestId:
@@ -246,7 +333,7 @@ components:
     ActingUser:
       name: X-Acting-User
       in: header
-      description: UUID opaco de la persona de Kide-Artean que origina la consulta (obligatorio con `number`). Solo para el registro.
+      description: UUID opaco de la persona del consumidor que origina la consulta (obligatorio con `number`; recomendado siempre que la consulta la origine una persona). Solo para el registro.
       schema: { type: string, format: uuid }
     Limit:
       name: limit
@@ -275,6 +362,15 @@ components:
       type: string
       enum: [pending, delivered, returned, returned_with_incident]
 
+    Person:
+      type: [object, 'null']
+      description: Usuario de GLPI (personal de Tabakalera). Sin email ni teléfono. `name` es null si el usuario ya no existe.
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: [string, 'null'] }
+
     Fingerprint:
       type: object
       additionalProperties: false
@@ -284,11 +380,10 @@ components:
         email: { type: [string, 'null'], pattern: '^[0-9a-f]{64}$', description: 'Solo si `email_status = valid`.' }
         tax_id: { type: [string, 'null'], pattern: '^[0-9a-f]{64}$', description: 'Solo si `tax_id_status = valid` (DNI/NIE).' }
 
-    Beneficiary:
+    BeneficiaryIdentification:
       type: object
-      additionalProperties: false
-      description: Identificación seudonimizada. Nunca los valores.
-      required: [email_status, tax_id_status, matches_requester_email, checked_on_entry, fingerprints]
+      description: Identificación seudonimizada y calidad de los datos del beneficiario.
+      required: [email_status, tax_id_status, matches_requester_email, checked_on_entry, requester_autofill_possible, fingerprints]
       properties:
         email_status: { type: string, enum: [valid, missing, invalid] }
         tax_id_status:
@@ -297,14 +392,37 @@ components:
           description: '`other` = pasaporte u otro documento: no se usa para identificar (G1-ID01 punto 5).'
         matches_requester_email:
           type: boolean
-          description: El email del beneficiario es uno de los del solicitante de GLPI (típico de préstamos antiguos autocompletados, o elegido a propósito).
+          description: El email del beneficiario es uno de los del solicitante de GLPI (elegido a propósito, o autocompletado en préstamos antiguos).
         checked_on_entry:
           type: boolean
           description: El beneficiario se introdujo o corrigió con las reglas actuales (false en préstamos antiguos sin revisar).
+        requester_autofill_possible:
+          type: boolean
+          description: 'Riesgo de identificación: `matches_requester_email` en un préstamo no revisado. No asociar automáticamente por email (ver `x-identification.historical_autofill`).'
         fingerprints:
           type: array
           description: Una entrada por clave en uso (dos durante una transición de clave). Vacío si no hay clave o ningún identificador válido.
           items: { $ref: '#/components/schemas/Fingerprint' }
+
+    Beneficiary:
+      description: Bloque del descubrimiento. Sin datos en claro.
+      allOf: [{ $ref: '#/components/schemas/BeneficiaryIdentification' }]
+      unevaluatedProperties: false
+
+    BeneficiaryDetail:
+      description: Bloque del detalle. Igual que en el descubrimiento, más `contact`.
+      allOf: [{ $ref: '#/components/schemas/BeneficiaryIdentification' }]
+      required: [contact]
+      properties:
+        contact:
+          type: [object, 'null']
+          description: 'Datos personales tal como constan en el préstamo (sin validar en préstamos antiguos). Solo con el ámbito `loans:read:personal`; si no, null. El DNI/NIE nunca se envía en claro.'
+          additionalProperties: false
+          required: [name, email]
+          properties:
+            name: { type: [string, 'null'], maxLength: 255 }
+            email: { type: [string, 'null'], maxLength: 255 }
+      unevaluatedProperties: false
 
     LoanEvent:
       type: object
@@ -335,33 +453,72 @@ components:
     Loan:
       type: object
       additionalProperties: false
-      required: [uuid, number, glpi_url, status, material_status, created_at, period, extension_request, delivery_note, cancellation, beneficiary, items_summary, items, changed_at]
+      required: [uuid, number, reference, glpi_url, entity, ticket_id, status, material_status, created_at, period, requester, recipient, details, extension_request, delivery_note, cancellation, beneficiary, items_summary, items, comments, changed_at]
       properties:
         uuid: { type: string, format: uuid }
         number: { type: integer, description: Número visible en GLPI. }
+        reference: { type: [string, 'null'], maxLength: 255, description: 'Nombre / referencia del préstamo (texto del personal).' }
         glpi_url: { type: string, format: uri, description: 'Ficha en GLPI (requiere sesión y permisos en GLPI).' }
+        entity:
+          type: object
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id: { type: integer }
+            name: { type: [string, 'null'], description: 'Nombre completo de la entidad en GLPI.' }
+        ticket_id: { type: [integer, 'null'], description: Ticket de GLPI vinculado. }
         status: { $ref: '#/components/schemas/LoanStatus' }
         material_status: { $ref: '#/components/schemas/MaterialStatus' }
         created_at: { type: [string, 'null'], format: date-time, description: Alta del préstamo. }
         period: { $ref: '#/components/schemas/Period', description: 'Periodo previsto (inicio y fin) del préstamo.' }
+        requester: { $ref: '#/components/schemas/Person', description: Solicitante en GLPI. }
+        recipient: { $ref: '#/components/schemas/Person', description: Supervisor destinatario que gestiona el préstamo. }
+        details:
+          type: object
+          description: Campos de gestión del formulario (texto del personal, máx. 255; null si están vacíos).
+          additionalProperties: false
+          required: [call, project, location, area, department]
+          properties:
+            call: { type: [string, 'null'], description: Convocatoria. }
+            project: { type: [string, 'null'], description: Proyecto. }
+            location: { type: [string, 'null'], description: Ubicación. }
+            area: { type: [string, 'null'], description: Arloa (área). }
+            department: { type: [string, 'null'], description: Departamentua (departamento). }
         extension_request:
           type: [object, 'null']
-          description: Ampliación de fecha de fin pedida (sin el motivo).
+          description: Ampliación de fecha de fin pedida (sin las notas). Una ampliación aprobada se refleja en `period.end` y desaparece.
+          additionalProperties: false
+          required: [status, requested_end, applies_to_items]
           properties:
             status: { type: string, enum: [pending, rejected] }
             requested_end: { type: [string, 'null'], format: date-time }
+            applies_to_items: { type: boolean, description: La nueva fecha se aplicará también a cada material. }
         delivery_note:
           type: object
-          required: [signed, signed_at]
+          additionalProperties: false
+          required: [signed, signed_at, signer_name, project, signing_link]
           properties:
             signed: { type: boolean }
             signed_at: { type: [string, 'null'], format: date-time, description: 'Lo más cercano a la entrega efectiva: Lagapenak no guarda fechas reales de entrega ni de devolución.' }
+            signer_name: { type: [string, 'null'], description: 'Nombre de quien firmó (puede no ser el beneficiario). Solo con `loans:read:personal`.' }
+            project: { type: [string, 'null'], description: 'Proyecto indicado en el albarán.' }
+            signing_link:
+              type: object
+              additionalProperties: false
+              required: [pending, expires_at]
+              description: Enlace de firma emitido y aún válido (nunca el enlace).
+              properties:
+                pending: { type: boolean }
+                expires_at: { type: [string, 'null'], format: date-time }
         cancellation:
           type: [object, 'null']
-          description: Solo si está cancelado. Sin el motivo ni quién canceló. `cancelled_at` es null en cancelaciones históricas sin registro.
+          description: Solo si está cancelado. Sin el motivo. `cancelled_at` y `cancelled_by` son null en cancelaciones históricas sin registro.
+          additionalProperties: false
+          required: [cancelled_at, cancelled_by]
           properties:
             cancelled_at: { type: [string, 'null'], format: date-time }
-        beneficiary: { $ref: '#/components/schemas/Beneficiary' }
+            cancelled_by: { $ref: '#/components/schemas/Person' }
+        beneficiary: { $ref: '#/components/schemas/BeneficiaryDetail' }
         items_summary:
           type: object
           required: [total, pending, delivered, returned, returned_with_incident]
@@ -374,18 +531,30 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/LoanItem' }
+        comments:
+          type: object
+          description: Solo el número y la fecha del último; nunca el texto.
+          additionalProperties: false
+          required: [count, last_at]
+          properties:
+            count: { type: integer }
+            last_at: { type: [string, 'null'], format: date-time }
         changed_at: { type: string, format: date-time, description: 'Fecha de modificación (versión) del préstamo para la API.' }
 
     LoanItem:
       type: object
       additionalProperties: false
-      required: [type, name, inventory_number, status, period]
+      required: [line_id, type, asset_id, name, inventory_number, serial, status, period, changed_at]
       properties:
-        type: { type: string }
+        line_id: { type: integer, description: Identificador estable de la línea del préstamo. }
+        type: { type: string, description: 'Tipo de activo de GLPI (Computer, Monitor, Peripheral, Phone, Printer, NetworkEquipment).' }
+        asset_id: { type: integer, description: Identificador del activo en GLPI. }
         name: { type: string }
         inventory_number: { type: [string, 'null'] }
+        serial: { type: [string, 'null'] }
         status: { $ref: '#/components/schemas/ItemStatus' }
         period: { $ref: '#/components/schemas/Period', description: 'Periodo previsto de la línea.' }
+        changed_at: { type: [string, 'null'], format: date-time, description: 'Último cambio de la línea (estado o fechas).' }
 
     LoanDetailPage:
       type: object
@@ -418,7 +587,7 @@ components:
           type: object
           properties:
             name: { type: string }
-            scopes: { type: array, items: { type: string, enum: ['loans:read'] } }
+            scopes: { type: array, items: { type: string, enum: ['loans:read', 'loans:read:personal'] } }
             expires_at: { type: string, format: date-time }
             token_rotation_pending: { type: boolean }
             scope_changed_at: { type: [string, 'null'], format: date-time }

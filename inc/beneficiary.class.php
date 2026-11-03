@@ -4,9 +4,10 @@
  * Beneficiary identification for the G1 integration (rule G1-ID01).
  *
  * The beneficiary is the person who receives the material: not the GLPI requester (usually a Tabakalera
- * worker) and not necessarily who signs the delivery note. The API never sends the beneficiary's email or
- * ID number: it sends HMAC-SHA256 fingerprints computed with a key that belongs to the integration only,
- * so that Kide-Artean, which holds the same key, can compare them with its own people.
+ * worker) and not necessarily who signs the delivery note. For automatic identification the API sends
+ * HMAC-SHA256 fingerprints of the email and the DNI/NIE, computed with a key that belongs to the integration
+ * only, so that Kide-Artean, which holds the same key, can compare them with its own people. The DNI/NIE is
+ * never sent in clear; name and email only in the loan detail, with the personal-data scope.
  *
  * Normalisation "g1-v1" (shared with Kide-Artean, test vectors in docs/api/g1-hmac-vectors.json):
  * - email: strip ASCII whitespace at both ends, lower-case A-Z only, then validate with EMAIL_RE.
@@ -82,12 +83,16 @@ class PluginLagapenakBeneficiary {
     }
 
     /**
-     * Message for the loan form, or '' when the beneficiary has at least one valid identifier and no
-     * malformed one. A foreign document is accepted but does not count as identifier (an email is needed).
+     * Message for the loan form, or '' when the beneficiary has a name and at least one valid identifier and
+     * no malformed one (G1-F08). A foreign document is accepted but does not count as identifier (an email is
+     * needed).
      */
-    static function checkForForm(?string $email, ?string $tax_id): string {
+    static function checkForForm(?string $name, ?string $email, ?string $tax_id): string {
         [$es] = self::normalizeEmail($email);
         [$ts] = self::normalizeTaxId($tax_id);
+        if (trim(self::raw($name)) === '') {
+            return __("Enter the beneficiary's full name.", 'lagapenak');
+        }
         if ($es === self::STATUS_INVALID) {
             return __("The beneficiary's email address is not valid.", 'lagapenak');
         }
@@ -100,6 +105,18 @@ class PluginLagapenakBeneficiary {
                 : __('Enter the beneficiary\'s email address or DNI/NIE (at least one).', 'lagapenak');
         }
         return '';
+    }
+
+    /**
+     * Whether $input changes the beneficiary of a loan (only the fields present in $input count).
+     */
+    static function isChanged(array $fields, array $input): bool {
+        foreach (['beneficiary_name', 'beneficiary_email', 'beneficiary_dni'] as $f) {
+            if (array_key_exists($f, $input) && self::raw((string) $input[$f]) !== self::raw((string) ($fields[$f] ?? ''))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ── Integration keys ────────────────────────────────────────────────────
@@ -197,11 +214,17 @@ class PluginLagapenakBeneficiary {
                 'tax_id' => $tax !== null ? self::fingerprint('tax_id', $tax, $raw) : null,
             ];
         }
+        $matches = $email !== null && in_array($email, $requester_emails, true);
+        $checked = (int) ($loan['beneficiary_validated'] ?? 0) === 1;
         return [
             'email_status'            => $es,
             'tax_id_status'           => $ts,
-            'matches_requester_email' => $email !== null && in_array($email, $requester_emails, true),
-            'checked_on_entry'        => (int) ($loan['beneficiary_validated'] ?? 0) === 1,
+            'matches_requester_email' => $matches,
+            'checked_on_entry'        => $checked,
+            // Up to 1.6.1 the form pre-filled the beneficiary's name and email with the requester's (never the
+            // DNI/NIE): on those loans an email equal to the requester's may not identify the beneficiary.
+            // The consumer must not associate by email alone; the DNI/NIE fingerprint, when valid, is reliable.
+            'requester_autofill_possible' => $matches && !$checked,
             'fingerprints'            => $fingerprints,
         ];
     }

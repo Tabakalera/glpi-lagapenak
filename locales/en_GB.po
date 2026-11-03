@@ -839,3 +839,21 @@ msgstr "Valid until"
 
 msgid "With a passport or foreign document, the beneficiary's email address is required."
 msgstr "With a passport or foreign document, the beneficiary's email address is required."
+
+msgid "%d with personal data"
+msgstr "%d with personal data"
+
+msgid "A cancelled loan cannot be deleted: it is kept with its history."
+msgstr "A cancelled loan cannot be deleted: it is kept with its history."
+
+msgid "Enter the beneficiary's full name."
+msgstr "Enter the beneficiary's full name."
+
+msgid "Loans, material, states, dates, entity, staff and operational fields; beneficiary fingerprints"
+msgstr "Loans, material, states, dates, entity, staff and operational fields; beneficiary fingerprints"
+
+msgid "Person who receives the material (artist, resident...), not who requests it. Full name required, and email or DNI/NIE (at least one); with a passport or foreign document, the email."
+msgstr "Person who receives the material (artist, resident...), not who requests it. Full name required, and email or DNI/NIE (at least one); with a passport or foreign document, the email."
+
+msgid "Personal data: beneficiary's name and email, signer's name. Every response that carries them is logged"
+msgstr "Personal data: beneficiary's name and email, signer's name. Every response that carries them is logged"

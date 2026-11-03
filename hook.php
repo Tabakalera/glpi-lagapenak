@@ -255,12 +255,20 @@ function plugin_lagapenak_install_api() {
                 `ip`            VARCHAR(45) NOT NULL DEFAULT '',
                 `request_id`    VARCHAR(64) NOT NULL DEFAULT '',
                 `acting_user`   CHAR(36) NULL DEFAULT NULL,
+                `personal_count` INT UNSIGNED NOT NULL DEFAULT 0,
                 `duration_ms`   INT UNSIGNED NOT NULL DEFAULT 0,
                 PRIMARY KEY (`id`),
                 KEY `client_date` (`apiclients_id`, `date`),
                 KEY `ip_date` (`ip`, `date`),
                 KEY `date` (`date`)
             ) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation}"
+        );
+    }
+
+    // How many loans of each response carried personal data (scope loans:read:personal); never the data
+    if (!$DB->fieldExists('glpi_plugin_lagapenak_apilogs', 'personal_count')) {
+        plugin_lagapenak_query_or_fail(
+            "ALTER TABLE `glpi_plugin_lagapenak_apilogs` ADD COLUMN `personal_count` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `acting_user`"
         );
     }
 

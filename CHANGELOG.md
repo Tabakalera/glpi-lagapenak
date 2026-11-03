@@ -4,35 +4,56 @@ All notable changes to this project will be documented in this file.
 
 ## [1.7.0-dev] - Unreleased (branch `feature/api-g1`, number to be decided at release)
 
-Integration API G1 for Kide-Artean (read-only), beneficiary identification (G1-ID01) and explicit
-cancellation. Contract: `docs/api/openapi-g1.yaml`. Built on 1.6.1, which is unchanged.
-Pending: security review, DPD validation of the fingerprint mechanism, release authorisation.
+Loan query API G1 (read-only, first consumer Kide-Artean), beneficiary identification (G1-ID01) and explicit
+cancellation (G1-F05 to G1-F07). Contract: `docs/api/openapi-g1.yaml` (3.0.0-draft). Built on 1.6.1, which is
+unchanged. Pending: security review, DPD validation (`docs/api/privacidad-g1.md`), release authorisation.
 
 ### Added
-- `front/api.php/v1/...`: read-only server-to-server API, four operations: `meta`, `loan-events` (level 1,
-  incremental discovery), `loans?number=` / `loans?uuids=` and `loans/{uuid}` (level 2, detail). Lagapenak
-  does not know residencies or assignments: Kide-Artean identifies the beneficiary and associates loans
-- Beneficiary identification without personal data: HMAC-SHA256 fingerprints of the normalised email and
-  DNI/NIE ("g1-v1", shared test vectors in `docs/api/g1-hmac-vectors.json`), with a key that belongs to the
-  integration, stored encrypted with GLPI's key, identified by `kid`, rotated with a transition period
+- `front/api.php/v1/...`: read-only server-to-server API with four operations: `meta`, `loan-events` (level 1,
+  light incremental discovery), `loans?number=` / `loans?uuids=` and `loans/{uuid}` (level 2, full detail of
+  any loan of the authorised entities, whether or not the consumer recognised the beneficiary). Lagapenak
+  does not know residencies or assignments: the consumer identifies the beneficiary and decides what to
+  associate
+- Full structured detail: reference, entity, linked ticket, requester and recipient (GLPI id and name),
+  management fields (call, project, location, area, department), planned period, extension request (status,
+  requested date, whether it applies to the assets), delivery note (signed, date, project, pending signing link
+  and its expiry, never the link), cancellation (date and who), number of comments and date of the last one,
+  and per asset line: line id, type, GLPI asset id, name, inventory and serial numbers, status, planned period,
+  last change
+- Two scopes: `loans:read` (operational data and beneficiary fingerprints) and `loans:read:personal` (adds the
+  beneficiary's name and email and the signer's name to the detail). A new client gets `loans:read` only. The
+  DNI/NIE is never sent in clear; signatures, documents, signing links, observations, notes, comments,
+  incident texts and reasons are never sent
+- Beneficiary identification: HMAC-SHA256 fingerprints of the normalised email and DNI/NIE ("g1-v1", shared
+  test vectors in `docs/api/g1-hmac-vectors.json`), with a key that belongs to the integration, stored
+  encrypted with GLPI's key, identified by `kid`, rotated with a transition period
+- Warning `requester_autofill_possible` on older loans whose beneficiary email equals the requester's (1.6.1
+  pre-filled it): the consumer must not associate them by email alone. Historical data is not changed
 - Computed material status: pending delivery, partially delivered, delivered, partially returned, returned,
   returned with incident, cancelled (G1-F01, G1-F02)
 - Change feed from 2026-01-01 (loans active from that date, including older loans still running), with
-  deletions and moves out of the authorised entities; total order and opaque cursor; changes of the client's
-  entities or of the keys send every loan again
-- Explicit cancellation of requests whose material was never handed over (supervisor of the loan's entity,
-  reason required): the loan is kept with who, when and why; a cancelled loan can no longer be changed,
-  signed or receive material. Not available on signed loans or once any material was delivered
+  deletions and moves out of the authorised entities; total order and opaque cursor; changes of comments, of
+  the client's entities or scopes, or of the keys send the loans again
+- Explicit cancellation of requests whose material was never handed over, by the supervisor of the loan's
+  entity or by the original requester of their own request (G1-F05), reason required, checked again in the
+  write itself against concurrent deliveries or signatures; the loan is kept with who, when and why
 - Every loan gets a random UUID (filled in for existing loans on update), not editable
-- API clients (one scope `loans:read`), API log without bodies (parameters logged only with their expected
-  format), daily task `ApiLogClean`, Super-Admin page (*Setup › Plugins › Lagapenak › Configure*)
+- API log without bodies, with the number of loans returned with personal data per call (`personal_count`);
+  daily task `ApiLogClean`; Super-Admin page (*Setup › Plugins › Lagapenak › Configure*)
+- `docs/api/integracion-kide-artean.md` (integration guide) and `docs/api/privacidad-g1.md` (for the DPD)
 
 ### Changed
 - Loan form: the beneficiary is no longer pre-filled with the requester's data; a button copies it when they
-  really are the same person. New loans need at least one valid identifier: a valid email or a valid DNI/NIE
-  (format and letter). Passports and foreign documents are accepted, with an email. Editing the beneficiary
-  of an existing loan applies the same rule; older loans keep their data until someone edits the beneficiary
-- A loan can no longer be created already cancelled, nor cancelled or reopened through the loan form
+  really are the same person. New loans need the beneficiary's full name (G1-F08) and at least one valid
+  identifier: a valid email or a valid DNI/NIE (format and letter). Passports and foreign documents are
+  accepted, with an email. Checked in the browser and on the server; what was typed is kept when the check
+  fails. Editing the beneficiary of an existing loan applies the same rule; older loans keep their data until
+  someone edits the beneficiary
+- A cancelled loan can never be deleted (G1-F06), by any route (loan form, GLPI massive actions, GLPI API),
+  even with the purge right
+- A cancelled loan is never reopened nor changed (G1-F07): no edit, massive update, asset, delivery, date,
+  extension or signature. A new request is created instead
+- A loan can no longer be created already cancelled, nor cancelled through the loan form
 
 ### Notes
 - The API is **disabled** after install or update until a Super-Admin enables it

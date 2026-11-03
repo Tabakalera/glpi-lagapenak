@@ -12,8 +12,10 @@ class PluginLagapenakApiClient {
 
     const TABLE = 'glpi_plugin_lagapenak_apiclients';
 
-    // G1 is read-only: one scope
-    const SCOPES = ['loans:read'];
+    // G1 is read-only. loans:read: loans, material, states, staff and operational fields. loans:read:personal:
+    // also the beneficiary's name and email and the signer's name (only with loans:read).
+    const SCOPES = ['loans:read', 'loans:read:personal'];
+    const SCOPE_PERSONAL = 'loans:read:personal';
 
     const MAX_VALIDITY_DAYS = 366;
 
@@ -236,11 +238,11 @@ class PluginLagapenakApiClient {
             return;
         }
         $now = date('Y-m-d H:i:s');
-        // Links belong to the source: it never changes after creation
+        // The source identifies the consumer: it never changes after creation
         $fields['source'] = $old['source'];
-        // A change of what the client may see makes every link "changed" for its next sync
+        // A change of what the client may see sends every loan again on its next sync
         if ($old['entities'] !== $fields['entities'] || (int) $old['is_recursive'] !== (int) $fields['is_recursive']
-            || (int) $old['is_active'] !== (int) $fields['is_active']
+            || (int) $old['is_active'] !== (int) $fields['is_active'] || $old['scopes'] !== $fields['scopes']
         ) {
             $fields['scope_mod'] = $now;
         }

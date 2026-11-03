@@ -3,10 +3,13 @@
 /**
  * Integration API G1 (contract: docs/api/openapi-g1.yaml).
  *
- * Read-only access to the loans of the client's entities, in two levels: discovery (change feed with
- * identification fingerprints) and detail. Lagapenak does not know residencies or assignments: Kide-Artean
- * identifies the beneficiary and associates the loan (G1-ID01). Never exposes names, email addresses, ID
- * numbers, signatures, documents or free texts. Every request is logged without bodies.
+ * Read-only query interface for the loans of the client's entities, in two levels: discovery (light change
+ * feed with identification fingerprints) and full detail of any loan of those entities, recognised by the
+ * consumer or not. Lagapenak does not know residencies or assignments: the consumer identifies the
+ * beneficiary and decides what to associate (G1-ID01).
+ * Personal data of the beneficiary (name, email) and the signer's name only with scope loans:read:personal;
+ * DNI/NIE only as fingerprint. Never: signatures, documents, signing links, observations, notes, comments,
+ * incident texts or reasons. Every request is logged without bodies, with how many loans carried personal data.
  */
 class PluginLagapenakApi {
 
@@ -58,6 +61,7 @@ class PluginLagapenakApi {
     private array $entities = [];
     private string $code = '';
     private int $count = 0;
+    private int $personal = 0;   // loans of the response that carried personal data
     private array $config;
 
     public function __construct() {
@@ -345,13 +349,22 @@ class PluginLagapenakApi {
 
     // ── Data ────────────────────────────────────────────────────────────────
 
-    // Only what the contract exposes and what is needed to compute it. Beneficiary values are read to
-    // compute fingerprints and are never returned.
-    const LOAN_COLUMNS = "l.`id`, l.`uuid`, l.`entities_id`, l.`users_id`, l.`status`, l.`fecha_inicio`, l.`fecha_fin`,
-        l.`date_request_status`, l.`requested_date_end`, l.`signature_date`,
+    // Only what the contract exposes and what is needed to compute it. The DNI/NIE is read to compute its
+    // fingerprint and is never returned; the signature, the signing token, observations, notes and the
+    // cancellation reason are not even read.
+    const LOAN_COLUMNS = "l.`id`, l.`uuid`, l.`name`, l.`entities_id`, l.`users_id`, l.`users_id_destinatario`, l.`tickets_id`,
+        l.`status`, l.`fecha_inicio`, l.`fecha_fin`,
+        l.`field_1`, l.`field_2`, l.`field_3`, l.`field_4`, l.`field_5`,
+        l.`date_request_status`, l.`requested_date_end`, l.`date_request_apply_items`,
+        l.`signature_date`, l.`signature_name`, l.`albaran_project`,
         (l.`signature_data` IS NOT NULL AND l.`signature_data` <> '') AS is_signed,
-        l.`cancel_date`, l.`beneficiary_email`, l.`beneficiary_dni`, l.`beneficiary_validated`,
+        (l.`sign_token` IS NOT NULL AND l.`sign_token` <> '') AS has_sign_link, l.`sign_token_expires`,
+        l.`cancel_date`, l.`cancel_users_id`,
+        l.`beneficiary_name`, l.`beneficiary_email`, l.`beneficiary_dni`, l.`beneficiary_validated`,
         l.`date_creation`, l.`date_mod`";
+
+    // Generic fields of the loan form (PluginLagapenakLoan::getFieldLabels()) under stable names
+    const DETAIL_FIELDS = ['field_1' => 'call', 'field_2' => 'project', 'field_3' => 'location', 'field_4' => 'area', 'field_5' => 'department'];
 
     /**
      * Loans that belong to the change feed: anything that was or is active from the sync date on, so that a
@@ -367,8 +380,9 @@ class PluginLagapenakApi {
     }
 
     /**
-     * Version of a loan as the API sees it: the loan, its lines, the signature, the cancellation, and also
-     * the client's authorisations and the integration keys (a change there sends every loan again).
+     * Version of a loan as the API sees it: the loan, its lines, the signature, the cancellation, its
+     * comments, and also the client's authorisations and the integration keys (a change there sends every
+     * loan again).
      */
     private function loanChangedAt(): string {
         $min = "'1970-01-02 00:00:00'";
@@ -379,6 +393,7 @@ class PluginLagapenakApi {
             COALESCE(l.`signature_date`, $min),
             COALESCE(l.`cancel_date`, $min),
             COALESCE((SELECT MAX(i.`date_mod`) FROM `glpi_plugin_lagapenak_loanitems` i WHERE i.`loans_id` = l.`id`), $min),
+            COALESCE((SELECT MAX(c.`date_creation`) FROM `glpi_plugin_lagapenak_loancomments` c WHERE c.`loans_id` = l.`id`), $min),
             $scope, $keys)";
     }
 
@@ -408,7 +423,7 @@ class PluginLagapenakApi {
         }
         $ids = array_map(function ($r) { return (int) $r['id']; }, $rows);
         foreach ($this->select(
-            'SELECT `loans_id`, `itemtype`, `items_id`, `status`, `date_checkout`, `date_checkin`
+            'SELECT `id`, `loans_id`, `itemtype`, `items_id`, `status`, `date_checkout`, `date_checkin`, `date_mod`
              FROM `glpi_plugin_lagapenak_loanitems` WHERE `loans_id` IN (' . implode(',', $ids) . ') ORDER BY `id`'
         ) as $it) {
             $ctx['items'][(int) $it['loans_id']][] = $it;
@@ -435,9 +450,19 @@ class PluginLagapenakApi {
     }
 
     private function serializeLoans(array $rows): array {
-        $ctx    = $this->loanContext($rows);
-        $assets = $this->assetLabels(array_merge([], ...array_values($ctx['items'])));
-        $out    = [];
+        $ctx      = $this->loanContext($rows);
+        $assets   = $this->assetLabels(array_merge([], ...array_values($ctx['items'])));
+        $people   = $this->userNames(array_merge(
+            array_column($rows, 'users_id'), array_column($rows, 'users_id_destinatario'), array_column($rows, 'cancel_users_id')
+        ));
+        $entities = $this->entityNames(array_column($rows, 'entities_id'));
+        $comments = $this->commentStats(array_map('intval', array_column($rows, 'id')));
+        $personal = in_array(PluginLagapenakApiClient::SCOPE_PERSONAL, PluginLagapenakApiClient::getScopes($this->client), true);
+        $person   = function ($id) use ($people) {
+            $id = (int) $id;
+            return $id > 0 ? ['id' => $id, 'name' => $people[$id] ?? null] : null;
+        };
+        $out = [];
         foreach ($rows as $l) {
             $id      = (int) $l['id'];
             $list    = [];
@@ -448,40 +473,125 @@ class PluginLagapenakApi {
                 $summary[$status]++;
                 $asset  = $assets[$it['itemtype']][(int) $it['items_id']] ?? null;
                 $list[] = [
+                    'line_id'          => (int) $it['id'],
                     'type'             => $it['itemtype'],
-                    'name'             => $asset['name'] ?? ($it['itemtype'] . ' #' . (int) $it['items_id']),
-                    'inventory_number' => ($asset['otherserial'] ?? '') !== '' ? $asset['otherserial'] : null,
+                    'asset_id'         => (int) $it['items_id'],
+                    'name'             => self::text($asset['name'] ?? null) ?? ($it['itemtype'] . ' #' . (int) $it['items_id']),
+                    'inventory_number' => self::text($asset['otherserial'] ?? null),
+                    'serial'           => self::text($asset['serial'] ?? null),
                     'status'           => $status,
                     'period'           => ['start' => self::iso($it['date_checkout']), 'end' => self::iso($it['date_checkin'])],
+                    'changed_at'       => self::iso($it['date_mod']),
                 ];
             }
             $request = null;
-            if ((int) $l['date_request_status'] === PluginLagapenakLoan::DATE_REQUEST_PENDING) {
-                $request = ['status' => 'pending', 'requested_end' => self::iso($l['requested_date_end'])];
-            } elseif ((int) $l['date_request_status'] === PluginLagapenakLoan::DATE_REQUEST_REJECTED) {
-                $request = ['status' => 'rejected', 'requested_end' => self::iso($l['requested_date_end'])];
+            $dr = (int) $l['date_request_status'];
+            if ($dr === PluginLagapenakLoan::DATE_REQUEST_PENDING || $dr === PluginLagapenakLoan::DATE_REQUEST_REJECTED) {
+                $request = [
+                    'status'           => $dr === PluginLagapenakLoan::DATE_REQUEST_PENDING ? 'pending' : 'rejected',
+                    'requested_end'    => self::iso($l['requested_date_end']),
+                    'applies_to_items' => (int) $l['date_request_apply_items'] === 1,
+                ];
             }
             $signed    = (bool) $l['is_signed'];
             $cancelled = (int) $l['status'] === PluginLagapenakLoan::STATUS_CANCELLED;
+            $link_open = !$signed && !$cancelled && (bool) $l['has_sign_link']
+                && ($l['sign_token_expires'] === null || (string) $l['sign_token_expires'] > date('Y-m-d H:i:s'));
+            $details = [];
+            foreach (self::DETAIL_FIELDS as $col => $key) {
+                $details[$key] = self::text($l[$col]);
+            }
+            $beneficiary = $ctx['beneficiary'][$id];
+            // Personal data: only with the personal scope, for any loan of the authorised entities
+            $beneficiary['contact'] = $personal
+                ? ['name' => self::text($l['beneficiary_name']), 'email' => self::text($l['beneficiary_email'])]
+                : null;
+            if ($personal) {
+                $this->personal++;
+            }
             $out[] = [
                 'uuid'              => $l['uuid'],
                 'number'            => $id,
+                'reference'         => self::text($l['name']),
                 'glpi_url'          => plugin_lagapenak_web_dir(true) . '/front/loan.form.php?id=' . $id,
+                'entity'            => ['id' => (int) $l['entities_id'], 'name' => $entities[(int) $l['entities_id']] ?? null],
+                'ticket_id'         => (int) $l['tickets_id'] > 0 ? (int) $l['tickets_id'] : null,
                 'status'            => self::LOAN_STATUS[(int) $l['status']] ?? 'pending',
                 'material_status'   => $ctx['material'][$id],
                 'created_at'        => self::iso($l['date_creation']),
                 'period'            => ['start' => self::iso($l['fecha_inicio']), 'end' => self::iso($l['fecha_fin'])],
+                'requester'         => $person($l['users_id']),
+                'recipient'         => $person($l['users_id_destinatario']),
+                'details'           => $details,
                 'extension_request' => $request,
-                'delivery_note'     => ['signed' => $signed, 'signed_at' => $signed ? self::iso($l['signature_date']) : null],
-                'cancellation'      => $cancelled ? ['cancelled_at' => self::iso($l['cancel_date'])] : null,
-                'beneficiary'       => $ctx['beneficiary'][$id],
+                'delivery_note'     => [
+                    'signed'       => $signed,
+                    'signed_at'    => $signed ? self::iso($l['signature_date']) : null,
+                    'signer_name'  => $signed && $personal ? self::text($l['signature_name']) : null,
+                    'project'      => self::text($l['albaran_project']),
+                    'signing_link' => ['pending' => $link_open, 'expires_at' => $link_open ? self::iso($l['sign_token_expires']) : null],
+                ],
+                'cancellation'      => $cancelled ? [
+                    'cancelled_at' => self::iso($l['cancel_date']),
+                    'cancelled_by' => $person($l['cancel_users_id']),
+                ] : null,
+                'beneficiary'       => $beneficiary,
                 'items_summary'     => $summary,
                 'items'             => $list,
+                'comments'          => $comments[$id] ?? ['count' => 0, 'last_at' => null],
                 'changed_at'        => self::iso($l['changed_at']),
             ];
         }
         $this->count = count($out);
         return $out;
+    }
+
+    /**
+     * Display name of GLPI users (staff: requester, recipient, who cancelled): "Surname Firstname" or login.
+     */
+    private function userNames(array $ids): array {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        $out = [];
+        if ($ids) {
+            foreach ($this->select('SELECT `id`, `name`, `realname`, `firstname` FROM `glpi_users` WHERE `id` IN (' . implode(',', $ids) . ')') as $u) {
+                $out[(int) $u['id']] = self::text(trim($u['realname'] . ' ' . $u['firstname'])) ?? self::text($u['name']);
+            }
+        }
+        return $out;
+    }
+
+    private function entityNames(array $ids): array {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        $out = [];
+        if ($ids) {
+            foreach ($this->select('SELECT `id`, `completename` FROM `glpi_entities` WHERE `id` IN (' . implode(',', $ids) . ')') as $e) {
+                $out[(int) $e['id']] = self::text($e['completename']);
+            }
+        }
+        return $out;
+    }
+
+    /** Number of comments and date of the last one, never their text. */
+    private function commentStats(array $ids): array {
+        $out = [];
+        if ($ids) {
+            foreach ($this->select(
+                'SELECT `loans_id`, COUNT(*) AS n, MAX(`date_creation`) AS last_at FROM `glpi_plugin_lagapenak_loancomments`
+                 WHERE `loans_id` IN (' . implode(',', $ids) . ') GROUP BY `loans_id`'
+            ) as $c) {
+                $out[(int) $c['loans_id']] = ['count' => (int) $c['n'], 'last_at' => self::iso($c['last_at'])];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Stored text as typed (GLPI 10 keeps it HTML-encoded), without control characters, at most $max
+     * characters; null when empty.
+     */
+    static function text($value, int $max = 255): ?string {
+        $v = trim(preg_replace('/[\x00-\x1F\x7F]+/u', ' ', PluginLagapenakBeneficiary::raw((string) $value)) ?? '');
+        return $v === '' ? null : mb_substr($v, 0, $max);
     }
 
     /**
@@ -499,8 +609,10 @@ class PluginLagapenakApi {
         foreach ($by_type as $itemtype => $ids) {
             $table  = getTableForItemType($itemtype);
             $fields = ['id', 'name'];
-            if ($DB->fieldExists($table, 'otherserial')) {
-                $fields[] = 'otherserial';
+            foreach (['otherserial', 'serial'] as $f) {
+                if ($DB->fieldExists($table, $f)) {
+                    $fields[] = $f;
+                }
             }
             foreach ($DB->request(['SELECT' => $fields, 'FROM' => $table, 'WHERE' => ['id' => array_values($ids)]]) as $a) {
                 $out[$itemtype][(int) $a['id']] = $a;
@@ -735,6 +847,7 @@ class PluginLagapenakApi {
                 'status'        => $status,
                 'code'          => $this->code,
                 'result_count'  => $this->count,
+                'personal_count' => $this->personal,
                 'ip'            => substr($this->ip, 0, 45),
                 'request_id'    => $this->request_id,
                 'acting_user'   => $this->acting_user,
