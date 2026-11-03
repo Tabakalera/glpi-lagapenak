@@ -1,0 +1,635 @@
+openapi: 3.1.0
+info:
+  title: Lagapenak · API de integración G1 (Kide-Artean)
+  version: 1.0.0-draft
+  summary: Consulta de préstamos de material y vínculos con residencias y cesiones de Kide-Artean.
+  description: |
+    Contrato funcional único para Lagapenak (plugin GLPI) y Kide-Artean. Cada proyecto lo implementa por
+    separado. Decisiones funcionales aprobadas (G1, D1–D6):
+
+    - **D1** · Los vínculos los crea una persona desde Kide-Artean, buscando el préstamo por su número.
+      Lagapenak comprueba que el préstamo existe y está en una entidad autorizada antes de crear el vínculo.
+      No hay asociación automática por correo electrónico.
+    - **D2** · Un préstamo pertenece a **una** residencia principal y, además, puede vincularse a cesiones
+      de esa misma residencia. Un vínculo de cesión exige el vínculo activo con su residencia; Lagapenak
+      rechaza cualquier cesión declarada de otra residencia.
+    - **D3** · Sin vínculos con convocatorias en V1.
+    - **D4** · Solo identificadores, material, fechas, estados, firma mínima y referencias autorizadas.
+      Nunca nombres de supervisores, textos libres (nombre del préstamo, observaciones, comentarios,
+      campos adicionales), DNI, firmas ni documentos. Validación formal del DPD previa a producción.
+    - **D5** · Solo entidades GLPI expresamente autorizadas al cliente, comprobadas en el servidor en
+      cada petición.
+    - **D6** · Cierre de residencia: lo decide Kide-Artean con estos datos (ver `x-closure-guidance`).
+
+    **Fuera de alcance:** crear, editar, firmar, cancelar o borrar préstamos; vínculos con convocatorias;
+    descarga masiva de préstamos no vinculados; documentos y PDF.
+
+    **Compatibilidad:** GLPI 10.0.11 – 10.0.x y 11.0.x con el mismo plugin. La API no usa sesión de GLPI ni
+    cookies ni token CSRF: en GLPI 11 la ruta se declara *stateless* en el arranque del plugin
+    (`plugin_lagapenak_boot` → `SessionManager::registerPluginStatelessPath`), lo que también la saca del
+    cortafuegos de sesión; en GLPI 10 el script desactiva las cookies de sesión antes de cargar GLPI.
+    La ruta se obtiene de `REQUEST_URI` (GLPI 11 no rellena `PATH_INFO`). Comprobado en entornos aislados
+    GLPI 10.0.24 y 11.0.9: GET, PUT y DELETE con cuerpo JSON y cabecera `Authorization`, sin cookie de respuesta.
+
+    **Activación:** la API viene **desactivada** al instalar o actualizar. Un Super-Admin la activa y da de
+    alta el cliente en *Lagapenak › API*. Mientras esté desactivada responde 404 a todo.
+  contact:
+    name: Tabakalera · Sistemas
+  x-closure-guidance:
+    description: |
+      Guía para la comprobación MATERIAL_LOANS del cierre de residencia (D6). La implementa Kide-Artean;
+      Lagapenak solo aporta los datos. Consulta en el momento del cierre:
+      `GET /v1/loans?link_type=residency&link_id={residencia}`, recorriendo todas las páginas.
+    outcomes:
+      NO_LINKED_LOANS: La respuesta llega completa y no hay vínculos `active` (ni `unavailable`). Distinto de "devuelto".
+      VERIFIED_RETURNED: Todos los vínculos `active` tienen préstamo en `returned` o `cancelled`. Permite el cierre ordinario.
+      PENDING: Algún préstamo `active` en `pending`, `partially_delivered` o `delivered`. Bloquea el cierre ordinario.
+      UNVERIFIABLE: Sin respuesta, error 5xx/429/401/403, respuesta no JSON, paginación incompleta o algún vínculo `unavailable` o `loan_deleted`. No cuenta como superada.
+    notes:
+      - El cierre excepcional sigue disponible en todos los casos.
+      - Un préstamo en `returned` puede incluir líneas `returned_with_incident` (Lagapenak ya lo considera devuelto). Se expone `items_summary.returned_with_incident` para que Kide-Artean lo muestre como aviso.
+      - Las cesiones vinculadas no cambian el resultado: todo préstamo vinculado a una cesión lo está también a su residencia (D2).
+
+servers:
+  - url: https://{glpi}/plugins/lagapenak/front/api.php
+    description: GLPI 10 y GLPI 11 (misma ruta).
+    variables:
+      glpi:
+        default: glpi.example.invalid
+
+security:
+  - bearerToken: []
+
+tags:
+  - name: meta
+  - name: loans
+  - name: links
+
+paths:
+  /v1/meta:
+    get:
+      tags: [meta]
+      operationId: getMeta
+      summary: Estado de la API y del cliente autenticado
+      description: Sirve también como comprobación de conectividad y credencial. No requiere ningún ámbito.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Meta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /v1/loans:
+    get:
+      tags: [loans]
+      operationId: listLoans
+      summary: Buscar por número, por objeto vinculado o por cambios
+      description: |
+        Exige **exactamente uno** de estos modos (si no, 400 `invalid_request`; nunca hay listado completo):
+
+        1. `number` — búsqueda para crear un vínculo (D1). Devuelve 0 o 1 préstamo de las entidades del
+           cliente, esté o no vinculado. Cada búsqueda queda registrada con el usuario de `X-Acting-User`.
+        2. `link_type` + `link_id` — los vínculos de un objeto de Kide-Artean y sus préstamos
+           (`data[]` de tipo `LinkedLoan`), incluidos `loan_deleted` y `unavailable`, no los `removed`.
+           Es la consulta del cierre de residencia (D6).
+        3. `changed_since` — préstamos con algún vínculo `active` de este cliente cuyo `changed_at` es
+           posterior al cursor (sincronización periódica). Los préstamos que dejan de estar accesibles
+           no aparecen aquí: los anuncia `GET /v1/links`.
+      security:
+        - bearerToken: ['loans:read']
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ActingUserOptional'
+        - name: number
+          in: query
+          schema: { type: integer, minimum: 1 }
+          description: Número del préstamo tal como aparece en GLPI («Préstamo #123» → 123).
+        - name: link_type
+          in: query
+          schema: { $ref: '#/components/schemas/ObjectType' }
+        - name: link_id
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/ChangedSince'
+        - $ref: '#/components/parameters/Limit'
+        - name: page_token
+          in: query
+          description: Solo en el modo `link_type`/`link_id`; el `next_page_token` de la página anterior.
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/LoanSearchPage'
+                  - $ref: '#/components/schemas/LinkedLoanPage'
+                  - $ref: '#/components/schemas/LoanChangesPage'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /v1/loans/{loan_uuid}:
+    parameters:
+      - $ref: '#/components/parameters/LoanUuid'
+    get:
+      tags: [loans]
+      operationId: getLoan
+      summary: Un préstamo
+      description: |
+        404 si no existe o está fuera de las entidades del cliente (no se distingue).
+        410 si el préstamo estuvo vinculado por este cliente y se ha borrado en GLPI.
+      security:
+        - bearerToken: ['loans:read']
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ActingUserOptional'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Loan' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410': { $ref: '#/components/responses/Gone' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /v1/loans/{loan_uuid}/links/{object_type}/{object_id}:
+    parameters:
+      - $ref: '#/components/parameters/LoanUuid'
+      - name: object_type
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/ObjectType' }
+      - name: object_id
+        in: path
+        required: true
+        description: UUID del objeto en Kide-Artean (`residencies.id` o `assignments.id`).
+        schema: { type: string, format: uuid }
+    put:
+      tags: [links]
+      operationId: putLink
+      summary: Crear (o reactivar) un vínculo — idempotente
+      description: |
+        Repetir la misma petición no crea duplicados: 200 con el vínculo tal como está.
+
+        Reglas (D2):
+        - `residency`: el préstamo no puede tener otro vínculo `active` de residencia (409 `residency_conflict`).
+          Para cambiar de residencia, primero se retiran las cesiones y la residencia anterior.
+        - `assignment`: `parent_residency_id` es obligatorio, es la residencia de la cesión en Kide-Artean
+          y debe coincidir con el vínculo `active` de residencia del préstamo (409 `parent_residency_mismatch`).
+          Kide-Artean comprueba antes que la cesión pertenece de verdad a esa residencia; Lagapenak no
+          conoce la relación y solo impide la incoherencia entre vínculos.
+        - El préstamo debe existir y estar en una entidad autorizada (404 si no).
+        - Un vínculo `removed` se reactiva con los datos nuevos. Uno `loan_deleted` no (410).
+      security:
+        - bearerToken: ['links:write']
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ActingUserRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LinkInput' }
+      responses:
+        '200':
+          description: Ya existía activo (sin cambios, o con la etiqueta actualizada).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Link' }
+        '201':
+          description: Creado o reactivado.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Link' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    delete:
+      tags: [links]
+      operationId: deleteLink
+      summary: Retirar un vínculo — idempotente
+      description: |
+        El vínculo pasa a `removed` (no se borra: queda quién y cuándo). Repetirlo devuelve 200 con el mismo
+        estado. Funciona aunque el préstamo ya no esté accesible para el cliente. Un vínculo `loan_deleted`
+        se devuelve sin cambios. 404 si este cliente nunca creó ese vínculo.
+        No se puede retirar una residencia con cesiones activas en el mismo préstamo (409 `dependent_links`).
+      security:
+        - bearerToken: ['links:write']
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ActingUserRequired'
+      responses:
+        '200':
+          description: Retirado (o ya lo estaba).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Link' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /v1/links:
+    get:
+      tags: [links]
+      operationId: listLinkChanges
+      summary: Cambios en los vínculos de este cliente
+      description: |
+        Todos los vínculos creados por este cliente cuyo estado efectivo o préstamo ha cambiado tras el cursor,
+        incluidos `removed`, `loan_deleted` y `unavailable`. Un cambio de entidad del préstamo o de las
+        entidades autorizadas al cliente también hace aparecer el vínculo.
+      security:
+        - bearerToken: ['links:read']
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ChangedSinceRequired'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LinkChangesPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+components:
+  securitySchemes:
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: |
+        Credencial de servidor a servidor emitida por un Super-Admin en *Lagapenak › API*. Formato
+        `lgk_<8 caracteres>_<40 caracteres>`; se muestra una sola vez y Lagapenak guarda solo su hash SHA-256.
+        Caduca a los 12 meses como máximo. Rotación con periodo de gracia (la anterior sigue válida hasta
+        el plazo indicado) y revocación inmediata. Cada cliente tiene: ámbitos (`loans:read`, `links:read`,
+        `links:write`), lista de entidades GLPI (con o sin subentidades) y lista de IP de origen permitidas.
+        Solo HTTPS (salvo que el administrador lo desactive para pruebas). Credencial inválida, caducada,
+        revocada o cliente desactivado → el mismo 401.
+
+  headers:
+    RequestId:
+      description: El `X-Request-Id` recibido, o uno generado por Lagapenak. Queda en el registro de la API.
+      schema: { type: string, maxLength: 64 }
+    RetryAfter:
+      description: Segundos que esperar.
+      schema: { type: integer }
+
+  parameters:
+    RequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      description: Identificador de correlación de Kide-Artean (`[A-Za-z0-9._:-]{1,64}`).
+      schema: { type: string, pattern: '^[A-Za-z0-9._:-]{1,64}$' }
+    ActingUserRequired:
+      name: X-Acting-User
+      in: header
+      required: true
+      description: UUID del usuario de Kide-Artean que hace la acción. Se guarda en el vínculo y en el registro. Nunca nombre ni correo.
+      schema: { type: string, format: uuid }
+    ActingUserOptional:
+      name: X-Acting-User
+      in: header
+      required: false
+      description: UUID del usuario de Kide-Artean, si la consulta la origina una persona (obligatorio con `number`).
+      schema: { type: string, format: uuid }
+    LoanUuid:
+      name: loan_uuid
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ChangedSince:
+      name: changed_since
+      in: query
+      required: false
+      description: |
+        Cursor opaco `next_since` de la respuesta anterior, o una fecha RFC 3339 para empezar
+        (`1970-01-01T00:00:00Z` = desde el principio). Lagapenak no entrega cambios de los 2 últimos
+        segundos para no saltarse escrituras concurrentes.
+      schema: { type: string }
+    ChangedSinceRequired:
+      name: changed_since
+      in: query
+      required: true
+      description: Igual que en `GET /v1/loans`.
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+
+  schemas:
+    ObjectType:
+      type: string
+      enum: [residency, assignment]
+      description: '`residency` = residencia (`residencies.id`), `assignment` = cesión (`assignments.id`). Sin convocatorias (D3).'
+
+    LoanStatus:
+      type: string
+      description: |
+        `pending` (nada entregado), `partially_delivered` (parte entregada), `delivered` (todo entregado o
+        devuelto parcialmente), `returned` (todas las líneas devueltas, con o sin incidencia),
+        `cancelled`. Mismo cálculo que Lagapenak.
+      enum: [pending, partially_delivered, delivered, returned, cancelled]
+
+    ItemStatus:
+      type: string
+      enum: [pending, delivered, returned, returned_with_incident]
+
+    LinkState:
+      type: string
+      description: |
+        `active`; `removed` (retirado desde Kide-Artean); `loan_deleted` (el préstamo se borró en GLPI;
+        definitivo); `unavailable` (el préstamo existe pero ya no está en las entidades del cliente; se
+        calcula en cada consulta y vuelve a `active` si cambia la autorización).
+      enum: [active, removed, loan_deleted, unavailable]
+
+    Period:
+      type: object
+      required: [start, end]
+      properties:
+        start: { type: [string, 'null'], format: date-time }
+        end: { type: [string, 'null'], format: date-time }
+
+    Loan:
+      type: object
+      additionalProperties: false
+      required: [uuid, number, glpi_url, status, period, extension_request, delivery_note, items_summary, items, links, created_at, changed_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        number: { type: integer, description: Número visible en GLPI. }
+        glpi_url: { type: string, format: uri, description: Ficha del préstamo en GLPI (requiere sesión y permisos en GLPI). }
+        status: { $ref: '#/components/schemas/LoanStatus' }
+        period: { $ref: '#/components/schemas/Period' }
+        extension_request:
+          type: [object, 'null']
+          description: Solicitud de ampliación de fechas, si hay. Sin el motivo (texto libre).
+          properties:
+            status: { type: string, enum: [pending, rejected] }
+            requested_end: { type: [string, 'null'], format: date-time }
+        delivery_note:
+          type: object
+          description: Firma mínima del albarán. Nunca la imagen, el nombre ni el DNI.
+          required: [signed, signed_at]
+          properties:
+            signed: { type: boolean }
+            signed_at: { type: [string, 'null'], format: date-time }
+        items_summary:
+          type: object
+          required: [total, pending, delivered, returned, returned_with_incident]
+          properties:
+            total: { type: integer }
+            pending: { type: integer }
+            delivered: { type: integer }
+            returned: { type: integer }
+            returned_with_incident: { type: integer }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/LoanItem' }
+        links:
+          type: array
+          description: Vínculos de este cliente con el préstamo (cualquier estado salvo `removed`).
+          items: { $ref: '#/components/schemas/Link' }
+        created_at: { type: [string, 'null'], format: date-time }
+        changed_at:
+          type: string
+          format: date-time
+          description: |
+            Máximo de: última modificación del préstamo, de sus líneas, fecha de firma del albarán y de sus
+            vínculos con este cliente. (La firma no actualiza la fecha de modificación del préstamo en GLPI.)
+
+    LoanItem:
+      type: object
+      additionalProperties: false
+      required: [type, name, inventory_number, status, period]
+      properties:
+        type: { type: string, description: 'Tipo de activo GLPI (Computer, Monitor, Peripheral, Phone, Printer, NetworkEquipment…).' }
+        name: { type: string }
+        inventory_number: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/ItemStatus' }
+        period:
+          description: Fechas previstas de salida y vuelta de esta línea (pueden diferir de las del préstamo).
+          $ref: '#/components/schemas/Period'
+
+    LinkInput:
+      type: object
+      additionalProperties: false
+      properties:
+        label:
+          type: string
+          maxLength: 40
+          pattern: '^[A-Za-z0-9._/-]*$'
+          description: Referencia visible del objeto (el `code` de Kide-Artean, p. ej. `RES-2026-004`). Nunca nombres ni títulos.
+        parent_residency_id:
+          type: string
+          format: uuid
+          description: Obligatorio para `assignment`; prohibido para `residency`.
+
+    Link:
+      type: object
+      additionalProperties: false
+      required: [loan_uuid, loan_number, object_type, object_id, parent_residency_id, label, state, created_at, created_by, removed_at, removed_by, changed_at]
+      properties:
+        loan_uuid: { type: string, format: uuid }
+        loan_number: { type: integer }
+        object_type: { $ref: '#/components/schemas/ObjectType' }
+        object_id: { type: string, format: uuid }
+        parent_residency_id: { type: [string, 'null'], format: uuid }
+        label: { type: string }
+        state: { $ref: '#/components/schemas/LinkState' }
+        created_at: { type: string, format: date-time }
+        created_by: { type: [string, 'null'], format: uuid, description: '`X-Acting-User` de la última creación o reactivación.' }
+        removed_at: { type: [string, 'null'], format: date-time }
+        removed_by: { type: [string, 'null'], format: uuid }
+        changed_at: { type: string, format: date-time }
+
+    LinkedLoan:
+      type: object
+      required: [link, loan]
+      properties:
+        link: { $ref: '#/components/schemas/Link' }
+        loan:
+          description: '`null` si el vínculo está en `loan_deleted` o `unavailable`.'
+          oneOf:
+            - $ref: '#/components/schemas/Loan'
+            - type: 'null'
+
+    LoanSearchPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 1
+          items: { $ref: '#/components/schemas/Loan' }
+
+    LinkedLoanPage:
+      type: object
+      required: [data, next_page_token]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/LinkedLoan' }
+        next_page_token: { type: [string, 'null'], description: '`null` en la última página.' }
+
+    LoanChangesPage:
+      type: object
+      required: [data, next_since, has_more]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Loan' }
+        next_since: { type: string, description: Cursor para la siguiente llamada (también si `data` está vacío). }
+        has_more: { type: boolean }
+
+    LinkChangesPage:
+      type: object
+      required: [data, next_since, has_more]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Link' }
+        next_since: { type: string }
+        has_more: { type: boolean }
+
+    Meta:
+      type: object
+      required: [api_version, plugin_version, glpi_version, server_time, client, limits]
+      properties:
+        api_version: { type: string, examples: ['1.0'] }
+        plugin_version: { type: string }
+        glpi_version: { type: string }
+        server_time: { type: string, format: date-time }
+        client:
+          type: object
+          required: [name, source, scopes, expires_at]
+          properties:
+            name: { type: string }
+            source: { type: string, examples: ['kide-artean'] }
+            scopes:
+              type: array
+              items: { type: string, enum: ['loans:read', 'links:read', 'links:write'] }
+            expires_at: { type: string, format: date-time }
+            token_rotation_pending: { type: boolean, description: 'true si se está usando la credencial anterior durante su periodo de gracia.' }
+        limits:
+          type: object
+          properties:
+            page_size_max: { type: integer }
+            requests_per_minute: { type: integer }
+
+    Problem:
+      type: object
+      description: RFC 9457 (`application/problem+json`).
+      required: [type, title, status, code, request_id]
+      properties:
+        type: { type: string, format: uri, examples: ['urn:lagapenak:problem:residency_conflict'] }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code:
+          type: string
+          enum:
+            - invalid_request
+            - unauthorized
+            - forbidden_scope
+            - ip_not_allowed
+            - https_required
+            - not_found
+            - method_not_allowed
+            - loan_deleted
+            - residency_conflict
+            - parent_residency_mismatch
+            - dependent_links
+            - unsupported_media_type
+            - validation_failed
+            - rate_limited
+            - unavailable
+            - internal_error
+        request_id: { type: string }
+        errors:
+          type: array
+          description: Solo en 400/422.
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+  responses:
+    BadRequest:
+      description: Parámetros inválidos o combinación de modos no permitida (`invalid_request`).
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Unauthorized:
+      description: Falta la credencial o no es válida, ha caducado, está revocada o el cliente está desactivado (`unauthorized`).
+      headers:
+        WWW-Authenticate: { schema: { type: string, examples: ['Bearer realm="lagapenak"'] } }
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Forbidden:
+      description: 'Ámbito insuficiente (`forbidden_scope`), IP no permitida (`ip_not_allowed`) o petición sin HTTPS (`https_required`).'
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    NotFound:
+      description: No existe o está fuera de las entidades del cliente (`not_found`); también ruta desconocida o API desactivada.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Gone:
+      description: El préstamo vinculado se borró en GLPI (`loan_deleted`).
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Conflict:
+      description: Regla D2 (`residency_conflict`, `parent_residency_mismatch`, `dependent_links`).
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    UnsupportedMediaType:
+      description: El cuerpo no es `application/json`.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Unprocessable:
+      description: Cuerpo con campos inválidos (`validation_failed`).
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    TooManyRequests:
+      description: Límite de peticiones por minuto del cliente superado (`rate_limited`).
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Unavailable:
+      description: |
+        GLPI en mantenimiento o sin base de datos. Puede llegar como HTML de GLPI y no como problem+json:
+        Kide-Artean debe tratar cualquier respuesta no JSON como «No verificable».
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
