@@ -1,6 +1,6 @@
 <?php
 
-define('PLUGIN_LAGAPENAK_VERSION', '1.6.0');
+define('PLUGIN_LAGAPENAK_VERSION', '1.6.1');
 
 include_once __DIR__ . '/inc/compat.php';
 
