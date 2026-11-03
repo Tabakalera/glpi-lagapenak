@@ -688,5 +688,6 @@ msgstr "Motivo (obligatorio para otra dirección; queda registrado)"
 msgid "Not sent: the delivery note can only be sent to addresses linked to the loan, and the signing link only to the signer. A supervisor may use another address by stating the reason."
 msgstr "No enviado: el albarán solo se puede enviar a direcciones vinculadas al préstamo, y el enlace de firma solo a la persona firmante. Un supervisor puede usar otra dirección indicando el motivo."
 
-msgid "A loan with a signed delivery note cannot be deleted by its requester."
-msgstr "El solicitante no puede borrar un préstamo con el albarán firmado."
+
+msgid "A loan with a signed delivery note cannot be deleted: it is kept as the record of the handover."
+msgstr "Un préstamo con el albarán firmado no se puede borrar: se conserva como registro de la entrega."

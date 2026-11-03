@@ -522,7 +522,7 @@ if ($can_supervise || $ID == 0) {
         echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
         echo '<i class="fas fa-file-signature me-1"></i>' . __('Delivery note', 'lagapenak') . '</a>';
     }
-    if ($ID > 0 && $can_supervise) {
+    if ($ID > 0 && $can_supervise && !PluginLagapenakLoan::isSigned($loan->fields)) {
         echo '<button type="submit" name="delete_loan" class="btn btn-danger ms-auto"
                       onclick="return confirm(\'' . __('Delete this loan?', 'lagapenak') . '\')">';
         echo '<i class="fas fa-trash me-1"></i>' . __('Delete', 'lagapenak');

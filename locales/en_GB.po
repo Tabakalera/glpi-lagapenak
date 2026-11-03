@@ -578,5 +578,6 @@ msgstr "Reason (required for another address, recorded in the log)"
 msgid "Not sent: the delivery note can only be sent to addresses linked to the loan, and the signing link only to the signer. A supervisor may use another address by stating the reason."
 msgstr "Not sent: the delivery note can only be sent to addresses linked to the loan, and the signing link only to the signer. A supervisor may use another address by stating the reason."
 
-msgid "A loan with a signed delivery note cannot be deleted by its requester."
-msgstr "A loan with a signed delivery note cannot be deleted by its requester."
+
+msgid "A loan with a signed delivery note cannot be deleted: it is kept as the record of the handover."
+msgstr "A loan with a signed delivery note cannot be deleted: it is kept as the record of the handover."

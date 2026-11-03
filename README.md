@@ -137,6 +137,26 @@ Pon `[]` para no mostrar ninguno. Los labels se obtienen automáticamente de `ge
 
 ---
 
+## Cambios en la 1.6.1 para quienes gestionan préstamos
+
+**Envío del albarán y del enlace de firma**
+
+| # | Situación | Qué ocurre desde la 1.6.1 | Qué hacer |
+|---|---|---|---|
+| 1 | Un solicitante quiere enviar el albarán firmado a alguien que no figura en el préstamo (productora, gestoría, aseguradora…) | No se permite: solo se ofrecen las direcciones del solicitante, del beneficiario y del supervisor | Lo envía el supervisor indicando el motivo, o esa persona se registra como beneficiaria |
+| 2 | Un solicitante quiere copiar el enlace de firma para mandarlo por otro canal | Ya no puede ver el enlace en pantalla | El enlace se envía por correo al firmante, o lo muestra un supervisor |
+| 3 | Firma una persona distinta del beneficiario anotado | El enlace solo se envía al beneficiario | El supervisor corrige el beneficiario del préstamo antes de enviar el enlace |
+| 4 | El beneficiario no tiene correo (o no hay beneficiario y el solicitante no tiene correo en GLPI) | No se puede enviar el enlace | Añadir el correo, firmar en pantalla o pedir al supervisor que muestre el enlace |
+| 5 | Un supervisor envía el albarán a una dirección que no figura en el préstamo | Debe indicar el motivo (mínimo 10 caracteres) | El envío y el motivo quedan registrados en Administración > Registros |
+
+**Otros cambios**
+
+- Un albarán firmado no se puede volver a firmar ni sustituir. Si hay un error, no se corrige desde la aplicación hasta la 1.7.0 (anulación y nueva versión).
+- Un préstamo con el albarán firmado no se puede borrar, tampoco por un supervisor. Se puede seguir entregando, devolviendo, prorrogando y comentando.
+- Para pedir un préstamo hace falta el derecho «Crear» de Lagapenak en el perfil.
+- Cada supervisor gestiona solo los préstamos de las entidades a las que tiene acceso.
+- Solo se puede añadir material marcado con «Permitir reservas».
+
 ## Calendario y suscripción iCal
 
 Accede desde el icono de calendario en el menú de Lagapenak.
@@ -350,6 +370,26 @@ $albaran_loan_fields = ['field_1', 'field_2']; // shown in document and PDF (def
 Set to `[]` to show none. Labels are read automatically from `getFieldLabels()`.
 
 ---
+
+## Changes in 1.6.1 for loan managers
+
+**Sending the delivery note and the signing link**
+
+| # | Situation | What happens since 1.6.1 | What to do |
+|---|---|---|---|
+| 1 | A requester wants to send the signed delivery note to someone not on the loan | Not allowed: only the requester's, beneficiary's and supervisor's addresses are offered | The supervisor sends it stating the reason, or that person is recorded as beneficiary |
+| 2 | A requester wants to copy the signing link to send it another way | The link is no longer shown to them | The link is emailed to the signer, or a supervisor shows it |
+| 3 | Someone other than the recorded beneficiary signs | The link only goes to the beneficiary | The supervisor corrects the beneficiary before sending the link |
+| 4 | The beneficiary has no email (or there is no beneficiary and the requester has no GLPI email) | The link cannot be sent | Add the email, sign on screen, or ask a supervisor to show the link |
+| 5 | A supervisor sends the delivery note to an address not on the loan | A reason is required (10 characters minimum) | The sending and the reason are recorded in Administration > Logs |
+
+**Other changes**
+
+- A signed delivery note cannot be signed again or replaced. Mistakes cannot be corrected from the application until 1.7.0 (annulment and new version).
+- A loan with a signed delivery note cannot be deleted, not even by a supervisor. Deliveries, returns, extensions and comments keep working.
+- Requesting a loan needs the Lagapenak "Create" right in the profile.
+- Supervisors only manage loans of the entities they have access to.
+- Only assets with "Allow reservations" enabled can be added.
 
 ## Calendar and iCal subscription
 

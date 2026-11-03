@@ -264,14 +264,14 @@ class PluginLagapenakLoan extends CommonDBTM {
     }
 
     /**
-     * A signed delivery note is evidence of the handover: the requester can no longer delete the loan.
-     * Checked here so it applies to every deletion route. (1.7.0 replaces deletion with cancellation
-     * and keeps the signed versions.)
+     * A signed delivery note is evidence of the handover: nobody can delete the loan, supervisors
+     * included. Checked here so it applies to every deletion route. The loan itself keeps working
+     * (deliveries, returns, extensions, comments). 1.7.0 adds cancellation and kept signed versions.
      */
     function pre_deleteItem() {
-        if (self::isSigned($this->fields) && !self::canManageLoan($this)) {
+        if (self::isSigned($this->fields)) {
             Session::addMessageAfterRedirect(
-                __('A loan with a signed delivery note cannot be deleted by its requester.', 'lagapenak'),
+                __('A loan with a signed delivery note cannot be deleted: it is kept as the record of the handover.', 'lagapenak'),
                 false,
                 ERROR
             );
