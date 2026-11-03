@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.1] - Unreleased
+
+Security release. Every issue below was reproduced first and checked after the fix with fictitious
+data on an isolated GLPI 10.0.24 and GLPI 11.0.9.
+
+### Security
+- Creating a loan now requires the CREATE right, also to open the form (the "New" button was hidden, the page and its submission were not). The entity must be one the user can access and the recipient must be a supervisor of that entity. A requester needs CREATE to add assets to their own loan
+- "Supervisor" of a loan now means UPDATE right **and** access to the loan's entity: a supervisor of one entity could open, edit, comment, delete and see the delivery note (ID number included) of loans in other entities by id, and create loans there
+- `ajax/asset_timeline.php` retired (answers 410): no page used it and it returned every loan name and requester name of the month, all entities, to any logged-in user. `ajax/entity_supervisor.php` and `ajax/asset_list.php` now respect the user's entities
+- Removing or changing an asset line now checks that the line belongs to the loan being edited (lines of other people's loans could be removed or have their status changed)
+- Assets are validated on the server: loanable type, existing item, entity the user can access, "Allow reservations" enabled. Any GLPI object (a User, for instance) could be added to a loan, and the bulk-add answer revealed the full name of any user by id
+- A signed delivery note can no longer be signed again or replaced: the signature is written only if there is none (conditional UPDATE), any pending signing link is voided when the note is signed, the public signing page refuses links of signed notes, no link is generated for a signed note, the loan form can no longer write signature fields (a supervisor could rewrite or back-date a signature) and the signature must be a PNG image. "Sign again" removed
+- The generated signing link is no longer passed in the redirect URL (browser history, access logs)
+
+### Known open items
+- Sending the delivery note or the signing link to any address (decision A5 pending)
+- The signed PDF is still regenerated from current loan data; immutable signed versions are being designed
+
 ## [1.6.0] - 2026-09-23
 
 ### Added
