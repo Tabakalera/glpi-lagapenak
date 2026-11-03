@@ -181,6 +181,23 @@ Requiere servidor SMTP configurado en **Configuración → Notificaciones**. Se 
 
 ---
 
+## API de integración con Kide-Artean (en desarrollo)
+
+Kide-Artean (residencias y cesiones) consulta los préstamos de Lagapenak y los vincula a sus residencias y cesiones. Contrato completo: `docs/api/openapi-g1.yaml`.
+
+- **Qué puede hacer:** buscar un préstamo por su número, leer su estado, fechas y material, saber si el albarán está firmado y cuándo, y crear o retirar vínculos con una residencia y sus cesiones. **No** puede crear, cambiar, firmar, cancelar ni borrar préstamos.
+- **Qué nunca recibe:** nombre del préstamo, observaciones, campos personalizados, comentarios, personas, DNI, firmas ni documentos.
+- **Viene desactivada.** Para activarla, un Super-Admin entra en *Configuración › Complementos › Lagapenak › Configurar*:
+  1. Marca **API activada** (y deja **Exigir HTTPS** marcado).
+  2. Crea el cliente: entidades autorizadas, IP del servidor de Kide-Artean y caducidad (12 meses como máximo).
+  3. Copia la credencial que aparece: **solo se muestra una vez**. Se entrega a Kide-Artean por un canal seguro.
+- **Cambiar la credencial:** *Editar › Emitir nueva credencial*. La anterior sigue valiendo los días indicados (0 = deja de valer ya).
+- **Cortar el acceso:** *Editar › Revocar ahora*.
+- Cada llamada queda en *Últimas 50 llamadas* y en la tabla `glpi_plugin_lagapenak_apilogs` (365 días por defecto).
+- Si se borra un préstamo vinculado, Kide-Artean lo ve como `loan_deleted`; si se mueve a una entidad no autorizada, como `unavailable`.
+
+---
+
 ## Estructura de archivos
 
 ```
@@ -190,6 +207,7 @@ lagapenak/
 ├── README.md
 ├── LICENSE
 ├── CHANGELOG.md
+├── docs/api/openapi-g1.yaml       # Contrato de la API G1 / G1 API contract
 ├── ajax/
 │   ├── asset_list.php             # Listado de activos para selector
 │   ├── asset_timeline.php         # Retirado en 1.6.1 (responde 410)
@@ -202,10 +220,15 @@ lagapenak/
 │   ├── loan.form.php              # Formulario de préstamo
 │   ├── albaran.php                # Albarán de entrega con firma digital
 │   ├── calendar.php               # Vista de calendario
-│   └── loan.ics.php               # Feed iCal (autenticación por token)
+│   ├── loan.ics.php               # Feed iCal (autenticación por token)
+│   ├── api.php                    # API de integración G1 (Kide-Artean)
+│   └── apiclient.php              # Configuración de la API y clientes (Super-Admin)
 ├── inc/
 │   ├── loan.class.php             # Clase principal del préstamo
 │   ├── loanitem.class.php         # Clase de ítem de préstamo
+│   ├── loanlink.class.php         # Vínculos con residencias y cesiones
+│   ├── api.class.php              # API de integración
+│   ├── apiclient.class.php        # Clientes y credenciales de la API
 │   ├── profile.class.php          # Integración de permisos con perfiles GLPI
 │   ├── compat.php                 # Compatibilidad GLPI 10 / GLPI 11
 │   └── notification.php           # Envío de emails y cron de recordatorios
@@ -423,6 +446,23 @@ If sending fails, the error is logged in `files/_log/`.
 
 ---
 
+## Kide-Artean integration API (in development)
+
+Kide-Artean (residencies and assignments) reads Lagapenak loans and links them to its residencies and assignments. Full contract: `docs/api/openapi-g1.yaml`.
+
+- **What it can do:** find a loan by number, read its status, dates and assets, see whether and when the delivery note was signed, and create or remove links with a residency and its assignments. It can **not** create, change, sign, cancel or delete loans.
+- **What it never receives:** loan name, observations, custom fields, comments, people, ID numbers, signatures or documents.
+- **Disabled by default.** A Super-Admin enables it in *Setup › Plugins › Lagapenak › Configure*:
+  1. Tick **API enabled** (keep **Require HTTPS** ticked).
+  2. Create the client: authorised entities, Kide-Artean server IP and expiry (12 months at most).
+  3. Copy the credential shown: **it is shown only once**. Hand it to Kide-Artean through a secure channel.
+- **New credential:** *Edit › Issue new credential*. The previous one keeps working for the given days (0 = stops now).
+- **Cut access:** *Edit › Revoke now*.
+- Every call is listed in *Last 50 calls* and in table `glpi_plugin_lagapenak_apilogs` (365 days by default).
+- A deleted linked loan shows in Kide-Artean as `loan_deleted`; one moved to a non-authorised entity, as `unavailable`.
+
+---
+
 ## File structure
 
 ```
@@ -432,6 +472,7 @@ lagapenak/
 ├── README.md
 ├── LICENSE
 ├── CHANGELOG.md
+├── docs/api/openapi-g1.yaml       # Contrato de la API G1 / G1 API contract
 ├── ajax/
 │   ├── asset_list.php             # Asset list for selector
 │   ├── asset_timeline.php         # Retired in 1.6.1 (answers 410)
@@ -444,10 +485,15 @@ lagapenak/
 │   ├── loan.form.php              # Loan form (create / edit)
 │   ├── albaran.php                # Delivery note with digital signature
 │   ├── calendar.php               # Calendar view
-│   └── loan.ics.php               # iCal feed (token authentication)
+│   ├── loan.ics.php               # iCal feed (token authentication)
+│   ├── api.php                    # G1 integration API (Kide-Artean)
+│   └── apiclient.php              # API settings and clients (Super-Admin)
 ├── inc/
 │   ├── loan.class.php             # Main loan class
 │   ├── loanitem.class.php         # Loan item class
+│   ├── loanlink.class.php         # Links with residencies and assignments
+│   ├── api.class.php              # Integration API
+│   ├── apiclient.class.php        # API clients and credentials
 │   ├── profile.class.php          # GLPI profile permissions integration
 │   ├── compat.php                 # GLPI 10 / GLPI 11 compatibility helpers
 │   └── notification.php           # Email notifications and cron reminders

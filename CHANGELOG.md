@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.0-dev] - Unreleased (branch `feature/api-g1`, number to be decided at release)
+
+Integration API G1 for Kide-Artean. Contract: `docs/api/openapi-g1.yaml`. Built on 1.6.1, which is unchanged.
+
+### Added
+- `front/api.php/v1/...`: server-to-server API, read-only for loans. Six operations: `meta`, loan search (by number, by linked residency or assignment, or by changes since a cursor), one loan, create/remove a link (idempotent) and link changes. No operation creates, edits, signs, cancels or deletes loans
+- Exposes only identifiers, material, dates, statuses and whether/when the delivery note was signed. Never the loan name, observations, custom fields, comments, people, ID numbers, signatures or documents
+- Links between a loan and one Kide-Artean residency plus assignments of that same residency (`glpi_plugin_lagapenak_loanlinks`). Removed links are kept with who and when; links of a deleted loan become `loan_deleted`; a loan moved out of the client's entities shows as `unavailable`
+- Every loan gets a random UUID (`uuid` column, filled in for existing loans on update); it cannot be changed from the form
+- API clients (`glpi_plugin_lagapenak_apiclients`): bearer token stored as a SHA-256 hash and shown once, expiry of 12 months at most, rotation with a grace period, immediate revocation, scopes, authorised entities (optionally with sub-entities) checked on every request, allowed source IPs, HTTPS required, trusted reverse proxies, per-client rate limit and a lockout of 5 minutes after 20 failed credentials from one IP
+- API log (`glpi_plugin_lagapenak_apilogs`): client, date, method, route, result, IP, request id and Kide-Artean user. No bodies. Kept 365 days by default (daily task `ApiLogClean`)
+- *Setup › Plugins › Lagapenak › Configure* (Super-Admin): enable the API, manage clients, see the last 50 calls
+
+### Notes
+- The API is **disabled** after install or update until a Super-Admin enables it
+- GLPI 11: the API path is declared stateless in `plugin_lagapenak_boot()` (no session, cookie, CSRF token or session firewall). GLPI 10: the script disables session cookies itself
+- Uninstall removes API clients (credentials) and keeps links and the API log (records), like loans
+
 ## [1.6.1] - Unreleased
 
 Security release. Every issue below was reproduced first and checked after the fix with fictitious

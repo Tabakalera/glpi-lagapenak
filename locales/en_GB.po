@@ -602,3 +602,141 @@ msgstr "Calendars subscribed to this URL will stop receiving loans. Continue?"
 
 msgid "Revoke URL"
 msgstr "Revoke URL"
+
+msgid "API enabled (when disabled, every call answers 404)"
+msgstr "API enabled (when disabled, every call answers 404)"
+
+msgid "Allowed IPs"
+msgstr "Allowed IPs"
+
+msgid "Allowed source IPs (one per line; address or range)"
+msgstr "Allowed source IPs (one per line; address or range)"
+
+msgid "Authorised entities"
+msgstr "Authorised entities"
+
+msgid "Choose at least one entity."
+msgstr "Choose at least one entity."
+
+msgid "Choose at least one scope."
+msgstr "Choose at least one scope."
+
+msgid "Client saved."
+msgstr "Client saved."
+
+msgid "Client"
+msgstr "Client"
+
+msgid "Clients"
+msgstr "Clients"
+
+msgid "Copy this credential now: it will not be shown again."
+msgstr "Copy this credential now: it will not be shown again."
+
+msgid "Create client and show credential"
+msgstr "Create client and show credential"
+
+msgid "Credential revoked: it stopped working immediately."
+msgstr "Credential revoked: it stopped working immediately."
+
+msgid "Days the current credential keeps working"
+msgstr "Days the current credential keeps working"
+
+msgid "Deletes integration API log entries older than the retention period"
+msgstr "Deletes integration API log entries older than the retention period"
+
+msgid "Edit client: %s"
+msgstr "Edit client: %s"
+
+msgid "Enter at least one allowed IP address."
+msgstr "Enter at least one allowed IP address."
+
+msgid "Expires (12 months at most)"
+msgstr "Expires (12 months at most)"
+
+msgid "Expires"
+msgstr "Expires"
+
+msgid "Expiry date must be in the future and within 12 months."
+msgstr "Expiry date must be in the future and within 12 months."
+
+msgid "Include sub-entities"
+msgstr "Include sub-entities"
+
+msgid "Integration API (Kide-Artean)"
+msgstr "Integration API (Kide-Artean)"
+
+msgid "Invalid IP address or range: %s"
+msgstr "Invalid IP address or range: %s"
+
+msgid "Issue new credential"
+msgstr "Issue new credential"
+
+msgid "Keep API log (days)"
+msgstr "Keep API log (days)"
+
+msgid "Kide-Artean user"
+msgstr "Kide-Artean user"
+
+msgid "Lagapenak · Integration API"
+msgstr "Lagapenak · Integration API"
+
+msgid "Last 50 calls"
+msgstr "Last 50 calls"
+
+msgid "Last used"
+msgstr "Last used"
+
+msgid "Name is required: up to 100 letters, digits, spaces and . _ ( ) -"
+msgstr "Name is required: up to 100 letters, digits, spaces and . _ ( ) -"
+
+msgid "New client"
+msgstr "New client"
+
+msgid "No clients yet."
+msgstr "No clients yet."
+
+msgid "Read-only access to loans of the authorised entities and links with residencies and assignments. Contract: docs/api/openapi-g1.yaml in the plugin folder."
+msgstr "Read-only access to loans of the authorised entities and links with residencies and assignments. Contract: docs/api/openapi-g1.yaml in the plugin folder."
+
+msgid "Request"
+msgstr "Request"
+
+msgid "Requests per minute per client"
+msgstr "Requests per minute per client"
+
+msgid "Require HTTPS (only disable in test environments)"
+msgstr "Require HTTPS (only disable in test environments)"
+
+msgid "Result"
+msgstr "Result"
+
+msgid "Revoke now"
+msgstr "Revoke now"
+
+msgid "Scopes"
+msgstr "Scopes"
+
+msgid "Settings saved."
+msgstr "Settings saved."
+
+msgid "Settings"
+msgstr "Settings"
+
+msgid "Source must be 2-32 lower-case letters, digits or dashes."
+msgstr "Source must be 2-32 lower-case letters, digits or dashes."
+
+msgid "Source"
+msgstr "Source"
+
+msgid "The client will stop working immediately. Continue?"
+msgstr "The client will stop working immediately. Continue?"
+
+msgid "Trusted reverse proxies (IP or range; only these may set X-Forwarded-For / X-Forwarded-Proto)"
+msgstr "Trusted reverse proxies (IP or range; only these may set X-Forwarded-For / X-Forwarded-Proto)"
+
+msgid "previous credential valid until %s"
+msgstr "previous credential valid until %s"
+
+msgid "sub-entities"
+msgstr "sub-entities"

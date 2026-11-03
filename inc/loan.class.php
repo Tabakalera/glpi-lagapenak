@@ -305,7 +305,19 @@ class PluginLagapenakLoan extends CommonDBTM {
         if (!self::canSupervise()) {
             $input['status'] = self::STATUS_PENDING;
         }
+        // Public identifier for the integration API, never taken from the form
+        $input['uuid'] = self::newUuid();
         return self::sanitizeDates($input);
+    }
+
+    /**
+     * Random UUID (version 4), lower case.
+     */
+    static function newUuid(): string {
+        $b = random_bytes(16);
+        $b[6] = chr((ord($b[6]) & 0x0f) | 0x40);
+        $b[8] = chr((ord($b[8]) & 0x3f) | 0x80);
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($b), 4));
     }
 
     /**
@@ -367,8 +379,8 @@ class PluginLagapenakLoan extends CommonDBTM {
     }
 
     function prepareInputForUpdate($input) {
-        // Solicitante cannot be changed after creation
-        unset($input['users_id']);
+        // Solicitante and the public identifier cannot be changed after creation
+        unset($input['users_id'], $input['uuid']);
         // A signature is only ever written by the signing workflow, which updates the row directly.
         // Without this, saving the loan form could rewrite or back-date a signed delivery note.
         foreach (self::getSignatureFields() as $field) {
@@ -989,12 +1001,35 @@ class PluginLagapenakLoan extends CommonDBTM {
         global $DB;
         $DB->delete('glpi_plugin_lagapenak_loanitems',    ['loans_id' => $this->getID()]);
         $DB->delete('glpi_plugin_lagapenak_loancomments', ['loans_id' => $this->getID()]);
+        // Links are kept as tombstones so that Kide-Artean learns the loan is gone
+        if ($DB->tableExists('glpi_plugin_lagapenak_loanlinks')) {
+            PluginLagapenakLoanLink::markLoanDeleted($this->getID());
+        }
     }
 
     // ── Cron: recordatorio de devolución ─────────────────────────────────────
 
     public static function cronInfo(string $name): array {
+        if ($name === 'ApiLogClean') {
+            return ['description' => __('Deletes integration API log entries older than the retention period', 'lagapenak')];
+        }
         return ['description' => __('Sends return reminders for loans due in 2 days', 'lagapenak')];
+    }
+
+    /**
+     * Daily. Keeps the integration API log for the configured number of days (365 by default).
+     */
+    public static function cronApiLogClean(CronTask $task): int {
+        global $DB;
+        if (!$DB->tableExists('glpi_plugin_lagapenak_apilogs')) {
+            return 0;
+        }
+        $days = PluginLagapenakApiClient::getConfig()['log_retention_days'];
+        $DB->delete('glpi_plugin_lagapenak_apilogs', [
+            'date' => ['<', date('Y-m-d H:i:s', time() - $days * DAY_TIMESTAMP)],
+        ]);
+        $task->addVolume($DB->affectedRows());
+        return 1;
     }
 
     /**

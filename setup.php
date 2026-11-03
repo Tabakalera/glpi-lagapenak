@@ -1,6 +1,7 @@
 <?php
 
-define('PLUGIN_LAGAPENAK_VERSION', '1.6.1');
+// Development build of the G1 integration API (branch feature/api-g1); final number decided at release
+define('PLUGIN_LAGAPENAK_VERSION', '1.7.0-dev');
 
 include_once __DIR__ . '/inc/compat.php';
 
@@ -60,6 +61,15 @@ function plugin_lagapenak_addDefaultWhere($itemtype) {
     return '';
 }
 
+/**
+ * GLPI 11 only, called before the session starts. The integration API authenticates with its own
+ * bearer token: no GLPI session, no cookie, no CSRF token and no session firewall.
+ * (GLPI 10 has no such hook: front/api.php disables session cookies itself.)
+ */
+function plugin_lagapenak_boot() {
+    \Glpi\Http\SessionManager::registerPluginStatelessPath('lagapenak', '#^/front/api\.php(/|$)#');
+}
+
 function plugin_init_lagapenak() {
     Plugin::loadLang('lagapenak');
 
@@ -86,6 +96,11 @@ function plugin_init_lagapenak() {
         'state'   => CronTask::STATE_WAITING,
         'mode'    => CronTask::MODE_INTERNAL,
     ]);
+    CronTask::register('PluginLagapenakLoan', 'ApiLogClean', DAY_TIMESTAMP, [
+        'comment' => 'Delete integration API log entries older than the retention period',
+        'state'   => CronTask::STATE_WAITING,
+        'mode'    => CronTask::MODE_INTERNAL,
+    ]);
 
     // Only show the helpdesk sidebar entry to users who have at least READ on the plugin
     if (PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_loan', READ)) {
@@ -94,6 +109,10 @@ function plugin_init_lagapenak() {
     }
 
     global $PLUGIN_HOOKS;
+    // "Configure" link in the plugin list: integration API settings and clients (Super-Admin only)
+    if (Session::haveRight('config', UPDATE)) {
+        $PLUGIN_HOOKS['config_page']['lagapenak'] = 'front/apiclient.php';
+    }
     $PLUGIN_HOOKS['item_add']['lagapenak'] = [
         'PluginLagapenakLoan' => 'plugin_lagapenak_notify_loan_created',
     ];

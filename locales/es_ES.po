@@ -712,3 +712,141 @@ msgstr "Los calendarios suscritos a este enlace dejarán de recibir préstamos. 
 
 msgid "Revoke URL"
 msgstr "Revocar enlace"
+
+msgid "API enabled (when disabled, every call answers 404)"
+msgstr "API activada (desactivada, todas las llamadas responden 404)"
+
+msgid "Allowed IPs"
+msgstr "IP permitidas"
+
+msgid "Allowed source IPs (one per line; address or range)"
+msgstr "IP de origen permitidas (una por línea; dirección o rango)"
+
+msgid "Authorised entities"
+msgstr "Entidades autorizadas"
+
+msgid "Choose at least one entity."
+msgstr "Elige al menos una entidad."
+
+msgid "Choose at least one scope."
+msgstr "Elige al menos un ámbito."
+
+msgid "Client saved."
+msgstr "Cliente guardado."
+
+msgid "Client"
+msgstr "Cliente"
+
+msgid "Clients"
+msgstr "Clientes"
+
+msgid "Copy this credential now: it will not be shown again."
+msgstr "Copia ahora esta credencial: no se volverá a mostrar."
+
+msgid "Create client and show credential"
+msgstr "Crear cliente y mostrar la credencial"
+
+msgid "Credential revoked: it stopped working immediately."
+msgstr "Credencial revocada: ha dejado de funcionar al instante."
+
+msgid "Days the current credential keeps working"
+msgstr "Días que sigue funcionando la credencial actual"
+
+msgid "Deletes integration API log entries older than the retention period"
+msgstr "Borra las entradas del registro de la API de integración más antiguas que el plazo de conservación"
+
+msgid "Edit client: %s"
+msgstr "Editar cliente: %s"
+
+msgid "Enter at least one allowed IP address."
+msgstr "Indica al menos una IP permitida."
+
+msgid "Expires (12 months at most)"
+msgstr "Caduca (12 meses como máximo)"
+
+msgid "Expires"
+msgstr "Caduca"
+
+msgid "Expiry date must be in the future and within 12 months."
+msgstr "La caducidad debe ser futura y no superar 12 meses."
+
+msgid "Include sub-entities"
+msgstr "Incluir subentidades"
+
+msgid "Integration API (Kide-Artean)"
+msgstr "API de integración (Kide-Artean)"
+
+msgid "Invalid IP address or range: %s"
+msgstr "IP o rango no válido: %s"
+
+msgid "Issue new credential"
+msgstr "Emitir nueva credencial"
+
+msgid "Keep API log (days)"
+msgstr "Conservar el registro de la API (días)"
+
+msgid "Kide-Artean user"
+msgstr "Usuario de Kide-Artean"
+
+msgid "Lagapenak · Integration API"
+msgstr "Lagapenak · API de integración"
+
+msgid "Last 50 calls"
+msgstr "Últimas 50 llamadas"
+
+msgid "Last used"
+msgstr "Último uso"
+
+msgid "Name is required: up to 100 letters, digits, spaces and . _ ( ) -"
+msgstr "El nombre es obligatorio: hasta 100 letras, cifras, espacios y . _ ( ) -"
+
+msgid "New client"
+msgstr "Nuevo cliente"
+
+msgid "No clients yet."
+msgstr "Todavía no hay clientes."
+
+msgid "Read-only access to loans of the authorised entities and links with residencies and assignments. Contract: docs/api/openapi-g1.yaml in the plugin folder."
+msgstr "Acceso de solo lectura a los préstamos de las entidades autorizadas y vínculos con residencias y cesiones. Contrato: docs/api/openapi-g1.yaml en la carpeta del plugin."
+
+msgid "Request"
+msgstr "Petición"
+
+msgid "Requests per minute per client"
+msgstr "Peticiones por minuto por cliente"
+
+msgid "Require HTTPS (only disable in test environments)"
+msgstr "Exigir HTTPS (desactivar solo en entornos de prueba)"
+
+msgid "Result"
+msgstr "Resultado"
+
+msgid "Revoke now"
+msgstr "Revocar ahora"
+
+msgid "Scopes"
+msgstr "Ámbitos"
+
+msgid "Settings saved."
+msgstr "Configuración guardada."
+
+msgid "Settings"
+msgstr "Configuración"
+
+msgid "Source must be 2-32 lower-case letters, digits or dashes."
+msgstr "La fuente debe tener de 2 a 32 minúsculas, cifras o guiones."
+
+msgid "Source"
+msgstr "Fuente"
+
+msgid "The client will stop working immediately. Continue?"
+msgstr "El cliente dejará de funcionar al instante. ¿Continuar?"
+
+msgid "Trusted reverse proxies (IP or range; only these may set X-Forwarded-For / X-Forwarded-Proto)"
+msgstr "Proxies inversos de confianza (IP o rango; solo ellos pueden fijar X-Forwarded-For / X-Forwarded-Proto)"
+
+msgid "previous credential valid until %s"
+msgstr "credencial anterior válida hasta %s"
+
+msgid "sub-entities"
+msgstr "subentidades"

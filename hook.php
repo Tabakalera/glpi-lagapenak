@@ -119,6 +119,8 @@ function plugin_lagapenak_install() {
         );
     }
 
+    plugin_lagapenak_install_api();
+
     // Only add missing rights: ProfileRight::addProfileRights() inserts blindly and, on GLPI 11,
     // the duplicate-key error on plugin update is fatal.
     foreach ($DB->request(['SELECT' => ['id'], 'FROM' => 'glpi_profiles']) as $profile) {
@@ -143,6 +145,132 @@ function plugin_lagapenak_install() {
     // with a notice instead of loans. Personal tokens (glpi_plugin_lagapenak_icstokens) replace it.
 
     return true;
+}
+
+/**
+ * G1 integration API (Kide-Artean): loan UUIDs, links, API clients and API log.
+ * Idempotent: only creates what is missing. The API stays disabled until a Super-Admin enables it.
+ */
+function plugin_lagapenak_install_api() {
+    global $DB;
+
+    $default_charset   = DBConnection::getDefaultCharset();
+    $default_collation = DBConnection::getDefaultCollation();
+
+    // Stable public identifier of each loan (the numeric id is sequential and internal)
+    if (!$DB->fieldExists('glpi_plugin_lagapenak_loans', 'uuid')) {
+        plugin_lagapenak_query_or_fail(
+            "ALTER TABLE `glpi_plugin_lagapenak_loans` ADD COLUMN `uuid` CHAR(36) NULL DEFAULT NULL"
+        );
+    }
+    // Backfill before the unique key; uuid is not part of date_mod on purpose (it is not a change)
+    foreach ($DB->request([
+        'SELECT' => ['id'],
+        'FROM'   => 'glpi_plugin_lagapenak_loans',
+        'WHERE'  => ['OR' => [['uuid' => null], ['uuid' => '']]],
+    ]) as $row) {
+        $DB->update('glpi_plugin_lagapenak_loans', ['uuid' => PluginLagapenakLoan::newUuid()], ['id' => $row['id']]);
+    }
+    if (!isIndex('glpi_plugin_lagapenak_loans', 'uuid')) {
+        plugin_lagapenak_query_or_fail(
+            "ALTER TABLE `glpi_plugin_lagapenak_loans` ADD UNIQUE KEY `uuid` (`uuid`)"
+        );
+    }
+
+    if (!$DB->tableExists('glpi_plugin_lagapenak_loanlinks')) {
+        plugin_lagapenak_query_or_fail(
+            "CREATE TABLE `glpi_plugin_lagapenak_loanlinks` (
+                `id`                  INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `loans_id`            INT UNSIGNED NOT NULL DEFAULT 0,
+                `loan_uuid`           CHAR(36) NOT NULL DEFAULT '',
+                `loan_number`         INT UNSIGNED NOT NULL DEFAULT 0,
+                `source`              VARCHAR(32) NOT NULL DEFAULT '',
+                `object_type`         VARCHAR(20) NOT NULL DEFAULT '',
+                `object_id`           CHAR(36) NOT NULL DEFAULT '',
+                `parent_residency_id` CHAR(36) NULL DEFAULT NULL,
+                `label`               VARCHAR(40) NOT NULL DEFAULT '',
+                `state`               VARCHAR(16) NOT NULL DEFAULT 'active',
+                `created_by`          CHAR(36) NULL DEFAULT NULL,
+                `removed_by`          CHAR(36) NULL DEFAULT NULL,
+                `apiclients_id`       INT UNSIGNED NOT NULL DEFAULT 0,
+                `date_creation`       TIMESTAMP NULL DEFAULT NULL,
+                `date_mod`            TIMESTAMP NULL DEFAULT NULL,
+                `date_removed`        TIMESTAMP NULL DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `unicity` (`loans_id`, `source`, `object_type`, `object_id`),
+                KEY `object` (`source`, `object_type`, `object_id`),
+                KEY `loan_uuid` (`loan_uuid`),
+                KEY `date_mod` (`date_mod`)
+            ) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation}"
+        );
+    }
+
+    if (!$DB->tableExists('glpi_plugin_lagapenak_apiclients')) {
+        plugin_lagapenak_query_or_fail(
+            "CREATE TABLE `glpi_plugin_lagapenak_apiclients` (
+                `id`                    INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `name`                  VARCHAR(100) NOT NULL DEFAULT '',
+                `source`                VARCHAR(32) NOT NULL DEFAULT '',
+                `token_prefix`          VARCHAR(16) NULL DEFAULT NULL,
+                `token_hash`            CHAR(64) NULL DEFAULT NULL,
+                `prev_token_prefix`     VARCHAR(16) NULL DEFAULT NULL,
+                `prev_token_hash`       CHAR(64) NULL DEFAULT NULL,
+                `prev_token_expires_at` TIMESTAMP NULL DEFAULT NULL,
+                `scopes`                VARCHAR(255) NOT NULL DEFAULT '',
+                `entities`              TEXT NULL DEFAULT NULL,
+                `is_recursive`          TINYINT(1) NOT NULL DEFAULT 0,
+                `allowed_ips`           TEXT NULL DEFAULT NULL,
+                `is_active`             TINYINT(1) NOT NULL DEFAULT 1,
+                `expires_at`            TIMESTAMP NULL DEFAULT NULL,
+                `last_used_at`          TIMESTAMP NULL DEFAULT NULL,
+                `scope_mod`             TIMESTAMP NULL DEFAULT NULL,
+                `users_id`              INT UNSIGNED NOT NULL DEFAULT 0,
+                `date_creation`         TIMESTAMP NULL DEFAULT NULL,
+                `date_mod`              TIMESTAMP NULL DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `token_prefix` (`token_prefix`),
+                UNIQUE KEY `prev_token_prefix` (`prev_token_prefix`)
+            ) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation}"
+        );
+    }
+
+    // Who called what and when; never request or response bodies
+    if (!$DB->tableExists('glpi_plugin_lagapenak_apilogs')) {
+        plugin_lagapenak_query_or_fail(
+            "CREATE TABLE `glpi_plugin_lagapenak_apilogs` (
+                `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `apiclients_id` INT UNSIGNED NOT NULL DEFAULT 0,
+                `date`          TIMESTAMP NULL DEFAULT NULL,
+                `method`        VARCHAR(8) NOT NULL DEFAULT '',
+                `route`         VARCHAR(255) NOT NULL DEFAULT '',
+                `query`         VARCHAR(255) NOT NULL DEFAULT '',
+                `status`        SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+                `code`          VARCHAR(40) NOT NULL DEFAULT '',
+                `result_count`  INT UNSIGNED NOT NULL DEFAULT 0,
+                `ip`            VARCHAR(45) NOT NULL DEFAULT '',
+                `request_id`    VARCHAR(64) NOT NULL DEFAULT '',
+                `acting_user`   CHAR(36) NULL DEFAULT NULL,
+                `duration_ms`   INT UNSIGNED NOT NULL DEFAULT 0,
+                PRIMARY KEY (`id`),
+                KEY `client_date` (`apiclients_id`, `date`),
+                KEY `ip_date` (`ip`, `date`),
+                KEY `date` (`date`)
+            ) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation}"
+        );
+    }
+
+    $defaults = [
+        'api_enabled'            => 0,
+        'api_require_https'      => 1,
+        'api_trusted_proxies'    => '',
+        'api_rate_per_minute'    => 120,
+        'api_log_retention_days' => 365,
+    ];
+    $current = Config::getConfigurationValues('plugin:lagapenak', array_keys($defaults));
+    $missing = array_diff_key($defaults, $current);
+    if ($missing) {
+        Config::setConfigurationValues('plugin:lagapenak', $missing);
+    }
 }
 
 /**
@@ -172,13 +300,15 @@ function plugin_lagapenak_set_display_prefs() {
  * Uninstall keeps the loan records: loans (with their signed delivery notes), asset lines and comments
  * are evidence of handovers and must not disappear with a click. Reinstalling the plugin finds them
  * again (install only creates what is missing). Deleting them for good is a manual, documented step
- * (README, "Uninstalling"). Personal iCal tokens are access credentials, not records: they are removed.
+ * (README, "Uninstalling"). Personal iCal tokens and API clients are access credentials, not records: they
+ * are removed. Kide-Artean links and the API log are records and are kept, like the loans.
  */
 function plugin_lagapenak_uninstall() {
     global $DB;
 
     foreach ([
         'glpi_plugin_lagapenak_icstokens',
+        'glpi_plugin_lagapenak_apiclients',
     ] as $table) {
         if ($DB->tableExists($table)) {
             plugin_lagapenak_query_or_fail("DROP TABLE `$table`");
@@ -187,6 +317,11 @@ function plugin_lagapenak_uninstall() {
 
     // The general iCal token is a credential too; a reinstall generates a new one
     Config::deleteConfigurationValues('plugin:lagapenak', ['ics_token']);
+
+    // A reinstall starts with the API disabled again
+    Config::deleteConfigurationValues('plugin:lagapenak', [
+        'api_enabled', 'api_require_https', 'api_trusted_proxies', 'api_rate_per_minute', 'api_log_retention_days',
+    ]);
 
     // Remove display preferences
     $DB->delete('glpi_displaypreferences', ['itemtype' => 'PluginLagapenakLoan']);
