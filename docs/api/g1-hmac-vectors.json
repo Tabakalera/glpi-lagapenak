@@ -1,0 +1,180 @@
+{
+  "normalization": "g1-v1",
+  "algorithm": "HMAC-SHA256",
+  "message_format": "lagapenak-g1|v1|<email|tax_id>|<normalised value>",
+  "output": "lower-case hexadecimal",
+  "test_key_base64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+  "warning": "Test key only. Never use it outside tests.",
+  "email": [
+    {
+      "input": "Artista.Ficticia@Example.TEST",
+      "status": "valid",
+      "normalized": "artista.ficticia@example.test",
+      "fingerprint": "a8aad1dad2d50894197d79bcbf429ca8f8c6e2988883ed52be20e729db8d2b28"
+    },
+    {
+      "input": "  artista.ficticia@example.test\t",
+      "status": "valid",
+      "normalized": "artista.ficticia@example.test",
+      "fingerprint": "a8aad1dad2d50894197d79bcbf429ca8f8c6e2988883ed52be20e729db8d2b28"
+    },
+    {
+      "input": "ARTISTA+g1@sub.example.test",
+      "status": "valid",
+      "normalized": "artista+g1@sub.example.test",
+      "fingerprint": "f99540461cf231070bb1f72ba0a56abbc837501d3373e5fb6be702819800e838"
+    },
+    {
+      "input": "o'brien.ficticio@example.test",
+      "status": "valid",
+      "normalized": "o'brien.ficticio@example.test",
+      "fingerprint": "23ce8681e1edb85feedee4129c6819e9a5e2d80004ed885ed02552b39cce0e87"
+    },
+    {
+      "input": "sin-arroba.example.test",
+      "status": "invalid",
+      "normalized": null,
+      "fingerprint": null
+    },
+    {
+      "input": "dos@@example.test",
+      "status": "invalid",
+      "normalized": null,
+      "fingerprint": null
+    },
+    {
+      "input": "acentuado@exámple.test",
+      "status": "invalid",
+      "normalized": null,
+      "fingerprint": null
+    },
+    {
+      "input": "punto@example",
+      "status": "invalid",
+      "normalized": null,
+      "fingerprint": null
+    },
+    {
+      "input": "",
+      "status": "missing",
+      "normalized": null,
+      "fingerprint": null
+    },
+    {
+      "input": "   ",
+      "status": "missing",
+      "normalized": null,
+      "fingerprint": null
+    }
+  ],
+  "tax_id": [
+    {
+      "input": "12345678Z",
+      "status": "valid",
+      "normalized": "12345678Z",
+      "fingerprint": "e74be494cfb75988e12821cf3a2c3bc2ad57d10df6ec021bd66d823a9888068c"
+    },
+    {
+      "input": "12.345.678-z",
+      "status": "valid",
+      "normalized": "12345678Z",
+      "fingerprint": "e74be494cfb75988e12821cf3a2c3bc2ad57d10df6ec021bd66d823a9888068c"
+    },
+    {
+      "input": " 12345678 z ",
+      "status": "valid",
+      "normalized": "12345678Z",
+      "fingerprint": "e74be494cfb75988e12821cf3a2c3bc2ad57d10df6ec021bd66d823a9888068c"
+    },
+    {
+      "input": "1234567L",
+      "status": "valid",
+      "normalized": "01234567L",
+      "fingerprint": "f5aaf812403e589a2bc2e8a68757ab8f6b215b913ecfed612377d62b514b2fc9"
+    },
+    {
+      "input": "01234567L",
+      "status": "valid",
+      "normalized": "01234567L",
+      "fingerprint": "f5aaf812403e589a2bc2e8a68757ab8f6b215b913ecfed612377d62b514b2fc9"
+    },
+    {
+      "input": "12345678A",
+      "status": "invalid",
+      "normalized": null,
+      "fingerprint": null
+    },
+    {
+      "input": "12345678",
+      "status": "invalid",
+      "normalized": null,
+      "fingerprint": null
+    },
+    {
+      "input": "X1234567L",
+      "status": "valid",
+      "normalized": "X1234567L",
+      "fingerprint": "5aa340a7cd98ac27012f9915c1231fe0b03e4a6edf3ca606d2c8ca54c44fded4"
+    },
+    {
+      "input": "x-1234567-l",
+      "status": "valid",
+      "normalized": "X1234567L",
+      "fingerprint": "5aa340a7cd98ac27012f9915c1231fe0b03e4a6edf3ca606d2c8ca54c44fded4"
+    },
+    {
+      "input": "Y0000001R",
+      "status": "invalid",
+      "normalized": null,
+      "fingerprint": null
+    },
+    {
+      "input": "Y0000001S",
+      "status": "valid",
+      "normalized": "Y0000001S",
+      "fingerprint": "3c57fac3f1c6d8539d39ea6c963fd88a3e2d1285d33d69e9216704194f795edc"
+    },
+    {
+      "input": "X 1234567 L",
+      "status": "valid",
+      "normalized": "X1234567L",
+      "fingerprint": "5aa340a7cd98ac27012f9915c1231fe0b03e4a6edf3ca606d2c8ca54c44fded4"
+    },
+    {
+      "input": "1234567８L",
+      "status": "other",
+      "normalized": null,
+      "fingerprint": null
+    },
+    {
+      "input": "Z7654321H",
+      "status": "valid",
+      "normalized": "Z7654321H",
+      "fingerprint": "d32e81e89a37ede62e1d187fc004e3ed254c98c4fe8c6143aff906fca60ff6fe"
+    },
+    {
+      "input": "X1234567A",
+      "status": "invalid",
+      "normalized": null,
+      "fingerprint": null
+    },
+    {
+      "input": "AB1234567",
+      "status": "other",
+      "normalized": null,
+      "fingerprint": null
+    },
+    {
+      "input": "P-ESP-998877",
+      "status": "other",
+      "normalized": null,
+      "fingerprint": null
+    },
+    {
+      "input": "",
+      "status": "missing",
+      "normalized": null,
+      "fingerprint": null
+    }
+  ]
+}
