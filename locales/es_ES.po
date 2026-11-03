@@ -636,3 +636,24 @@ msgstr "El enlace actual dejará de funcionar y los calendarios suscritos tendr�
 
 msgid "Regenerate URL"
 msgstr "Regenerar enlace"
+
+msgid "You do not have access to this entity."
+msgstr "No tienes acceso a esta entidad."
+
+msgid "The recipient must be a supervisor of the selected entity."
+msgstr "El destinatario debe ser un supervisor de la entidad seleccionada."
+
+msgid "This type of item cannot be loaned."
+msgstr "Este tipo de elemento no se puede prestar."
+
+msgid "Asset not found."
+msgstr "Activo no encontrado."
+
+msgid "This asset is not authorized for loan (\"Allow reservations\" is disabled)."
+msgstr "Este activo no está autorizado para préstamo («Permitir reservas» está desactivado)."
+
+msgid "This delivery note is already signed. A signed delivery note cannot be signed again or replaced."
+msgstr "Este albarán ya está firmado. Un albarán firmado no se puede volver a firmar ni sustituir."
+
+msgid "The signature could not be saved: a name and a drawn signature are required."
+msgstr "No se ha podido guardar la firma: se necesitan el nombre y la firma dibujada."

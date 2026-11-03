@@ -158,7 +158,7 @@ lagapenak/
 ├── CHANGELOG.md
 ├── ajax/
 │   ├── asset_list.php             # Listado de activos para selector
-│   ├── asset_timeline.php         # Historial de préstamos de un activo (calendario)
+│   ├── asset_timeline.php         # Retirado en 1.6.1 (responde 410)
 │   ├── availability.php           # Disponibilidad en rango de fechas
 │   ├── bulk_add.php               # Añadir múltiples activos a un préstamo
 │   ├── calendar_events.php        # Eventos para el calendario FullCalendar
@@ -366,7 +366,7 @@ lagapenak/
 ├── CHANGELOG.md
 ├── ajax/
 │   ├── asset_list.php             # Asset list for selector
-│   ├── asset_timeline.php         # Asset loan history (calendar)
+│   ├── asset_timeline.php         # Retired in 1.6.1 (answers 410)
 │   ├── availability.php           # Availability checker for a date range
 │   ├── bulk_add.php               # Bulk add assets to a loan
 │   ├── calendar_events.php        # FullCalendar event feed

@@ -32,6 +32,11 @@ if (!$row) {
 if (!empty($row['sign_token_expires']) && strtotime($row['sign_token_expires']) < time()) {
     die('<p style="font-family:sans-serif;padding:40px;">Este enlace ha caducado. Solicita uno nuevo al responsable del préstamo.</p>');
 }
+if (PluginLagapenakLoan::isSigned($row)) {
+    // A link issued before the delivery note was signed can never replace the signature
+    $DB->update('glpi_plugin_lagapenak_loans', ['sign_token' => null, 'sign_token_expires' => null], ['id' => (int) $row['id']]);
+    die('<p style="font-family:sans-serif;padding:40px;">Este albarán ya está firmado. El enlace ya no es válido.</p>');
+}
 
 $loan = new PluginLagapenakLoan();
 $loan->getFromDB((int) $row['id']);
@@ -45,17 +50,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_signature'])) {
     $sig_passport = trim($_POST['albaran_passport']  ?? '');
     $sig_project  = trim($_POST['albaran_project']   ?? '');
 
-    if ($sig_data && $sig_name) {
-        $DB->update('glpi_plugin_lagapenak_loans', [
-            'signature_data'    => $sig_data,
-            'signature_name'    => $sig_name,
-            'signature_date'    => date('Y-m-d H:i:s'),
-            'has_albaran'       => 1,
-            'albaran_passport'  => $sig_passport,
-            'albaran_project'   => $sig_project,
-            'sign_token'        => null,
-            'sign_token_expires'=> null,
-        ], ['id' => $ID]);
+    if (PluginLagapenakLoan::isValidSignatureImage($sig_data) && $sig_name !== '') {
+        // recordSignature() also voids the token; it fails if the note was signed meanwhile
+        if (!PluginLagapenakLoan::recordSignature($ID, $sig_data, $sig_name, $sig_passport, $sig_project)) {
+            die('<p style="font-family:sans-serif;padding:40px;">Este albarán ya está firmado. El enlace ya no es válido.</p>');
+        }
         plugin_lagapenak_send_signed_albaran($ID);
         $signed_ok = true;
     }

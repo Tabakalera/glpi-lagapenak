@@ -526,3 +526,24 @@ msgstr "The current URL will stop working and calendars subscribed to it will ha
 
 msgid "Regenerate URL"
 msgstr "Regenerate URL"
+
+msgid "You do not have access to this entity."
+msgstr "You do not have access to this entity."
+
+msgid "The recipient must be a supervisor of the selected entity."
+msgstr "The recipient must be a supervisor of the selected entity."
+
+msgid "This type of item cannot be loaned."
+msgstr "This type of item cannot be loaned."
+
+msgid "Asset not found."
+msgstr "Asset not found."
+
+msgid "This asset is not authorized for loan (\"Allow reservations\" is disabled)."
+msgstr "This asset is not authorized for loan (\"Allow reservations\" is disabled)."
+
+msgid "This delivery note is already signed. A signed delivery note cannot be signed again or replaced."
+msgstr "This delivery note is already signed. A signed delivery note cannot be signed again or replaced."
+
+msgid "The signature could not be saved: a name and a drawn signature are required."
+msgstr "The signature could not be saved: a name and a drawn signature are required."

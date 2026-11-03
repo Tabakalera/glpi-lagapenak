@@ -18,13 +18,14 @@ $type_table = [
     'Printer'          => 'glpi_printers',
 ];
 
-// Raw SQL: all distinct assets in non-cancelled loans
+// Raw SQL: all distinct assets in non-cancelled loans of the user's active entities
 $cancelled = (int) PluginLagapenakLoan::STATUS_CANCELLED;
+$loan_entity_condition = getEntitiesRestrictRequest('AND', 'l', 'entities_id', '', false);
 $result = $DB->doQuery(
     "SELECT DISTINCT li.itemtype, li.items_id
      FROM `glpi_plugin_lagapenak_loanitems` li
      JOIN `glpi_plugin_lagapenak_loans` l ON l.id = li.loans_id
-     WHERE l.status != {$cancelled}
+     WHERE l.status != {$cancelled} {$loan_entity_condition}
      ORDER BY li.itemtype, li.items_id"
 );
 

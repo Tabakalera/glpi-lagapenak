@@ -932,6 +932,10 @@ if ($tab === 'prestamos') {
                     msg += (msg ? '<br>' : '') + '<span class="text-muted"><i class="fas fa-info-circle me-1"></i>'
                          + 'Ya estaban en el préstamo: ' + data.already.join(', ') + '</span>';
                 }
+                if (data.rejected > 0) {
+                    msg += (msg ? '<br>' : '') + '<span class="text-danger"><i class="fas fa-ban me-1"></i>'
+                         + data.rejected + ' no se pueden prestar y se han omitido.</span>';
+                }
                 if (!msg) msg = '<span class="text-muted">Sin cambios.</span>';
 
                 avShowBulkResult(data.added > 0 ? 'success' : 'warning', msg);

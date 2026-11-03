@@ -12,6 +12,18 @@ $loan          = new PluginLagapenakLoan();
 $ID            = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $form_error    = '';
 $can_supervise = PluginLagapenakLoan::canSupervise();
+// For an existing loan, "supervisor" means supervisor of that loan's entity
+$current_loan = new PluginLagapenakLoan();
+if ($ID > 0) {
+    if ($current_loan->getFromDB($ID)) {
+        $can_supervise = PluginLagapenakLoan::canManageLoan($current_loan);
+    }
+} elseif (!PluginLagapenakLoan::canCreate()) {
+    // The "New" button is hidden without CREATE; the form and its submission must be refused too
+    plugin_lagapenak_access_denied();
+    Html::footer();
+    exit;
+}
 
 // ── Date changes that conflict with other bookings ──────────────────────────
 // A conflicting date change is not saved at first: the request is kept in session and the
@@ -54,6 +66,10 @@ if (isset($_POST['save_loan'])) {
     if (!$is_new && !$can_supervise) {
         Html::back(); // only supervisor can edit existing loans
     } else {
+        // An existing loan may keep its entity and recipient; new or changed ones are validated
+        $keeps_recipient = $ID > 0
+            && (int) ($_POST['entities_id'] ?? -1) === (int) ($current_loan->fields['entities_id'] ?? -2)
+            && (int) ($_POST['users_id_destinatario'] ?? -1) === (int) ($current_loan->fields['users_id_destinatario'] ?? -2);
         if (empty(trim($_POST['name'] ?? ''))) {
             $form_error = __('The Name / Reference field is required.', 'lagapenak');
         } elseif (!isset($_POST['entities_id']) || $_POST['entities_id'] === '') {
@@ -62,6 +78,11 @@ if (isset($_POST['save_loan'])) {
             $form_error = __('The Recipient is required.', 'lagapenak');
         } elseif (empty($_POST['fecha_inicio']) || empty($_POST['fecha_fin'])) {
             $form_error = __('The start and end dates are required.', 'lagapenak');
+        } elseif (!$keeps_recipient
+            && ($recipient_error = PluginLagapenakLoan::checkEntityAndRecipient(
+                (int) $_POST['entities_id'], (int) $_POST['users_id_destinatario']
+            )) !== '') {
+            $form_error = $recipient_error;
         } else {
             $conflicts = ($ID > 0 && !$conflicts_confirmed)
                 ? PluginLagapenakLoanItem::getConflictsForDateChange(
@@ -101,18 +122,27 @@ if (isset($_POST['delete_loan'])) {
 // ── Handle loan item CRUD ────────────────────────────────────────────────────
 if (isset($_POST['add_loanitem'])) {
     $li_loans_id = (int) ($_POST['loans_id'] ?? 0);
+    // $can_supervise was computed for the loan in the URL: the item must go to that same loan
+    if ($li_loans_id !== $ID) { Html::back(); }
     $li_loan     = new PluginLagapenakLoan();
     $li_loan->getFromDB($li_loans_id);
     $li_status = (int) ($li_loan->fields['status'] ?? 0);
 
-    // Supervisor always allowed; the loan's own requester can add items as long as not Returned
+    // Supervisor always allowed; the loan's own requester (with CREATE) can add items as long as not Returned
     $li_is_owner = ((int) ($li_loan->fields['users_id'] ?? 0) === (int) ($_SESSION['glpiID'] ?? -1));
     $can_add = $can_supervise ||
-               ($li_status !== PluginLagapenakLoan::STATUS_RETURNED && $li_is_owner);
+               ($li_status !== PluginLagapenakLoan::STATUS_RETURNED && $li_is_owner
+                && PluginLagapenakLoan::canCreate());
     if (!$can_add) { Html::back(); }
 
     $li_itemtype = $_POST['itemtype'] ?? '';
     $li_items_id = (int) ($_POST['items_id'] ?? 0);
+
+    $asset_error = PluginLagapenakLoanItem::checkAsset($li_itemtype, $li_items_id);
+    if ($asset_error !== '') {
+        Session::addMessageAfterRedirect($asset_error, false, ERROR);
+        Html::back();
+    }
 
     // Use the individual item dates if filled; fall back to the loan's period
     $li_checkout = !empty($_POST['item_date_checkout']) ? $_POST['item_date_checkout'] : ($li_loan->fields['fecha_inicio'] ?? null);
@@ -160,6 +190,8 @@ if (isset($_POST['remove_loanitem'])) {
     // Also check the item's own status — requester can only remove if the item is still Pending
     $rm_loanitem = new PluginLagapenakLoanItem();
     $rm_loanitem->getFromDB((int) ($_POST['loanitem_id'] ?? 0));
+    // The line must belong to the loan whose permissions were checked
+    if ((int) ($rm_loanitem->fields['loans_id'] ?? 0) !== $ID) { Html::back(); }
     $rm_item_status = (int) ($rm_loanitem->fields['status'] ?? -1);
     $can_remove = $can_supervise ||
                   ($rm_item_status === PluginLagapenakLoanItem::STATUS_PENDING && $rm_is_owner);
@@ -173,6 +205,8 @@ if (isset($_POST['remove_loanitem'])) {
 if (isset($_POST['update_loanitem'])) {
     if (!$can_supervise) { Html::back(); }
     $upd_item_id = (int) ($_POST['loanitem_id'] ?? 0);
+    $upd_item    = new PluginLagapenakLoanItem();
+    if (!$upd_item->getFromDB($upd_item_id) || (int) $upd_item->fields['loans_id'] !== $ID) { Html::back(); }
     $upd_status  = (int) ($_POST['item_status'] ?? 1);
     $conflicts   = [];
     if (!$conflicts_confirmed && $upd_status !== PluginLagapenakLoanItem::STATUS_RETURNED) {

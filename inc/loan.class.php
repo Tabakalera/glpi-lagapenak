@@ -70,6 +70,78 @@ class PluginLagapenakLoan extends CommonDBTM {
     }
 
     /**
+     * Supervisor of this particular loan: UPDATE right AND access to the loan's entity.
+     * canSupervise() alone ignores entities, so a supervisor of entity A could manage loans of B.
+     */
+    static function canManageLoan(PluginLagapenakLoan $loan): bool {
+        return self::canSupervise()
+            && isset($loan->fields['entities_id'])
+            && Session::haveAccessToEntity((int) $loan->fields['entities_id']);
+    }
+
+    static function isRequester(PluginLagapenakLoan $loan): bool {
+        return (int) ($loan->fields['users_id'] ?? 0) === (int) ($_SESSION['glpiID'] ?? -1);
+    }
+
+    /**
+     * Server-side checks for creating a loan (or moving one to another entity / recipient).
+     * Returns an error message, or '' when allowed.
+     */
+    static function checkEntityAndRecipient(int $entities_id, int $users_id_destinatario): string {
+        if (!Session::haveAccessToEntity($entities_id)) {
+            return __('You do not have access to this entity.', 'lagapenak');
+        }
+        $supervisor_ids = array_column(self::getSupervisorsForEntity($entities_id), 'id');
+        if (!in_array($users_id_destinatario, $supervisor_ids, true)) {
+            return __('The recipient must be a supervisor of the selected entity.', 'lagapenak');
+        }
+        return '';
+    }
+
+    /** Fields written only by the signing workflow (albaran.php / sign.php), never by the loan form. */
+    static function getSignatureFields(): array {
+        return [
+            'signature_data', 'signature_name', 'signature_date', 'has_albaran',
+            'albaran_passport', 'albaran_project', 'sign_token', 'sign_token_expires',
+        ];
+    }
+
+    static function isSigned(array $fields): bool {
+        return !empty($fields['signature_data']);
+    }
+
+    /** The canvas sends a PNG data URL; anything else (or an oversized payload) is rejected. */
+    static function isValidSignatureImage(string $data): bool {
+        return strlen($data) <= 2 * 1024 * 1024
+            && preg_match('#^data:image/png;base64,[A-Za-z0-9+/]+={0,2}$#', $data) === 1;
+    }
+
+    /**
+     * Record the signature of a delivery note, once.
+     * The UPDATE only matches a loan that is not signed yet, so a repeated submit, a second tab or an
+     * old signing link can never replace a closed signature. Any outstanding signing link is voided.
+     *
+     * @return bool true when this call signed the loan
+     */
+    static function recordSignature(int $loans_id, string $data, string $name, string $passport, string $project): bool {
+        global $DB;
+        $DB->update('glpi_plugin_lagapenak_loans', [
+            'signature_data'     => $data,
+            'signature_name'     => $name,
+            'signature_date'     => date('Y-m-d H:i:s'),
+            'has_albaran'        => 1,
+            'albaran_passport'   => $passport,
+            'albaran_project'    => $project,
+            'sign_token'         => null,
+            'sign_token_expires' => null,
+        ], [
+            'id' => $loans_id,
+            'OR' => [['signature_data' => null], ['signature_data' => '']],
+        ]);
+        return $DB->affectedRows() === 1;
+    }
+
+    /**
      * Returns users with UPDATE right on this plugin for the given entity,
      * including parent entities where the profile is recursive.
      */
@@ -130,11 +202,9 @@ class PluginLagapenakLoan extends CommonDBTM {
 
         // Fields managed by the plugin workflows (signature, albarán, date requests) are never
         // taken from the creation form, otherwise a loan could be created already "signed".
-        foreach ([
-            'signature_data', 'signature_name', 'signature_date', 'has_albaran',
-            'albaran_passport', 'albaran_project', 'sign_token', 'sign_token_expires',
+        foreach (array_merge(self::getSignatureFields(), [
             'requested_date_end', 'date_request_status', 'date_request_apply_items', 'date_request_notes',
-        ] as $field) {
+        ]) as $field) {
             unset($input[$field]);
         }
         // Only supervisors may choose the initial status
@@ -147,6 +217,11 @@ class PluginLagapenakLoan extends CommonDBTM {
     function prepareInputForUpdate($input) {
         // Solicitante cannot be changed after creation
         unset($input['users_id']);
+        // A signature is only ever written by the signing workflow, which updates the row directly.
+        // Without this, saving the loan form could rewrite or back-date a signed delivery note.
+        foreach (self::getSignatureFields() as $field) {
+            unset($input[$field]);
+        }
         return self::sanitizeDates($input);
     }
 

@@ -22,7 +22,7 @@ if (!$loan->getFromDB($ID)) {
 $_alb_uid        = (int)($_SESSION['glpiID'] ?? 0);
 $_alb_is_req     = (int)($loan->fields['users_id'] ?? 0) === $_alb_uid;
 $_alb_is_dest    = (int)($loan->fields['users_id_destinatario'] ?? 0) === $_alb_uid;
-$_alb_supervise  = PluginLagapenakLoan::canSupervise();
+$_alb_supervise  = PluginLagapenakLoan::canManageLoan($loan);
 $_alb_has_right  = PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_albaran', READ);
 $_alb_allowed    = $_alb_supervise || ($_alb_has_right && ($_alb_is_req || $_alb_is_dest));
 
@@ -50,19 +50,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_signature'])) {
     $sig_name     = trim($_UPOST['signature_name']    ?? ($_POST['signature_name']    ?? ''));
     $sig_passport = trim($_UPOST['albaran_passport']  ?? ($_POST['albaran_passport']  ?? ''));
     $sig_project  = trim($_UPOST['albaran_project']   ?? ($_POST['albaran_project']   ?? ''));
-    if (!empty($sig_data) && !empty($sig_name)) {
-        global $DB;
-        $DB->update('glpi_plugin_lagapenak_loans', [
-            'signature_data'   => $sig_data,
-            'signature_name'   => $sig_name,
-            'signature_date'   => date('Y-m-d H:i:s'),
-            'has_albaran'      => 1,
-            'albaran_passport' => $sig_passport,
-            'albaran_project'  => $sig_project,
-        ], ['id' => $ID]);
-        plugin_lagapenak_send_signed_albaran($ID);
+    $sig_result   = 'saved';
+    if (PluginLagapenakLoan::isSigned($loan->fields)) {
+        // A closed signature is never replaced (corrections go through annulment + new version)
+        $sig_result = 'already_signed';
+    } elseif (PluginLagapenakLoan::isValidSignatureImage($sig_data) && $sig_name !== '') {
+        if (PluginLagapenakLoan::recordSignature($ID, $sig_data, $sig_name, $sig_passport, $sig_project)) {
+            plugin_lagapenak_send_signed_albaran($ID);
+        } else {
+            $sig_result = 'already_signed'; // signed meanwhile (other tab, link)
+        }
+    } else {
+        $sig_result = 'sign_invalid';
     }
-    Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&saved=1');
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&' . $sig_result . '=1');
 }
 
 // ── Load display data ────────────────────────────────────────────────────────────
@@ -117,6 +118,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'pdf') {
 // ── Action: Generate public signing token and send by email ──────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_gen_token'])) {
     global $DB, $CFG_GLPI;
+    if ($already_signed) {
+        // No signing link for a delivery note that is already signed
+        Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&already_signed=1');
+    }
     $to_email = trim($_POST['sign_to_email'] ?? '');
     $token    = bin2hex(random_bytes(32));
     $expires  = date('Y-m-d H:i:s', strtotime('+48 hours'));
@@ -164,8 +169,9 @@ HTML;
         }
         Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&' . $sign_result . '=1');
     }
-    // No email provided — just show the link
-    Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&sign_link=' . urlencode($sign_url));
+    // No email provided — show the link once (kept out of the URL, browser history and access logs)
+    $_SESSION['plugin_lagapenak_sign_link'][$ID] = $sign_url;
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&sign_link=1');
 }
 
 // ── Action: Send by email ─────────────────────────────────────────────────────────
@@ -255,12 +261,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
         <?php endif; ?>
     </div>
 
-    <?php if (isset($_GET['sign_link'])): ?>
+    <?php $sign_link_once = $_SESSION['plugin_lagapenak_sign_link'][$ID] ?? '';
+          unset($_SESSION['plugin_lagapenak_sign_link'][$ID]); ?>
+    <?php if (isset($_GET['sign_link']) && $sign_link_once !== '' && !$already_signed): ?>
     <div class="alert alert-info no-print">
         <strong><i class="fas fa-share-alt me-2"></i><?= __('Signing link generated (valid 48 hours)', 'lagapenak') ?>:</strong>
         <div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
             <input type="text" class="form-control form-control-sm" id="sign-url-input"
-                   value="<?= htmlspecialchars(urldecode($_GET['sign_link'])) ?>" readonly style="max-width:520px;">
+                   value="<?= htmlspecialchars($sign_link_once) ?>" readonly style="max-width:520px;">
             <button type="button" class="btn btn-sm btn-outline-secondary"
                     onclick="navigator.clipboard.writeText(document.getElementById('sign-url-input').value);this.innerHTML='<i class=\'fas fa-check me-1\'></i><?= __('Copied', 'lagapenak') ?>'">
                 <i class="fas fa-copy me-1"></i><?= __('Copy', 'lagapenak') ?>
@@ -271,6 +279,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
     <?php elseif (isset($_GET['saved'])): ?>
     <div class="alert alert-success no-print">
         <i class="fas fa-check-circle me-2"></i><?= __('Signature saved successfully.', 'lagapenak') ?>
+    </div>
+    <?php elseif (isset($_GET['already_signed'])): ?>
+    <div class="alert alert-warning no-print">
+        <i class="fas fa-lock me-2"></i><?= __('This delivery note is already signed. A signed delivery note cannot be signed again or replaced.', 'lagapenak') ?>
+    </div>
+    <?php elseif (isset($_GET['sign_invalid'])): ?>
+    <div class="alert alert-danger no-print">
+        <i class="fas fa-exclamation-circle me-2"></i><?= __('The signature could not be saved: a name and a drawn signature are required.', 'lagapenak') ?>
     </div>
     <?php elseif (isset($_GET['email_sent'])): ?>
     <div class="alert alert-success no-print">
@@ -369,15 +385,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
                     </div>
                 </div>
             </div>
-            <div class="mt-3 no-print">
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-resign">
-                    <i class="fas fa-redo me-1"></i><?= __('Sign again (overwrites existing)', 'lagapenak') ?>
-                </button>
-            </div>
-            <div id="sign-form-wrapper" style="display:none">
             <?php else: ?>
             <div id="sign-form-wrapper">
-            <?php endif; ?>
 
                 <!-- Sign form -->
                 <form method="POST" action="" id="sign-form" class="mt-3">
@@ -422,6 +431,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
                 </form>
 
             </div><!-- /sign-form-wrapper -->
+            <?php endif; ?>
 
         </div><!-- /doc-body -->
 
@@ -548,15 +558,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
         if (!hasSigned) { e.preventDefault(); alert('<?= __('Please draw your signature before saving.', 'lagapenak') ?>'); return; }
         document.getElementById('signature_data_input').value = canvas.toDataURL('image/png');
     });
-
-    var resignBtn = document.getElementById('btn-resign');
-    if (resignBtn) {
-        resignBtn.addEventListener('click', function () {
-            document.getElementById('sign-form-wrapper').style.display = 'block';
-            resignBtn.style.display = 'none';
-            resizeCanvas(); // canvas was hidden on load → recalculate dimensions now
-        });
-    }
 })();
 </script>
 </body>
