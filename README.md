@@ -153,6 +153,9 @@ Pon `[]` para no mostrar ninguno. Los labels se obtienen automáticamente de `ge
 
 - Un albarán firmado no se puede volver a firmar ni sustituir. Si hay un error, no se corrige desde la aplicación hasta la 1.7.0 (anulación y nueva versión).
 - Un préstamo con el albarán firmado no se puede borrar, tampoco por un supervisor. Se puede seguir entregando, devolviendo, prorrogando y comentando.
+- Quien pide un préstamo puede retirar su solicitud solo mientras nadie haya actuado sobre ella: sigue pendiente, no hay material entregado, no se ha enviado enlace de firma, no hay prórroga pedida y nadie más ha comentado. Para borrar préstamos de otras personas hacen falta los derechos «Actualizar» y «Purgar».
+- Para consultar préstamos (lista, ficha, albarán, calendario) hace falta el derecho «Leer» de Lagapenak.
+- Calendario: cada persona tiene su propio enlace de suscripción, que puede regenerar o revocar en Lagapenak > Calendario. Muestra sus préstamos y, si supervisa, los de sus entidades, según sus permisos en cada momento. Los eventos muestran el número del préstamo, su estado y el material, no el nombre del préstamo. **El enlace general anterior deja de funcionar**: quien lo use debe suscribirse con su enlace personal.
 - Para pedir un préstamo hace falta el derecho «Crear» de Lagapenak en el perfil.
 - Cada supervisor gestiona solo los préstamos de las entidades a las que tiene acceso.
 - Solo se puede añadir material marcado con «Permitir reservas».
@@ -387,6 +390,9 @@ Set to `[]` to show none. Labels are read automatically from `getFieldLabels()`.
 
 - A signed delivery note cannot be signed again or replaced. Mistakes cannot be corrected from the application until 1.7.0 (annulment and new version).
 - A loan with a signed delivery note cannot be deleted, not even by a supervisor. Deliveries, returns, extensions and comments keep working.
+- A requester can withdraw their request only while nobody has acted on it (still pending, no asset delivered, no signing link sent, no date request, no comment from anyone else). Deleting other people's loans needs the "Update" and "Purge" rights.
+- Consulting loans (list, loan, delivery note, calendar) needs the Lagapenak "Read" right.
+- Calendar: everybody has their own subscription URL, which they can regenerate or revoke in Lagapenak > Calendar. It shows their loans and, for supervisors, the loans of their entities, according to their current rights. Events show the loan number, status and assets, not the loan name. **The former general URL stops working**: its users must subscribe with their personal URL.
 - Requesting a loan needs the Lagapenak "Create" right in the profile.
 - Supervisors only manage loans of the entities they have access to.
 - Only assets with "Allow reservations" enabled can be added.
