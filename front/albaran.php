@@ -24,7 +24,8 @@ $_alb_is_req     = (int)($loan->fields['users_id'] ?? 0) === $_alb_uid;
 $_alb_is_dest    = (int)($loan->fields['users_id_destinatario'] ?? 0) === $_alb_uid;
 $_alb_supervise  = PluginLagapenakLoan::canManageLoan($loan);
 $_alb_has_right  = PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_albaran', READ);
-$_alb_allowed    = $_alb_supervise || ($_alb_has_right && ($_alb_is_req || $_alb_is_dest));
+$_alb_allowed    = $_alb_supervise   // canManageLoan(): READ + UPDATE + entity
+    || (PluginLagapenakLoan::canView() && $_alb_has_right && ($_alb_is_req || $_alb_is_dest));
 
 if (!$_alb_allowed) {
     Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.php');

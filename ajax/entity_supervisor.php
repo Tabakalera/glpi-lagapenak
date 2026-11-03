@@ -4,6 +4,14 @@ include('../../../inc/includes.php');
 
 Session::checkLoginUser();
 
+// Only used to fill the recipient when creating or editing a loan
+if (!(PluginLagapenakLoan::canView() && (PluginLagapenakLoan::canCreate() || PluginLagapenakLoan::canSupervise()))) {
+    http_response_code(403);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Forbidden']);
+    exit;
+}
+
 header('Content-Type: application/json');
 
 global $DB;

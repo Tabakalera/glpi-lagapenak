@@ -49,6 +49,14 @@ function plugin_lagapenak_addDefaultWhere($itemtype) {
     if ($itemtype === 'PluginLagapenakLoan' && !PluginLagapenakLoan::canSupervise()) {
         return "`glpi_plugin_lagapenak_loans`.`users_id` = " . (int)($_SESSION['glpiID'] ?? 0);
     }
+    // Asset lines have no entity of their own: restrict them through their loan
+    // (own loans for requesters, loans of the active entities for supervisors)
+    if ($itemtype === 'PluginLagapenakLoanItem') {
+        $scope = PluginLagapenakLoan::canSupervise()
+            ? '1=1 ' . getEntitiesRestrictRequest('AND', 'l', 'entities_id', '', false)
+            : 'l.`users_id` = ' . (int)($_SESSION['glpiID'] ?? 0);
+        return "`glpi_plugin_lagapenak_loanitems`.`loans_id` IN (SELECT l.`id` FROM `glpi_plugin_lagapenak_loans` l WHERE $scope)";
+    }
     return '';
 }
 

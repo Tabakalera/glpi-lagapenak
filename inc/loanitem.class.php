@@ -482,6 +482,37 @@ class PluginLagapenakLoanItem extends CommonDBTM {
         return PluginLagapenakLoan::hasPluginRight(PluginLagapenakLoan::$rightname, READ);
     }
 
+    /**
+     * Asset lines have no entity of their own: through GLPI's own routes (massive actions, API) only
+     * whoever manages the parent loan may change or remove them. The loan form remains the normal way.
+     */
+    private function managesParentLoan(): bool {
+        $loan = new PluginLagapenakLoan();
+        return $loan->getFromDB((int) ($this->fields['loans_id'] ?? 0)) && PluginLagapenakLoan::canManageLoan($loan);
+    }
+
+    function canUpdateItem(): bool {
+        return $this->managesParentLoan();
+    }
+
+    function canDeleteItem(): bool {
+        return $this->managesParentLoan();
+    }
+
+    function canPurgeItem(): bool {
+        return $this->managesParentLoan();
+    }
+
+    /** Status and dates of a line go through the loan form (conflict checks, loan status). */
+    function canMassiveAction($action, $field, $value) {
+        return false;
+    }
+
+    function post_purgeItem() {
+        // Keep the loan status in line with its remaining assets, as the loan form does
+        self::syncLoanStatus((int) ($this->fields['loans_id'] ?? 0));
+    }
+
     static function getTypeName($nb = 0) {
         return _n('Loan asset', 'Loan assets', $nb, 'lagapenak');
     }

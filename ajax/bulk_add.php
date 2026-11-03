@@ -42,7 +42,7 @@ $_ba_can_sup     = PluginLagapenakLoan::canManageLoan($loan);
 $_ba_is_owner    = (int)($loan->fields['users_id'] ?? 0) === $_ba_uid;
 $_ba_loan_status = (int)($loan->fields['status'] ?? 0);
 if (!$_ba_can_sup
-    && !($_ba_is_owner && $_ba_loan_status === PluginLagapenakLoan::STATUS_PENDING
+    && !(PluginLagapenakLoan::canView() && $_ba_is_owner && $_ba_loan_status === PluginLagapenakLoan::STATUS_PENDING
          && PluginLagapenakLoan::canCreate())
 ) {
     echo json_encode(['error' => 'Sin permisos para modificar este préstamo']);

@@ -4,19 +4,29 @@ include('../../../inc/includes.php');
 
 Session::checkLoginUser();
 
-// iCal subscription: supervisors get the general URL (every loan),
-// everybody else a personal URL with only the loans they requested.
-$ics_general = PluginLagapenakLoan::canSupervise();
-$ics_uid     = (int) Session::getLoginUserID();
+// Consulting loans needs the READ right of the active profile
+if (!PluginLagapenakLoan::canView()) {
+    plugin_lagapenak_access_denied();
+    Html::footer();
+    exit;
+}
+
+// iCal subscription: every user has a personal URL, created only when they ask for it. What it shows
+// is checked on every request (own loans + loans of the entities they supervise), see PluginLagapenakIcsToken.
+$ics_supervisor = PluginLagapenakLoan::canSupervise();
+$ics_uid        = (int) Session::getLoginUserID();
 
 if (isset($_POST['regenerate_ics'])) {
-    if ($ics_general) {
-        PluginLagapenakIcsToken::regenerateGeneralToken();
-    } else {
-        PluginLagapenakIcsToken::regenerateUserToken($ics_uid);
-    }
+    PluginLagapenakIcsToken::regenerateUserToken($ics_uid);
     Session::addMessageAfterRedirect(
         __('A new subscription URL has been created. The previous one no longer works.', 'lagapenak')
+    );
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/calendar.php?ics=1');
+}
+if (isset($_POST['revoke_ics'])) {
+    PluginLagapenakIcsToken::revokeUserToken($ics_uid);
+    Session::addMessageAfterRedirect(
+        __('Your subscription URL has been revoked. Calendars subscribed to it no longer receive loans.', 'lagapenak')
     );
     Html::redirect(plugin_lagapenak_web_dir() . '/front/calendar.php?ics=1');
 }
@@ -71,9 +81,8 @@ $fc_locale = plugin_lagapenak_core_lib_url('fullcalendar/core/locales/es.min.js'
 
     <!-- iCal subscription panel -->
     <?php
-    $ics_token = $ics_general
-        ? PluginLagapenakIcsToken::getGeneralToken()
-        : PluginLagapenakIcsToken::getUserToken($ics_uid);
+    $ics_has_token = PluginLagapenakIcsToken::hasUserToken($ics_uid);
+    $ics_token     = $ics_has_token ? PluginLagapenakIcsToken::getUserToken($ics_uid) : '';
     // Use url_base explicitly to guarantee absolute URL for calendar clients
     $ics_url    = plugin_lagapenak_web_dir(true) . '/front/loan.ics.php?token=' . urlencode($ics_token);
     $url_loans  = $ics_url . '&type=loans';
@@ -83,10 +92,19 @@ $fc_locale = plugin_lagapenak_core_lib_url('fullcalendar/core/locales/es.min.js'
         <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:16px 20px;">
             <p class="mb-2" style="font-size:.875rem;">
                 <i class="fas fa-info-circle me-1"></i>
-                <?= $ics_general
-                    ? __('This URL shows <strong>all loans</strong>.', 'lagapenak')
+                <?= $ics_supervisor
+                    ? __('This URL shows <strong>your loans and the loans of the entities you supervise</strong>. It is checked on every update: if your rights change, so does what it shows.', 'lagapenak')
                     : __('This URL only shows <strong>the loans you have requested</strong>.', 'lagapenak') ?>
+                <?= __('Events show the loan number, status and assets, not the loan name.', 'lagapenak') ?>
             </p>
+            <?php if (!$ics_has_token): ?>
+            <form method="POST" action="<?= $plugin_web ?>/front/calendar.php" class="m-0">
+                <input type="hidden" name="_glpi_csrf_token" value="<?= Session::getNewCSRFToken() ?>">
+                <button type="submit" name="regenerate_ics" value="1" class="btn btn-sm btn-primary">
+                    <i class="fas fa-link me-1"></i><?= __('Create my subscription URL', 'lagapenak') ?>
+                </button>
+            </form>
+            <?php else: ?>
             <p class="mb-2" style="font-size:.875rem;font-weight:600;">
                 <?= __('Copy the URL and paste it into your calendar client:', 'lagapenak') ?>
             </p>
@@ -129,7 +147,15 @@ $fc_locale = plugin_lagapenak_core_lib_url('fullcalendar/core/locales/es.min.js'
                         <i class="fas fa-sync-alt me-1"></i><?= __('Regenerate URL', 'lagapenak') ?>
                     </button>
                 </form>
+                <form method="POST" action="<?= $plugin_web ?>/front/calendar.php" class="m-0"
+                      onsubmit="return confirm(<?= htmlspecialchars(json_encode(__('Calendars subscribed to this URL will stop receiving loans. Continue?', 'lagapenak')), ENT_QUOTES) ?>);">
+                    <input type="hidden" name="_glpi_csrf_token" value="<?= Session::getNewCSRFToken() ?>">
+                    <button type="submit" name="revoke_ics" value="1" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-ban me-1"></i><?= __('Revoke URL', 'lagapenak') ?>
+                    </button>
+                </form>
             </div>
+            <?php endif; ?>
         </div>
     </div>
 

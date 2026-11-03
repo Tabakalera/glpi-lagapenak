@@ -8,6 +8,14 @@ Session::checkLoginUser();
 // Do NOT call Session::checkCSRF() here — it would fail because the token is already
 // consumed by the time our handler code runs.
 
+// Every page and action of a loan needs READ (consulting); ownership, entity and the other rights
+// are checked per action below
+if (!PluginLagapenakLoan::canView()) {
+    plugin_lagapenak_access_denied();
+    Html::footer();
+    exit;
+}
+
 $loan          = new PluginLagapenakLoan();
 $ID            = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $form_error    = '';
@@ -111,11 +119,9 @@ if (isset($_POST['save_loan'])) {
 }
 
 if (isset($_POST['delete_loan'])) {
-    $loan->getFromDB($ID);
-    $is_own_pending = ((int)($loan->fields['users_id'] ?? 0) === (int)($_SESSION['glpiID'] ?? 0))
-                      && (int)($loan->fields['status'] ?? 0) === PluginLagapenakLoan::STATUS_PENDING;
-    if (!$can_supervise && !$is_own_pending) { Html::back(); }
-    // pre_deleteItem() refuses signed loans for non-supervisors and leaves a message
+    // Same rule as every other deletion route (PluginLagapenakLoan::canDeleteLoan)
+    if (!$loan->getFromDB($ID) || !PluginLagapenakLoan::canDeleteLoan($loan)) { Html::back(); }
+    // pre_deleteItem() checks again and leaves the message
     if (!$loan->delete(['id' => $ID])) { Html::back(); }
     Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.php');
 }
@@ -195,7 +201,8 @@ if (isset($_POST['remove_loanitem'])) {
     if ((int) ($rm_loanitem->fields['loans_id'] ?? 0) !== $ID) { Html::back(); }
     $rm_item_status = (int) ($rm_loanitem->fields['status'] ?? -1);
     $can_remove = $can_supervise ||
-                  ($rm_item_status === PluginLagapenakLoanItem::STATUS_PENDING && $rm_is_owner);
+                  ($rm_item_status === PluginLagapenakLoanItem::STATUS_PENDING && $rm_is_owner
+                   && PluginLagapenakLoan::canCreate());
     if (!$can_remove) { Html::back(); }
 
     PluginLagapenakLoanItem::removeItem((int) ($_POST['loanitem_id'] ?? 0));
@@ -267,7 +274,8 @@ if (isset($_POST['bulk_update_items'])) {
 
 // ── Date extension request (self-service) ──────────────────────────────────
 if (isset($_POST['save_date_request'])) {
-    if ($can_supervise || $ID == 0) { Html::back(); }
+    // A date change request modifies the requester's own request: READ (checked above) + CREATE
+    if ($can_supervise || $ID == 0 || !PluginLagapenakLoan::canCreate()) { Html::back(); }
     $loan->getFromDB($ID);
     if ((int)($loan->fields['users_id'] ?? 0) !== (int)($_SESSION['glpiID'] ?? 0)) { Html::back(); }
     $requested_end = trim($_POST['requested_date_end'] ?? '');
@@ -522,7 +530,7 @@ if ($can_supervise || $ID == 0) {
         echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
         echo '<i class="fas fa-file-signature me-1"></i>' . __('Delivery note', 'lagapenak') . '</a>';
     }
-    if ($ID > 0 && $can_supervise && !PluginLagapenakLoan::isSigned($loan->fields)) {
+    if ($ID > 0 && PluginLagapenakLoan::canDeleteLoan($loan)) {
         echo '<button type="submit" name="delete_loan" class="btn btn-danger ms-auto"
                       onclick="return confirm(\'' . __('Delete this loan?', 'lagapenak') . '\')">';
         echo '<i class="fas fa-trash me-1"></i>' . __('Delete', 'lagapenak');
@@ -576,12 +584,8 @@ if ($can_supervise || $ID == 0) {
         echo '<a href="' . $albaran_url . '" class="btn btn-outline-primary" target="_blank">';
         echo '<i class="fas fa-file-signature me-1"></i>' . __('Delivery note', 'lagapenak') . '</a>';
     }
-    // Solicitante can delete their own loan while still Pending and not signed
-    if ($ID > 0
-        && (int)($loan->fields['users_id'] ?? 0) === (int)($_SESSION['glpiID'] ?? 0)
-        && (int)($loan->fields['status'] ?? 0) === PluginLagapenakLoan::STATUS_PENDING
-        && !PluginLagapenakLoan::isSigned($loan->fields)
-    ) {
+    // Solicitante can withdraw their own request while nobody has acted on it
+    if ($ID > 0 && PluginLagapenakLoan::canDeleteLoan($loan)) {
         echo '<form method="POST" action="' . plugin_lagapenak_web_dir() . '/front/loan.form.php' . '?id=' . $ID . '" class="ms-auto">';
         echo '<input type="hidden" name="_glpi_csrf_token" value="' . Session::getNewCSRFToken() . '">';
         echo '<button type="submit" name="delete_loan" class="btn btn-danger"

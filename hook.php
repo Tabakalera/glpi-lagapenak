@@ -138,13 +138,9 @@ function plugin_lagapenak_install() {
     // 3=Estado, 4=Solicitante, 5=Destinatario, 6=F.Inicio, 7=F.Fin
     plugin_lagapenak_set_display_prefs();
 
-    // Generate iCal secret token if not yet created
-    $cfg = Config::getConfigurationValues('plugin:lagapenak');
-    if (empty($cfg['ics_token'])) {
-        Config::setConfigurationValues('plugin:lagapenak', [
-            'ics_token' => bin2hex(random_bytes(20)),
-        ]);
-    }
+    // The general iCal token of 1.6.0 (every loan of every entity) is retired: no new one is created.
+    // An existing value is kept only so that front/loan.ics.php can recognise the old URL and answer it
+    // with a notice instead of loans. Personal tokens (glpi_plugin_lagapenak_icstokens) replace it.
 
     return true;
 }

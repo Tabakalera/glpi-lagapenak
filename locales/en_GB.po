@@ -581,3 +581,24 @@ msgstr "Not sent: the delivery note can only be sent to addresses linked to the 
 
 msgid "A loan with a signed delivery note cannot be deleted: it is kept as the record of the handover."
 msgstr "A loan with a signed delivery note cannot be deleted: it is kept as the record of the handover."
+
+msgid "You cannot delete this loan. A request can only be withdrawn by its requester while nobody has acted on it."
+msgstr "You cannot delete this loan. A request can only be withdrawn by its requester while nobody has acted on it."
+
+msgid "Your subscription URL has been revoked. Calendars subscribed to it no longer receive loans."
+msgstr "Your subscription URL has been revoked. Calendars subscribed to it no longer receive loans."
+
+msgid "This URL shows <strong>your loans and the loans of the entities you supervise</strong>. It is checked on every update: if your rights change, so does what it shows."
+msgstr "This URL shows <strong>your loans and the loans of the entities you supervise</strong>. It is checked on every update: if your rights change, so does what it shows."
+
+msgid "Events show the loan number, status and assets, not the loan name."
+msgstr "Events show the loan number, status and assets, not the loan name."
+
+msgid "Create my subscription URL"
+msgstr "Create my subscription URL"
+
+msgid "Calendars subscribed to this URL will stop receiving loans. Continue?"
+msgstr "Calendars subscribed to this URL will stop receiving loans. Continue?"
+
+msgid "Revoke URL"
+msgstr "Revoke URL"

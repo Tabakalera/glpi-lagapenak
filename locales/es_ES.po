@@ -691,3 +691,24 @@ msgstr "No enviado: el albarán solo se puede enviar a direcciones vinculadas al
 
 msgid "A loan with a signed delivery note cannot be deleted: it is kept as the record of the handover."
 msgstr "Un préstamo con el albarán firmado no se puede borrar: se conserva como registro de la entrega."
+
+msgid "You cannot delete this loan. A request can only be withdrawn by its requester while nobody has acted on it."
+msgstr "No puedes borrar este préstamo. Una solicitud solo la puede retirar quien la pidió mientras nadie haya actuado sobre ella."
+
+msgid "Your subscription URL has been revoked. Calendars subscribed to it no longer receive loans."
+msgstr "Tu enlace de suscripción se ha revocado. Los calendarios suscritos ya no reciben préstamos."
+
+msgid "This URL shows <strong>your loans and the loans of the entities you supervise</strong>. It is checked on every update: if your rights change, so does what it shows."
+msgstr "Este enlace muestra <strong>tus préstamos y los de las entidades que supervisas</strong>. Se comprueba en cada actualización: si cambian tus permisos, cambia lo que muestra."
+
+msgid "Events show the loan number, status and assets, not the loan name."
+msgstr "Los eventos muestran el número del préstamo, su estado y el material, no su nombre."
+
+msgid "Create my subscription URL"
+msgstr "Crear mi enlace de suscripción"
+
+msgid "Calendars subscribed to this URL will stop receiving loans. Continue?"
+msgstr "Los calendarios suscritos a este enlace dejarán de recibir préstamos. ¿Continuar?"
+
+msgid "Revoke URL"
+msgstr "Revocar enlace"

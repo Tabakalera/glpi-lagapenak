@@ -4,6 +4,13 @@ include('../../../inc/includes.php');
 
 Session::checkLoginUser();
 
+// Consulting loans needs the READ right of the active profile
+if (!PluginLagapenakLoan::canView()) {
+    plugin_lagapenak_access_denied();
+    Html::footer();
+    exit;
+}
+
 $can_supervise = PluginLagapenakLoan::canSupervise();
 $tab           = isset($_GET['tab']) ? $_GET['tab'] : 'prestamos';
 // Non-supervisors cannot access the activos tab

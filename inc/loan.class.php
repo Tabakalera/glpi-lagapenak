@@ -71,17 +71,62 @@ class PluginLagapenakLoan extends CommonDBTM {
     }
 
     /**
-     * Supervisor of this particular loan: UPDATE right AND access to the loan's entity.
+     * Supervisor of this particular loan: READ + UPDATE rights AND access to the loan's entity.
      * canSupervise() alone ignores entities, so a supervisor of entity A could manage loans of B.
      */
     static function canManageLoan(PluginLagapenakLoan $loan): bool {
-        return self::canSupervise()
+        return self::canView()
+            && self::canSupervise()
             && isset($loan->fields['entities_id'])
             && Session::haveAccessToEntity((int) $loan->fields['entities_id']);
     }
 
     static function isRequester(PluginLagapenakLoan $loan): bool {
         return (int) ($loan->fields['users_id'] ?? 0) === (int) ($_SESSION['glpiID'] ?? -1);
+    }
+
+    /**
+     * A request nobody has acted on yet: still pending, no asset delivered/returned/with incident,
+     * no signing link issued, no date request and no comment from anyone else.
+     * Only such a request can be withdrawn (deleted) by its own requester.
+     */
+    static function isUntouchedRequest(PluginLagapenakLoan $loan): bool {
+        global $DB;
+        $id = (int) ($loan->fields['id'] ?? 0);
+        if ((int) ($loan->fields['status'] ?? 0) !== self::STATUS_PENDING
+            || !empty($loan->fields['sign_token'])
+            || (int) ($loan->fields['date_request_status'] ?? 0) !== self::DATE_REQUEST_NONE
+            || !empty($loan->fields['requested_date_end'])
+        ) {
+            return false;
+        }
+        $touched_items = countElementsInTable('glpi_plugin_lagapenak_loanitems', [
+            'loans_id' => $id,
+            'NOT'      => ['status' => PluginLagapenakLoanItem::STATUS_PENDING],
+        ]);
+        $others_comments = countElementsInTable('glpi_plugin_lagapenak_loancomments', [
+            'loans_id' => $id,
+            'NOT'      => ['users_id' => (int) ($loan->fields['users_id'] ?? 0)],
+        ]);
+        return $touched_items === 0 && $others_comments === 0;
+    }
+
+    /**
+     * Single deletion rule for every route (loan form, GLPI massive actions, API…):
+     * - a signed loan is never deleted;
+     * - the requester may withdraw their own untouched request (READ + CREATE, entity access), no PURGE needed;
+     * - anybody else needs READ + UPDATE + PURGE and access to the loan's entity.
+     */
+    static function canDeleteLoan(PluginLagapenakLoan $loan): bool {
+        if (empty($loan->fields['id']) || self::isSigned($loan->fields)) {
+            return false;
+        }
+        if (self::isRequester($loan)) {
+            return self::canView() && self::canCreate()
+                && Session::haveAccessToEntity((int) $loan->fields['entities_id'])
+                && self::isUntouchedRequest($loan);
+        }
+        return self::hasPluginRight(self::$rightname, PURGE) && self::canManageLoan($loan);
     }
 
     /**
@@ -264,9 +309,21 @@ class PluginLagapenakLoan extends CommonDBTM {
     }
 
     /**
-     * A signed delivery note is evidence of the handover: nobody can delete the loan, supervisors
-     * included. Checked here so it applies to every deletion route. The loan itself keeps working
-     * (deliveries, returns, extensions, comments). 1.7.0 adds cancellation and kept signed versions.
+     * GLPI asks these before deleting through its own routes (massive actions, API): same rule as the form.
+     * The table has no is_deleted column, so "delete" is always a purge.
+     */
+    function canDeleteItem(): bool {
+        return self::canDeleteLoan($this);
+    }
+
+    function canPurgeItem(): bool {
+        return self::canDeleteLoan($this);
+    }
+
+    /**
+     * Last check before any deletion, whatever the route. A signed delivery note is evidence of the
+     * handover: nobody can delete it. The loan itself keeps working (deliveries, returns, extensions,
+     * comments). 1.7.0 adds cancellation and kept signed versions.
      */
     function pre_deleteItem() {
         if (self::isSigned($this->fields)) {
@@ -277,7 +334,36 @@ class PluginLagapenakLoan extends CommonDBTM {
             );
             return false;
         }
+        if (!self::canDeleteLoan($this)) {
+            Session::addMessageAfterRedirect(
+                __('You cannot delete this loan. A request can only be withdrawn by its requester while nobody has acted on it.', 'lagapenak'),
+                false,
+                ERROR
+            );
+            return false;
+        }
         return true;
+    }
+
+    /**
+     * GLPI massive "update" applies a field to many loans without the loan form's checks (recipient,
+     * entity, date conflicts). Only fields with no such rules may be changed in bulk; the fields printed
+     * on the delivery note only while it is not signed.
+     */
+    function canMassiveAction($action, $field, $value) {
+        if (in_array($field, ['observaciones', 'field_3', 'field_4', 'field_5'], true)) {
+            return parent::canMassiveAction($action, $field, $value);
+        }
+        if (in_array($field, ['field_1', 'field_2'], true)) {
+            return !self::isSigned($this->fields) && parent::canMassiveAction($action, $field, $value);
+        }
+        return false;
+    }
+
+    function getForbiddenStandardMassiveAction() {
+        $forbidden   = parent::getForbiddenStandardMassiveAction();
+        $forbidden[] = 'add_transfer_list'; // moving loans between entities goes through the loan form
+        return $forbidden;
     }
 
     function prepareInputForUpdate($input) {
@@ -287,6 +373,18 @@ class PluginLagapenakLoan extends CommonDBTM {
         // Without this, saving the loan form could rewrite or back-date a signed delivery note.
         foreach (self::getSignatureFields() as $field) {
             unset($input[$field]);
+        }
+        // Entity and recipient rules hold for every update route, not only the loan form
+        $new_entity = (int) ($input['entities_id'] ?? $this->fields['entities_id'] ?? 0);
+        $new_dest   = (int) ($input['users_id_destinatario'] ?? $this->fields['users_id_destinatario'] ?? 0);
+        if ($new_entity !== (int) ($this->fields['entities_id'] ?? 0)
+            || $new_dest !== (int) ($this->fields['users_id_destinatario'] ?? 0)
+        ) {
+            $error = self::checkEntityAndRecipient($new_entity, $new_dest);
+            if ($error !== '') {
+                Session::addMessageAfterRedirect($error, false, ERROR);
+                return false;
+            }
         }
         return self::sanitizeDates($input);
     }
@@ -370,6 +468,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'linkfield' => 'entities_id',
             'name'      => __('Entity', 'lagapenak'),
             'datatype'  => 'dropdown',
+            'massiveaction' => false, // checked again by canMassiveAction()
         ];
 
         $tab[] = [
@@ -379,6 +478,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'linkfield' => 'users_id',
             'name'      => __('Requester', 'lagapenak'),
             'datatype'  => 'dropdown',
+            'massiveaction' => false, // checked again by canMassiveAction()
         ];
 
         $tab[] = [
@@ -388,6 +488,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'linkfield' => 'users_id_destinatario',
             'name'      => __('Recipient', 'lagapenak'),
             'datatype'  => 'dropdown',
+            'massiveaction' => false, // checked again by canMassiveAction()
         ];
 
         $tab[] = [
@@ -396,6 +497,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'field'    => 'fecha_inicio',
             'name'     => __('Start date', 'lagapenak'),
             'datatype' => 'datetime',
+            'massiveaction' => false, // checked again by canMassiveAction()
         ];
 
         $tab[] = [
@@ -404,6 +506,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'field'    => 'fecha_fin',
             'name'     => __('End date', 'lagapenak'),
             'datatype' => 'datetime',
+            'massiveaction' => false, // checked again by canMassiveAction()
         ];
 
         $tab[] = [
@@ -431,6 +534,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'field'    => 'beneficiary_name',
             'name'     => __('Full name', 'lagapenak'),
             'datatype' => 'string',
+            'massiveaction' => false, // beneficiary data: loan form only
         ];
 
         $tab[] = [
@@ -439,6 +543,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'field'    => 'beneficiary_dni',
             'name'     => __('Passport / ID', 'lagapenak'),
             'datatype' => 'string',
+            'massiveaction' => false, // beneficiary data: loan form only
         ];
 
         $tab[] = [
@@ -447,6 +552,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'field'    => 'beneficiary_email',
             'name'     => __('Email address', 'lagapenak'),
             'datatype' => 'string',
+            'massiveaction' => false, // beneficiary data: loan form only
         ];
 
         $t = $this->getTable();
