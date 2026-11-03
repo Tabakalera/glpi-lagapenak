@@ -198,7 +198,7 @@ Kide-Artean (residencias y cesiones) **consulta** los préstamos de Lagapenak. L
 - **Préstamos antiguos:** si el email del beneficiario coincide con el del solicitante en un préstamo anterior a esta versión, la API lo marca (`requester_autofill_possible`): pudo autocompletarse y no debe usarse para asociar por email sin verificación. Lagapenak no modifica esos datos.
 - **Huellas:** se calculan con una clave de la integración. Se genera en *Configurar › Claves de identificación*, se muestra **una sola vez** y se entrega a Kide-Artean por un canal seguro. Para cambiarla, *Rotar clave*: la anterior sigue funcionando los días indicados.
 - **Viene desactivada.** Un Super-Admin la activa en *Configuración › Complementos › Lagapenak › Configurar*: marca **API activada**, genera la clave de identificación y crea el cliente (permisos, entidades autorizadas, IP del servidor de Kide-Artean, caducidad de 12 meses como máximo). Un cliente nuevo solo tiene `loans:read`; el permiso de datos personales se marca expresamente. La credencial del cliente también se muestra una sola vez.
-- **Sincronización:** préstamos activos desde el 01/01/2026 (configurable); los anteriores se pueden consultar por número.
+- **Sincronización:** préstamos activos desde el 01/01/2026 (configurable); los anteriores se pueden consultar por número. Si cambia lo que el cliente puede ver (entidades, subentidades o permisos), la API cambia su `scope_version` para que Kide-Artean revise los préstamos que conoce.
 - Cada llamada queda en *Últimas 50 llamadas* y en `glpi_plugin_lagapenak_apilogs` (365 días por defecto). Pendiente de validación del DPD y revisión de seguridad.
 
 ---
@@ -472,7 +472,7 @@ Kide-Artean (residencies and assignments) **reads** Lagapenak loans. Lagapenak p
 - **Older loans:** when the beneficiary's email equals the requester's on a loan created before this version, the API flags it (`requester_autofill_possible`): it may have been pre-filled and must not be used to associate by email without verification. Lagapenak does not change that data.
 - **Fingerprints** use an integration key generated in *Configure › Identification keys*, shown **once** and handed to Kide-Artean through a secure channel. *Rotate key* keeps the previous one working for the given days.
 - **Disabled by default.** A Super-Admin enables it in *Setup › Plugins › Lagapenak › Configure*, generates the identification key and creates the client (scopes, authorised entities, Kide-Artean server IP, expiry of 12 months at most). A new client only has `loans:read`; the personal-data scope is ticked expressly. The client credential is also shown once.
-- **Sync:** loans active from 2026-01-01 (configurable); older loans can be looked up by number.
+- **Sync:** loans active from 2026-01-01 (configurable); older loans can be looked up by number. When what the client may see changes (entities, sub-entities or scopes), its `scope_version` changes so that Kide-Artean reconciles the loans it knows.
 - Every call is listed in *Last 50 calls* and in `glpi_plugin_lagapenak_apilogs` (365 days by default). Pending DPD validation and security review.
 
 ---

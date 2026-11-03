@@ -1,7 +1,7 @@
 # Integración con la API de préstamos G1 de Lagapenak
 
 Guía técnica para el equipo que implemente el consumidor en Kide·artean. Se basa exclusivamente en el contrato
-`openapi-g1.yaml` (versión 3.0.0-draft) y en los vectores `g1-hmac-vectors.json`. Si algo de esta guía no
+`openapi-g1.yaml` (versión 3.1.0-draft) y en los vectores `g1-hmac-vectors.json`. Si algo de esta guía no
 coincide con el contrato, manda el contrato.
 
 Estado: borrador. La API no está en producción: falta la validación del DPD y la revisión de seguridad.
@@ -91,11 +91,22 @@ siguiente aparición del préstamo o al pedir su detalle.
 - Repetir una página con el mismo `since` devuelve lo mismo (reintentos seguros, idempotencia).
 - Los cambios de los últimos `meta.sync.settle_seconds` (2 s) llegan en la siguiente lectura.
 - Procesar los eventos por `loan_uuid` de forma idempotente (aplicar dos veces el mismo `upsert` no cambia nada).
-- **Reconciliación**:
-  - Si `meta.client.scope_changed_at` es posterior a la última reconciliación (por ejemplo, porque se redujeron
-    las entidades del cliente), comprobar todos los UUID conocidos con `GET /v1/loans?uuids=` en lotes de 50.
-    Los que vengan en `not_found` (`deleted` o `not_available`) ya no son visibles.
-  - Recomendado además una reconciliación completa periódica (por ejemplo, semanal).
+- **Versión de alcance (`scope_version`)**: valor opaco (`sv1-` y 16 caracteres hexadecimales) que cambia
+  siempre que cambia lo que el cliente puede ver: entidades autorizadas, subentidades de GLPI (aunque nadie
+  toque la configuración del cliente) o ámbitos. Llega en cada página de `loan-events`, en
+  `meta.client.scope_version` y en la cabecera `X-Lagapenak-Scope-Version` de toda respuesta autenticada.
+  Guárdala junto a `next_since`.
+- **Si cambia `scope_version`**:
+  1. Termina de procesar la página recibida.
+  2. Comprueba todos los UUID conocidos con `GET /v1/loans?uuids=` en lotes de 50. Los que vengan en
+     `not_found` con `not_available` han quedado fuera de alcance; con `deleted`, se borraron. La API no da
+     ningún otro dato de ellos.
+  3. Repite el descubrimiento desde el principio (`since=1970-01-01T00:00:00Z`) para recibir los préstamos que
+     ahora sean visibles. Procesar es idempotente.
+  4. Guarda la nueva `scope_version` y el nuevo `next_since` solo al terminar.
+- Es el único caso en que un préstamo conocido deja de verse sin un evento propio. `meta.client.scope_changed_at`
+  se mantiene, pero `scope_version` es la señal fiable.
+- Recomendado además una reconciliación completa periódica (por ejemplo, semanal).
 
 ## 4. Detalle (nivel 2)
 
@@ -114,7 +125,7 @@ Campos principales del `Loan` (ver el esquema del contrato):
 | Estado | `status` (estado interno), `material_status` (calculado de las líneas; el que cuenta para cerrar) |
 | Fechas | `created_at`, `period {start, end}` (previsto), `changed_at` (versión) |
 | Personas de Tabakalera | `requester`, `recipient`, `cancellation.cancelled_by` — `{id, name}` de GLPI, sin email |
-| Gestión | `details {call, project, location, area, department}` (texto del personal) |
+| Gestión | `details {call, project, location, area, department}` (texto del personal; ver 4.1) |
 | Ampliación | `extension_request {status pending/rejected, requested_end, applies_to_items}` o `null` |
 | Albarán | `delivery_note {signed, signed_at, signer_name*, project, signing_link {pending, expires_at}}` |
 | Cancelación | `cancellation {cancelled_at, cancelled_by}` o `null` (sin motivo) |
@@ -123,6 +134,13 @@ Campos principales del `Loan` (ver el esquema del contrato):
 | Comentarios | `comments {count, last_at}` (nunca el texto) |
 
 `*` Solo con `loans:read:personal`; si no, `null`.
+
+### 4.1 Textos libres en el permiso básico
+
+La referencia, los campos de gestión y el proyecto del albarán los escribe el personal a mano. Aunque no son
+campos personales, pueden incluir el nombre de un artista o de su proyecto. Los nombres del personal de
+Tabakalera también son datos personales. Trátalos con el mismo cuidado que el resto de datos personales al
+mostrarlos a tus usuarios (clasificación en `x-data-classification.operational.free_text_risk`).
 
 Reglas útiles:
 - `signed_at` es lo más cercano a la entrega efectiva: Lagapenak no guarda fechas reales de entrega ni de
@@ -217,7 +235,7 @@ Para decidir el cierre, usa `material_status`:
 - [ ] Las 28 huellas de `g1-hmac-vectors.json` reproducidas.
 - [ ] Clave de la integración y credencial guardadas en el almacén de secretos; nada en el código ni en los logs.
 - [ ] `next_since` guardado solo tras procesar cada página; reintentos con el mismo cursor.
-- [ ] Reconciliación por lote ante `scope_changed_at` y periódica.
+- [ ] `scope_version` guardada con el cursor; reconciliación y descubrimiento completo cuando cambie; reconciliación periódica.
 - [ ] `requester_autofill_possible` excluido de la asociación automática por email.
 - [ ] `X-Acting-User` en las búsquedas por número y en las consultas de revisión manual.
 - [ ] Datos personales (`contact`, `signer_name`) mostrados solo a quien corresponda según los permisos de

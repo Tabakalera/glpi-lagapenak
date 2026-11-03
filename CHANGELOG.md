@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [1.7.0-dev] - Unreleased (branch `feature/api-g1`, number to be decided at release)
 
 Loan query API G1 (read-only, first consumer Kide-Artean), beneficiary identification (G1-ID01) and explicit
-cancellation (G1-F05 to G1-F07). Contract: `docs/api/openapi-g1.yaml` (3.0.0-draft). Built on 1.6.1, which is
+cancellation (G1-F05 to G1-F07). Contract: `docs/api/openapi-g1.yaml` (3.1.0-draft). Built on 1.6.1, which is
 unchanged. Pending: security review, DPD validation (`docs/api/privacidad-g1.md`), release authorisation.
 
 ### Added
@@ -37,6 +37,9 @@ unchanged. Pending: security review, DPD validation (`docs/api/privacidad-g1.md`
 - Explicit cancellation of requests whose material was never handed over, by the supervisor of the loan's
   entity or by the original requester of their own request (G1-F05), reason required, checked again in the
   write itself against concurrent deliveries or signatures; the loan is kept with who, when and why
+- Scope version (`scope_version`) in every discovery page, in `meta` and in the `X-Lagapenak-Scope-Version`
+  header: it changes whenever what the client may see changes (authorised entities, GLPI sub-entities, scopes),
+  so the consumer reconciles the loans it knows; loans out of scope come back as `not_available`, with no data
 - Every loan gets a random UUID (filled in for existing loans on update), not editable
 - API log without bodies, with the number of loans returned with personal data per call (`personal_count`);
   daily task `ApiLogClean`; Super-Admin page (*Setup › Plugins › Lagapenak › Configure*)

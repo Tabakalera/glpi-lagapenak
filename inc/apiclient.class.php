@@ -107,6 +107,17 @@ class PluginLagapenakApiClient {
         return array_values($ids);
     }
 
+    /**
+     * Opaque version of what the client may see: its effective entities (recomputed from the GLPI entity
+     * tree on every request, so a moved or removed sub-entity counts too) and its scopes. Any change gives a
+     * new value; the consumer then reconciles what it knows (contract x-sync). Reveals no loan data.
+     */
+    static function scopeVersion(array $client, array $entity_ids): string {
+        $ids = array_map('intval', $entity_ids);
+        sort($ids);
+        return 'sv1-' . substr(hash('sha256', implode(',', $ids) . '|' . implode(' ', self::getScopes($client))), 0, 16);
+    }
+
     static function isIpAllowed(array $client, string $ip): bool {
         foreach (self::parseList($client['allowed_ips'] ?? '') as $rule) {
             if (self::ipMatches($ip, $rule)) {

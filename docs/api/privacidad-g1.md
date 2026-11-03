@@ -2,7 +2,7 @@
 
 Documento para la validación del Delegado de Protección de Datos (DPD) y para la revisión de seguridad.
 Describe el tratamiento de datos personales de la API de consulta de préstamos G1 (contrato
-`openapi-g1.yaml`, versión 3.0.0-draft). La API no está en producción y no debe ponerse en producción sin
+`openapi-g1.yaml`, versión 3.1.0-draft). La API no está en producción y no debe ponerse en producción sin
 estas dos validaciones.
 
 ## 1. Finalidad
@@ -43,9 +43,10 @@ Interesados:
 
 - El descubrimiento incremental, que se consulta de forma periódica y masiva, **no lleva datos personales en
   claro**: solo huellas y estados.
-- Los datos personales en claro solo aparecen en el **detalle** de préstamos concretos. Para recibirlos, el
-  cliente necesita un permiso específico (`loans:read:personal`) que un Super-Admin concede expresamente. Un
-  cliente nuevo no lo tiene.
+- Los datos del beneficiario y del firmante en claro solo aparecen en el **detalle** de préstamos concretos y
+  necesitan un permiso específico (`loans:read:personal`) que un Super-Admin concede expresamente. Un cliente
+  nuevo no lo tiene. El detalle con el permiso básico también lleva nombres del personal y textos escritos a
+  mano que pueden contener datos personales (apartado 4.1).
 - No hay listados completos. El detalle se pide por número (una persona) o por lotes de hasta 50
   identificadores.
 - No se puede buscar por huella, nombre, email ni DNI.
@@ -53,6 +54,37 @@ Interesados:
 - Los textos libres sensibles quedan fuera aunque existan en Lagapenak: observaciones, notas, comentarios,
   incidencias y motivos.
 - El personal de Tabakalera aparece solo con su identificador de GLPI y su nombre.
+
+### 4.1 Campos del permiso básico que pueden contener datos personales
+
+La separación entre permisos es por el **propósito del campo**: `loans:read:personal` protege los campos
+destinados a identificar al beneficiario y al firmante. Estos campos del permiso básico contienen, o pueden
+contener, datos personales:
+
+| Campo | Qué es | ¿Datos personales? | Riesgo |
+|---|---|---|---|
+| `requester.name`, `recipient.name`, `cancellation.cancelled_by.name` | Nombre del personal de Tabakalera | Sí, por diseño (sin email ni teléfono) | Bajo: relación laboral y finalidad de gestión |
+| `reference` | Nombre del préstamo, escrito a mano | Puede incluir el nombre del artista o residente | Medio |
+| `details.call`, `details.project` | Convocatoria y proyecto, escritos a mano | Pueden incluir el nombre de un artista o de su proyecto | Medio |
+| `details.location`, `details.area`, `details.department` | Ubicación, área y departamento | Organizativos | Bajo |
+| `delivery_note.project` | Proyecto escrito en el albarán | Puede incluir el nombre del artista o de su proyecto | Medio |
+| `items[].name`, `inventory_number`, `serial` | Inventario de GLPI | El nombre de un equipo puede incluir el de su usuario habitual | Bajo |
+| `entity.name` | Entidad de GLPI | Organizativo | Sin riesgo apreciable |
+
+**Riesgo residual.** Un cliente con solo `loans:read` puede recibir el nombre de un beneficiario si el
+personal lo escribió en la referencia, la convocatoria, el proyecto o el proyecto del albarán. No se filtra el
+contenido: no sería fiable y eliminaría datos útiles para relacionar préstamos con convocatorias y proyectos.
+Hoy el único cliente previsto (Kide·artean) tendrá probablemente los dos permisos, así que el impacto práctico
+es bajo.
+
+**Opciones** (ninguna aplicada; requieren decisión):
+
+| Opción | Cambio | Impacto |
+|---|---|---|
+| A. Mantener (actual) | Ninguno; documentado | Un cliente básico recibe los textos tal como están |
+| B. Indicación al personal | Aviso en el formulario: no escribir datos del beneficiario fuera de sus campos | Sin impacto en la API; reduce el riesgo para el futuro, no para lo ya escrito |
+| C. Textos al permiso personal | `reference`, `details.call`, `details.project` y `delivery_note.project` solo con `loans:read:personal` | Un cliente básico pierde los datos que más ayudan a relacionar préstamos con convocatorias y proyectos |
+| D. Nombres del personal al permiso personal | Con el permiso básico, solo el identificador de GLPI | Un cliente básico no sabe quién pidió o gestionó sin otra fuente |
 
 ## 5. Seudonimización (huellas)
 
@@ -81,6 +113,13 @@ Interesados:
   ámbito personal y gestiona las claves.
 - **Activación.** La API viene **desactivada** al instalar o actualizar; desactivada, todo responde 404.
 - **Errores.** Los mensajes de error no contienen datos personales ni los valores recibidos.
+
+### 6.1 Cambios de alcance
+
+Si un cliente deja de poder ver préstamos (se le quitan entidades, se mueve una subentidad en GLPI o cambian sus
+permisos), la API cambia su `scope_version`. El cliente comprueba los préstamos que conocía y la API los
+devuelve como «no disponibles», sin ningún otro dato. Nunca se envían datos de préstamos que el cliente ya no
+puede consultar.
 
 ## 7. Auditoría
 
@@ -134,7 +173,8 @@ Interesados:
 1. Base jurídica y registro de actividades del tratamiento compartido entre Lagapenak y Kide·artean.
 2. Adecuación del ámbito `loans:read:personal` (nombre y email del beneficiario y nombre del firmante) a la
    finalidad.
-3. Envío de los textos de gestión (referencia, convocatoria, proyecto, etc.), que pueden contener nombres.
+3. Envío con el permiso básico de los textos escritos a mano (referencia, convocatoria, proyecto, proyecto del
+   albarán), que pueden contener nombres: opciones A–D del apartado 4.1.
 4. Envío de los nombres del personal de Tabakalera (solicitante, supervisor, quien cancela).
 5. Plazo de conservación del registro de la API (365 días por defecto) y de los datos en Kide·artean.
 6. Información a los interesados sobre la transmisión de sus datos a Kide·artean.

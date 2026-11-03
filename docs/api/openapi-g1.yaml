@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lagapenak · API de consulta de préstamos G1
-  version: 3.0.0-draft
+  version: 3.1.0-draft
   summary: Interfaz de solo lectura con la información estructurada de los préstamos de material de Lagapenak.
   description: |
     Contrato funcional único de la API de préstamos de Lagapenak (plugin GLPI). Su primer consumidor es
@@ -55,8 +55,18 @@ info:
         inventario, número de serie, estado, periodo previsto, fecha de último cambio. Beneficiario: estado de
         los identificadores, avisos de calidad y huellas HMAC.
       note: |
-        La referencia y los campos de gestión los escribe el personal a mano: pueden contener nombres. Se
-        envían tal como están, sin caracteres de control y con un máximo de 255 caracteres.
+        La separación de ámbitos es por el propósito del campo, no por su contenido: `loans:read:personal`
+        protege los campos destinados a identificar al beneficiario y al firmante. Algunos campos de este
+        ámbito básico contienen o pueden contener datos personales (ver `free_text_risk`). Se envían tal como
+        están, sin caracteres de control y con un máximo de 255 caracteres.
+      free_text_risk:
+        staff_names: '`requester.name`, `recipient.name`, `cancellation.cancelled_by.name`. Datos personales del personal de Tabakalera, por diseño (identificados, sin email ni teléfono). Riesgo bajo: relación laboral y finalidad de gestión.'
+        reference: '`reference`. Texto libre del personal (nombre del préstamo). Puede incluir el nombre del artista o residente. Riesgo medio.'
+        details: '`details.call`, `details.project`, `details.location`, `details.area`, `details.department`. Texto libre del personal. Convocatoria y proyecto pueden llevar el nombre de un artista o de su proyecto; ubicación, área y departamento son organizativos. Riesgo medio en call/project, bajo en el resto.'
+        delivery_note_project: '`delivery_note.project`. Proyecto escrito en el albarán. Puede llevar el nombre del artista o de su proyecto. Riesgo medio.'
+        assets: '`items[].name`, `inventory_number`, `serial`. Datos del inventario de GLPI; el nombre de un equipo puede incluir el nombre de su usuario habitual. Riesgo bajo.'
+        entity: '`entity.name`. Organizativo. Sin riesgo apreciable.'
+        residual: 'Un cliente sin `loans:read:personal` puede recibir el nombre de un beneficiario si el personal lo escribió en estos textos. No se filtra el contenido (no es fiable y rompería datos útiles). Mitigación: instrucción al personal de no escribir datos personales del beneficiario fuera de sus campos, revisión del DPD y, si se decide, mover estos textos al ámbito personal.'
     personal:
       scope: loans:read:personal (además de loans:read)
       fields: |
@@ -165,12 +175,26 @@ info:
         cancelación o sus comentarios, y también las entidades o ámbitos del cliente o las claves de
         identificación. El cambio de nombre de un usuario, una entidad o un activo en GLPI no genera evento: se
         refleja en la siguiente aparición del préstamo o en el detalle.
-      - Borrado → `deleted`; paso a una entidad no autorizada → `unavailable`. Ningún préstamo conocido
-        desaparece sin evento, salvo si se reducen las entidades del cliente: ver la reconciliación.
+      - Borrado → `deleted`; paso a una entidad no autorizada → `unavailable`. Un préstamo conocido solo puede
+        dejar de verse sin evento propio cuando cambia lo que el cliente puede ver (entidades autorizadas,
+        árbol de entidades de GLPI o ámbitos): ese cambio lo indica siempre `scope_version`.
       - Orden total (`changed_at`, tipo, id) y cursor opaco: sin duplicados ni pérdidas al paginar. No se
         entregan cambios de los últimos `settle_seconds` (2 s) para no saltarse escrituras concurrentes.
-      - Si `meta.client.scope_changed_at` es posterior a la última reconciliación, comprobar los préstamos
-        conocidos con `GET /v1/loans?uuids=` (los que ya no están vuelven en `not_found`).
+      - **Versión de alcance (`scope_version`).** Valor opaco que cambia siempre que cambia lo que el cliente
+        puede ver: entidades autorizadas, subentidades (se recalcula en cada petición con el árbol de
+        entidades de GLPI, así que también detecta una subentidad movida o eliminada) y ámbitos. Viaja en
+        cada página del descubrimiento, en `meta.client.scope_version` y en la cabecera
+        `X-Lagapenak-Scope-Version` de toda respuesta autenticada. No revela datos de ningún préstamo.
+      - **Protocolo ante un cambio de `scope_version`** (guardar la última conocida junto a `next_since`):
+        1. Terminar de procesar la página recibida.
+        2. Reconciliar los préstamos conocidos con `GET /v1/loans?uuids=` en lotes de 50: los que vuelven en
+           `not_found` con `not_available` han quedado fuera de alcance; los `deleted`, borrados. La API no
+           devuelve ningún dato de ellos.
+        3. Repetir el descubrimiento desde el principio (`since=1970-01-01T00:00:00Z`) para recibir los
+           préstamos que hayan pasado a ser visibles (procesar es idempotente).
+        4. Guardar la nueva `scope_version` y el nuevo `next_since` solo al terminar.
+      - `meta.client.scope_changed_at` se mantiene por compatibilidad (cambios hechos en la configuración del
+        cliente); `scope_version` es la señal fiable.
       - Recomendado: reconciliación periódica completa (p. ej. semanal) con el lote de UUID conocidos.
   contact:
     name: Tabakalera · Sistemas
@@ -205,6 +229,7 @@ paths:
           description: OK
           headers:
             X-Request-Id: { $ref: '#/components/headers/RequestId' }
+            X-Lagapenak-Scope-Version: { $ref: '#/components/headers/ScopeVersion' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Meta' }
@@ -234,6 +259,7 @@ paths:
           description: OK
           headers:
             X-Request-Id: { $ref: '#/components/headers/RequestId' }
+            X-Lagapenak-Scope-Version: { $ref: '#/components/headers/ScopeVersion' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LoanEventPage' }
@@ -271,6 +297,7 @@ paths:
           description: OK
           headers:
             X-Request-Id: { $ref: '#/components/headers/RequestId' }
+            X-Lagapenak-Scope-Version: { $ref: '#/components/headers/ScopeVersion' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LoanDetailPage' }
@@ -297,6 +324,7 @@ paths:
           description: OK
           headers:
             X-Request-Id: { $ref: '#/components/headers/RequestId' }
+            X-Lagapenak-Scope-Version: { $ref: '#/components/headers/ScopeVersion' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Loan' }
@@ -321,6 +349,9 @@ components:
         bloqueo de 5 min tras 20 credenciales fallidas desde una IP. Cualquier credencial no válida → el mismo 401.
 
   headers:
+    ScopeVersion:
+      description: '`scope_version` del cliente, en toda respuesta autenticada (también en errores tras autenticar).'
+      schema: { $ref: '#/components/schemas/ScopeVersion' }
     RequestId:
       description: El `X-Request-Id` recibido o uno generado. Queda en el registro.
       schema: { type: string, maxLength: 64 }
@@ -341,6 +372,11 @@ components:
       schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
 
   schemas:
+    ScopeVersion:
+      type: string
+      pattern: '^sv1-[0-9a-f]{16}$'
+      description: Versión opaca de lo que el cliente puede ver (entidades efectivas y ámbitos). Ver `x-sync`.
+
     Period:
       type: object
       required: [start, end]
@@ -444,11 +480,12 @@ components:
 
     LoanEventPage:
       type: object
-      required: [data, next_since, has_more]
+      required: [data, next_since, has_more, scope_version]
       properties:
         data: { type: array, items: { $ref: '#/components/schemas/LoanEvent' } }
         next_since: { type: string, description: 'Cursor opaco para la siguiente llamada (también si `data` está vacío).' }
         has_more: { type: boolean }
+        scope_version: { $ref: '#/components/schemas/ScopeVersion' }
 
     Loan:
       type: object
@@ -591,6 +628,7 @@ components:
             expires_at: { type: string, format: date-time }
             token_rotation_pending: { type: boolean }
             scope_changed_at: { type: [string, 'null'], format: date-time }
+            scope_version: { $ref: '#/components/schemas/ScopeVersion' }
         identification:
           type: object
           properties:

@@ -58,6 +58,7 @@ class PluginLagapenakApi {
     private string $request_id;
     private ?string $acting_user = null;
     private ?array $client = null;
+    private ?string $scope_version = null;   // sent on every authenticated response
     private array $entities = [];
     private string $code = '';
     private int $count = 0;
@@ -127,6 +128,7 @@ class PluginLagapenakApi {
         }
         PluginLagapenakApiClient::touch((int) $client['id']);
         $this->entities = PluginLagapenakApiClient::getEntityIds($client);
+        $this->scope_version = PluginLagapenakApiClient::scopeVersion($client, $this->entities);
 
         $acting = $this->header('X-Acting-User');
         if ($acting !== null && $acting !== '') {
@@ -182,6 +184,7 @@ class PluginLagapenakApi {
                 'expires_at'             => self::iso($this->client['expires_at']),
                 'token_rotation_pending' => (bool) $this->client['using_previous_token'],
                 'scope_changed_at'       => self::iso($this->client['scope_mod']),
+                'scope_version'          => $this->scope_version,
             ],
             'identification' => [
                 'algorithm'       => PluginLagapenakBeneficiary::ALGORITHM,
@@ -285,6 +288,8 @@ class PluginLagapenakApi {
         return $this->ok([
             'data'       => $data,
             'next_since' => $last ? self::cursor($last['ts'], $last['k'], $last['id']) : self::cursor($since, $kind, $after),
+            // A change means the client's view changed (entities or scopes): reconcile (contract x-sync)
+            'scope_version' => $this->scope_version,
             'has_more'   => $more,
         ]);
     }
@@ -829,6 +834,9 @@ class PluginLagapenakApi {
             'X-Content-Type-Options' => 'nosniff',
             'X-Request-Id'           => $this->request_id,
         ];
+        if ($this->scope_version !== null) {
+            $headers += ['X-Lagapenak-Scope-Version' => $this->scope_version];
+        }
         foreach ($headers as $name => $value) {
             header($name . ': ' . $value);
         }
