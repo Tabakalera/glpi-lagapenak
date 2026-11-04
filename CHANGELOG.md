@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.1] - YYYY-MM-DD (release date to be set on publication)
+
+Security release. Every issue below was reproduced first and checked after the fix with fictitious
+data on an isolated GLPI 10.0.24 and GLPI 11.0.9. Release tests: GLPI 10.0.11, 10.0.20, 10.0.28 and 11.0.12,
+including the upgrade from 1.6.0 and the rollback.
+
+### Security
+- Creating a loan now requires the CREATE right, also to open the form (the "New" button was hidden, the page and its submission were not). The entity must be one the user can access and the recipient must be a supervisor of that entity. A requester needs CREATE to add assets to their own loan
+- "Supervisor" of a loan now means UPDATE right **and** access to the loan's entity: a supervisor of one entity could open, edit, comment, delete and see the delivery note (ID number included) of loans in other entities by id, and create loans there
+- `ajax/asset_timeline.php` retired (answers 410): no page used it and it returned every loan name and requester name of the month, all entities, to any logged-in user. `ajax/entity_supervisor.php` and `ajax/asset_list.php` now respect the user's entities
+- Removing or changing an asset line now checks that the line belongs to the loan being edited (lines of other people's loans could be removed or have their status changed)
+- Assets are validated on the server: loanable type, existing item, entity the user can access, "Allow reservations" enabled. Any GLPI object (a User, for instance) could be added to a loan, and the bulk-add answer revealed the full name of any user by id
+- A signed delivery note can no longer be signed again or replaced: the signature is written only if there is none (conditional UPDATE), any pending signing link is voided when the note is signed, the public signing page refuses links of signed notes, no link is generated for a signed note, the loan form can no longer write signature fields (a supervisor could rewrite or back-date a signature) and the signature must be a PNG image. "Sign again" removed
+- The generated signing link is no longer passed in the redirect URL (browser history, access logs)
+
+- Recipients are checked on the server. The signed delivery note can only be sent to addresses linked to the loan (requester's and recipient's GLPI addresses, beneficiary's address); a supervisor of the loan's entity may use another address by stating a reason. The signing link only goes to the signer (the beneficiary, or the requester when there is none); showing the link on screen is reserved to supervisors. Every manual sending is recorded in the GLPI event log (user, address and, for an exceptional address, the reason)
+- A loan with a signed delivery note can no longer be deleted, by anyone (supervisors included): it is the record of the handover. Deliveries, returns, extensions and comments keep working. 1.7.0 adds cancellation
+- One deletion rule for every route (loan form, GLPI massive actions, API): a signed loan is never deleted; a requester may withdraw their own request (READ + CREATE, entity access) only while nobody has acted on it (still pending, no asset delivered, no signing link, no date request, no comment from anyone else); any other loan needs READ + UPDATE + PURGE and access to its entity. A profile with PURGE but without UPDATE could delete other people's loans through GLPI's "Delete permanently" massive action
+- Consulting loans requires the READ right of the active profile (list, loan, delivery note, calendar, availability, iCal), on top of ownership and entity. Changing an own request (adding or removing assets, asking for a date change) also requires CREATE
+- GLPI massive "update" can no longer change entity, recipient, dates or beneficiary data (it skipped the loan form's checks), nor the fields printed on a signed delivery note; entity and recipient rules now apply to every update route. Asset lines can only be changed or removed through GLPI's own routes by whoever manages their loan, and never in bulk
+- iCal feeds: personal URLs only, revocable, for everybody (supervisors included). What a feed shows is computed on every request from the owner's current rights and entities: their own loans plus the loans of the entities they supervise. It stops working when regenerated or revoked, or when the account is disabled. Events no longer carry the loan name (loan number, status and assets only). The general URL of 1.6.0, which gave every loan of every entity to any supervisor, is retired: it now answers with a notice and no loan data
+
+### Changed
+- Uninstalling the plugin keeps the loans, asset lines, comments and signed delivery notes (it used to drop every table). iCal tokens are still removed. See README, "Installation", for deleting the data for good
+
+### Known open items
+- Subscribers of the general iCal URL of 1.6.0 have to subscribe again with their personal URL (Lagapenak > Calendar > Subscribe)
+- The signed PDF is still regenerated from current loan data; immutable signed versions are planned for a future version, with no committed date
+- The audit trail of manual sendings lives in the GLPI event log, whose cleanup task (if enabled) keeps 30 days by default
+
 ## [1.6.0] - 2026-09-23
 
 ### Added

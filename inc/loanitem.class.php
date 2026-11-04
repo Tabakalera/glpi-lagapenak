@@ -311,10 +311,36 @@ class PluginLagapenakLoanItem extends CommonDBTM {
         return $items;
     }
 
+    /**
+     * Server-side check of an asset before it is added to a loan: a loanable type, an existing item
+     * the user can reach by entity, and "Allow reservations" enabled. The add form only offers such
+     * assets, but the request itself could name any GLPI object (a User, a Ticket…).
+     * Returns an error message, or '' when the asset can be added.
+     */
+    static function checkAsset($itemtype, $items_id): string {
+        $items_id = (int) $items_id;
+        if (!array_key_exists((string) $itemtype, self::getAssetTypes()) || $items_id <= 0) {
+            return __('This type of item cannot be loaned.', 'lagapenak');
+        }
+        $item = new $itemtype();
+        if (!$item->getFromDB($items_id)
+            || !empty($item->fields['is_deleted'])
+            || !empty($item->fields['is_template'])
+            || !Session::haveAccessToEntity((int) $item->getEntityID(), $item->isRecursive())
+        ) {
+            return __('Asset not found.', 'lagapenak');
+        }
+        $reservable = self::getReservableIds($itemtype);
+        if ($reservable !== null && !in_array($items_id, $reservable, true)) {
+            return __('This asset is not authorized for loan ("Allow reservations" is disabled).', 'lagapenak');
+        }
+        return '';
+    }
+
     static function addItem($loans_id, $itemtype, $items_id, $date_checkout = null, $date_checkin = null) {
         global $DB;
 
-        if (empty($itemtype) || $items_id <= 0) {
+        if (empty($itemtype) || $items_id <= 0 || self::checkAsset($itemtype, $items_id) !== '') {
             return false;
         }
 
@@ -439,7 +465,8 @@ class PluginLagapenakLoanItem extends CommonDBTM {
     }
 
     static function getItemName($itemtype, $items_id) {
-        if (!class_exists($itemtype)) {
+        // Only loanable asset types are resolved: never instantiate a class named by stored data
+        if (!array_key_exists((string) $itemtype, self::getAssetTypes()) || !class_exists($itemtype)) {
             return 'ID: ' . $items_id;
         }
         $obj = new $itemtype();
@@ -453,6 +480,37 @@ class PluginLagapenakLoanItem extends CommonDBTM {
 
     static function canView(): bool {
         return PluginLagapenakLoan::hasPluginRight(PluginLagapenakLoan::$rightname, READ);
+    }
+
+    /**
+     * Asset lines have no entity of their own: through GLPI's own routes (massive actions, API) only
+     * whoever manages the parent loan may change or remove them. The loan form remains the normal way.
+     */
+    private function managesParentLoan(): bool {
+        $loan = new PluginLagapenakLoan();
+        return $loan->getFromDB((int) ($this->fields['loans_id'] ?? 0)) && PluginLagapenakLoan::canManageLoan($loan);
+    }
+
+    function canUpdateItem(): bool {
+        return $this->managesParentLoan();
+    }
+
+    function canDeleteItem(): bool {
+        return $this->managesParentLoan();
+    }
+
+    function canPurgeItem(): bool {
+        return $this->managesParentLoan();
+    }
+
+    /** Status and dates of a line go through the loan form (conflict checks, loan status). */
+    function canMassiveAction($action, $field, $value) {
+        return false;
+    }
+
+    function post_purgeItem() {
+        // Keep the loan status in line with its remaining assets, as the loan form does
+        self::syncLoanStatus((int) ($this->fields['loans_id'] ?? 0));
     }
 
     static function getTypeName($nb = 0) {

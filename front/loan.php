@@ -4,6 +4,13 @@ include('../../../inc/includes.php');
 
 Session::checkLoginUser();
 
+// Consulting loans needs the READ right of the active profile
+if (!PluginLagapenakLoan::canView()) {
+    plugin_lagapenak_access_denied();
+    Html::footer();
+    exit;
+}
+
 $can_supervise = PluginLagapenakLoan::canSupervise();
 $tab           = isset($_GET['tab']) ? $_GET['tab'] : 'prestamos';
 // Non-supervisors cannot access the activos tab
@@ -931,6 +938,10 @@ if ($tab === 'prestamos') {
                 if (data.already && data.already.length > 0) {
                     msg += (msg ? '<br>' : '') + '<span class="text-muted"><i class="fas fa-info-circle me-1"></i>'
                          + 'Ya estaban en el préstamo: ' + data.already.join(', ') + '</span>';
+                }
+                if (data.rejected > 0) {
+                    msg += (msg ? '<br>' : '') + '<span class="text-danger"><i class="fas fa-ban me-1"></i>'
+                         + data.rejected + ' no se pueden prestar y se han omitido.</span>';
                 }
                 if (!msg) msg = '<span class="text-muted">Sin cambios.</span>';
 

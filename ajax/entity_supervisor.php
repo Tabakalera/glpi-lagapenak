@@ -4,12 +4,21 @@ include('../../../inc/includes.php');
 
 Session::checkLoginUser();
 
+// Only used to fill the recipient when creating or editing a loan
+if (!(PluginLagapenakLoan::canView() && (PluginLagapenakLoan::canCreate() || PluginLagapenakLoan::canSupervise()))) {
+    http_response_code(403);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Forbidden']);
+    exit;
+}
+
 header('Content-Type: application/json');
 
 global $DB;
 
 $entities_id = isset($_GET['entities_id']) ? (int)$_GET['entities_id'] : -1;
-if ($entities_id < 0) {
+// Supervisor names only for entities the user can work in
+if ($entities_id < 0 || !Session::haveAccessToEntity($entities_id)) {
     echo json_encode(['users' => []]);
     exit;
 }

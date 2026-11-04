@@ -35,14 +35,15 @@ if (!$loan->getFromDB($loans_id)) {
     exit;
 }
 
-// Permission check: supervisor can add to any loan;
-// non-supervisors only to their own loan while still PENDING.
+// Permission check: supervisors of the loan's entity can add to any of its loans;
+// non-supervisors (with CREATE) only to their own loan while still PENDING.
 $_ba_uid         = (int)($_SESSION['glpiID'] ?? 0);
-$_ba_can_sup     = PluginLagapenakLoan::canSupervise();
+$_ba_can_sup     = PluginLagapenakLoan::canManageLoan($loan);
 $_ba_is_owner    = (int)($loan->fields['users_id'] ?? 0) === $_ba_uid;
 $_ba_loan_status = (int)($loan->fields['status'] ?? 0);
 if (!$_ba_can_sup
-    && !($_ba_is_owner && $_ba_loan_status === PluginLagapenakLoan::STATUS_PENDING)
+    && !(PluginLagapenakLoan::canView() && $_ba_is_owner && $_ba_loan_status === PluginLagapenakLoan::STATUS_PENDING
+         && PluginLagapenakLoan::canCreate())
 ) {
     echo json_encode(['error' => 'Sin permisos para modificar este préstamo']);
     exit;
@@ -51,11 +52,18 @@ if (!$_ba_can_sup
 $added     = 0;
 $conflicts = [];
 $already   = [];
+$rejected  = 0;
 
 foreach ($items as $item) {
-    $itemtype = $item['itemtype'] ?? '';
+    $itemtype = (string) ($item['itemtype'] ?? '');
     $items_id = (int) ($item['items_id'] ?? 0);
     if (!$itemtype || !$items_id) continue;
+
+    // Validate before resolving any name: a rejected item reveals nothing about the object
+    if (PluginLagapenakLoanItem::checkAsset($itemtype, $items_id) !== '') {
+        $rejected++;
+        continue;
+    }
 
     $name = PluginLagapenakLoanItem::getItemName($itemtype, $items_id);
 
@@ -88,4 +96,5 @@ echo json_encode([
     'added'     => $added,
     'conflicts' => $conflicts,
     'already'   => $already,
+    'rejected'  => $rejected,
 ]);

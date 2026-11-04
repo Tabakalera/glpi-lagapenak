@@ -4,6 +4,14 @@ include('../../../inc/includes.php');
 
 Session::checkLoginUser();
 
+// Consulting loans needs the READ right of the active profile
+if (!(PluginLagapenakLoan::canView())) {
+    http_response_code(403);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Forbidden']);
+    exit;
+}
+
 header('Content-Type: application/json');
 
 global $DB;

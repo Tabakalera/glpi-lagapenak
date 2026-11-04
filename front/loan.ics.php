@@ -4,25 +4,6 @@ include('../../../inc/includes.php');
 
 global $DB;
 
-// ── Auth: token (para suscripciones externas) o sesión GLPI ──────────────────
-$token_provided = isset($_GET['token']) ? trim($_GET['token']) : '';
-
-// $ics_only_user = 0 → every loan (general token / supervisor session);
-//                 > 0 → only the loans requested by that user (personal token / non-supervisor session)
-if ($token_provided) {
-    $ics_scope = PluginLagapenakIcsToken::resolve($token_provided);
-    if ($ics_scope === null) {
-        http_response_code(403);
-        die('Token inválido.');
-    }
-    $ics_only_user = $ics_scope['users_id'];
-} else {
-    Session::checkLoginUser();
-    $ics_only_user = PluginLagapenakLoan::canSupervise() ? 0 : (int) Session::getLoginUserID();
-}
-
-$type = isset($_GET['type']) ? $_GET['type'] : 'loans'; // 'loans' | 'assets'
-
 // ── iCal helpers ─────────────────────────────────────────────────────────────
 
 // Escape text for iCal (commas, semicolons, backslashes, newlines)
@@ -54,6 +35,68 @@ function ics_date_end_exclusive($ts_str) {
     return date('Ymd', strtotime($ts_str . ' +1 day'));
 }
 
+function ics_output(string $cal_name, string $filename, array $vevents): void {
+    header('Content-Type: text/calendar; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Cache-Control: no-cache, must-revalidate');
+
+    echo "BEGIN:VCALENDAR\r\n";
+    echo "VERSION:2.0\r\n";
+    echo "PRODID:-//Tabakalera//GLPI Lagapenak//ES\r\n";
+    echo "CALSCALE:GREGORIAN\r\n";
+    echo "METHOD:PUBLISH\r\n";
+    echo ics_fold("X-WR-CALNAME:" . ics_escape($cal_name)) . "\r\n";
+    echo "X-WR-TIMEZONE:Europe/Madrid\r\n";
+    foreach ($vevents as $v) {
+        echo $v . "\r\n";
+    }
+    echo "END:VCALENDAR\r\n";
+}
+
+$type = (isset($_GET['type']) && $_GET['type'] === 'assets') ? 'assets' : 'loans';
+
+// ── Auth and scope ───────────────────────────────────────────────────────────
+// Scope = the loans the user requested + the loans of the entities they supervise (READ + UPDATE),
+// computed on every request: from the token owner's current rights (subscriptions) or from the
+// active profile and entities (GLPI session).
+$token_provided = isset($_GET['token']) ? trim((string) $_GET['token']) : '';
+
+if ($token_provided !== '') {
+    if (PluginLagapenakIcsToken::isRetiredGeneralToken($token_provided)) {
+        // The general URL of 1.6.0 gave every loan of every entity: it now only explains itself
+        $today = date('Ymd');
+        ics_output('Lagapenak', 'prestamos.ics', [implode("\r\n", array_map('ics_fold', [
+            'BEGIN:VEVENT',
+            'UID:lagapenak-general-url-retired@glpi',
+            'DTSTAMP:' . gmdate('Ymd\THis\Z'),
+            'DTSTART;VALUE=DATE:' . $today,
+            'DTEND;VALUE=DATE:' . date('Ymd', strtotime('+1 day')),
+            'SUMMARY:' . ics_escape('Este enlace de calendario ya no funciona'),
+            'DESCRIPTION:' . ics_escape("El enlace general de Lagapenak se ha retirado.\nSuscríbete con tu enlace personal: Lagapenak > Calendario > Suscribirse al calendario."),
+            'END:VEVENT',
+        ]))]);
+        exit;
+    }
+    $owner = PluginLagapenakIcsToken::resolve($token_provided);
+    $scope = $owner !== null ? PluginLagapenakIcsToken::getFeedScope($owner) : null;
+    if ($scope === null) {
+        http_response_code(403);
+        die('Token inválido.');
+    }
+} else {
+    Session::checkLoginUser();
+    if (!PluginLagapenakLoan::canView()) {
+        http_response_code(403);
+        die('Sin permiso.');
+    }
+    $scope = [
+        'users_id' => (int) Session::getLoginUserID(),
+        'entities' => PluginLagapenakLoan::canSupervise()
+            ? array_map('intval', $_SESSION['glpiactiveentities'] ?? [])
+            : [],
+    ];
+}
+
 // ── Asset name lookup ─────────────────────────────────────────────────────────
 $type_table = [
     'Computer'         => 'glpi_computers',
@@ -74,25 +117,31 @@ function ics_asset_name($itemtype, $items_id) {
     return $itemtype . ' #' . $items_id;
 }
 
-// ── Query loans ───────────────────────────────────────────────────────────────
+// ── Query loans in scope ──────────────────────────────────────────────────────
+$in_scope = [['users_id' => $scope['users_id']]];
+if (!empty($scope['entities'])) {
+    $in_scope[] = ['entities_id' => $scope['entities']];
+}
 $loans = $DB->request([
     'FROM'  => 'glpi_plugin_lagapenak_loans',
-    'WHERE' => array_merge(
-        [['status' => ['!=', PluginLagapenakLoan::STATUS_CANCELLED]]],
-        $ics_only_user ? [['users_id' => $ics_only_user]] : []
-    ),
+    'WHERE' => [
+        ['status' => ['!=', PluginLagapenakLoan::STATUS_CANCELLED]],
+        ['OR' => $in_scope],
+    ],
     'ORDER' => 'fecha_inicio ASC',
 ]);
 
 $plugin_url = plugin_lagapenak_web_dir(true); // absolute URL for external calendar clients
 
 // ── Build VEVENT list ─────────────────────────────────────────────────────────
+// Data minimisation: the feed leaves GLPI (calendar apps, phones), so events carry the loan number,
+// status and assets only — never the loan name (often a project or a person), people or ID numbers.
 $vevents = [];
 $now_stamp = gmdate('Ymd\THis\Z');
 
 foreach ($loans as $loan) {
     $lid   = (int) $loan['id'];
-    $title = $loan['name'] ?: ('Préstamo #' . $lid);
+    $title = 'Préstamo #' . $lid;
     $start = $loan['fecha_inicio'];
     $end   = $loan['fecha_fin'];
     if (!$start) continue;
@@ -132,7 +181,7 @@ foreach ($loans as $loan) {
             'DTSTAMP:' . $now_stamp,
             'DTSTART;VALUE=DATE:' . $dtstart,
             'DTEND;VALUE=DATE:'   . $dtend,
-            'SUMMARY:'  . ics_escape($title),
+            'SUMMARY:'  . ics_escape($title . ' · ' . $status_name),
             'DESCRIPTION:' . ics_escape($desc),
             'URL:'      . $url,
             'END:VEVENT',
@@ -148,7 +197,7 @@ foreach ($loans as $loan) {
                 'DTSTART;VALUE=DATE:' . $dtstart,
                 'DTEND;VALUE=DATE:'   . $dtend,
                 'SUMMARY:'  . ics_escape($ar['name']),
-                'DESCRIPTION:' . ics_escape('Préstamo: ' . $title . "\nEstado: " . $status_name),
+                'DESCRIPTION:' . ics_escape($title . "\nEstado: " . $status_name),
                 'URL:'      . $url,
                 'END:VEVENT',
             ]));
@@ -157,26 +206,8 @@ foreach ($loans as $loan) {
 }
 
 // ── Output ────────────────────────────────────────────────────────────────────
-$cal_name = $type === 'loans' ? 'Préstamos Tabakalera' : 'Activos en préstamo — Tabakalera';
-if ($ics_only_user) {
-    $cal_name = $type === 'loans' ? 'Mis préstamos — Tabakalera' : 'Mis activos en préstamo — Tabakalera';
-}
-$filename = $type === 'loans' ? 'prestamos.ics' : 'activos_prestamo.ics';
-
-header('Content-Type: text/calendar; charset=UTF-8');
-header('Content-Disposition: attachment; filename="' . $filename . '"');
-header('Cache-Control: no-cache, must-revalidate');
-
-echo "BEGIN:VCALENDAR\r\n";
-echo "VERSION:2.0\r\n";
-echo "PRODID:-//Tabakalera//GLPI Lagapenak//ES\r\n";
-echo "CALSCALE:GREGORIAN\r\n";
-echo "METHOD:PUBLISH\r\n";
-echo ics_fold("X-WR-CALNAME:" . ics_escape($cal_name)) . "\r\n";
-echo "X-WR-TIMEZONE:Europe/Madrid\r\n";
-
-foreach ($vevents as $v) {
-    echo $v . "\r\n";
-}
-
-echo "END:VCALENDAR\r\n";
+$supervisor_feed = !empty($scope['entities']);
+$cal_name = $type === 'loans'
+    ? ($supervisor_feed ? 'Préstamos — Tabakalera' : 'Mis préstamos — Tabakalera')
+    : ($supervisor_feed ? 'Activos en préstamo — Tabakalera' : 'Mis activos en préstamo — Tabakalera');
+ics_output($cal_name, $type === 'loans' ? 'prestamos.ics' : 'activos_prestamo.ics', $vevents);

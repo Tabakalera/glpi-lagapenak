@@ -8,8 +8,8 @@ Plugin para GLPI 10.0.x y 11.0.x que permite gestionar préstamos de activos (or
 
 ## Requisitos
 
-- GLPI 10.0.11 o superior (probado en 10.0.24) o GLPI 11.0.x (probado en 11.0.9)
-- PHP >= 7.4
+- GLPI 10.0.11 o superior (probado en 10.0.11, 10.0.20, 10.0.24 y 10.0.28) o GLPI 11.0.x (probado en 11.0.9 y 11.0.12)
+- PHP según la versión de GLPI (probado con PHP 8.2 en GLPI 10 y 8.3 en GLPI 11)
 - MySQL / MariaDB
 
 ## Instalación
@@ -18,7 +18,18 @@ Plugin para GLPI 10.0.x y 11.0.x que permite gestionar préstamos de activos (or
 2. Ve a **Configuración → Plugins**
 3. Localiza **Lagapenak** y pulsa **Instalar**, luego **Activar**
 
-Para desinstalar, pulsa **Desactivar** y luego **Desinstalar** desde el mismo menú. Las tablas de base de datos se eliminan automáticamente.
+Para desinstalar, pulsa **Desactivar** y luego **Desinstalar** desde el mismo menú.
+
+Desde la versión 1.6.1, desinstalar **conserva** los préstamos, sus líneas de material, los comentarios y las firmas de los albaranes, porque son el registro de las entregas. Sí se eliminan los tokens iCal (general y personales), las preferencias de visualización y el derecho `plugin_lagapenak_loan` de los perfiles. Al reinstalar, los préstamos vuelven a aparecer y hay que volver a asignar los derechos en los perfiles.
+
+Actualizar el plugin (copiar una versión nueva y pulsar **Actualizar**) nunca borra datos: la instalación solo crea las tablas y columnas que faltan.
+
+Borrado definitivo de los datos: solo con autorización y tras una copia de seguridad de la base de datos, ejecutar con el plugin desinstalado:
+
+```sql
+DROP TABLE glpi_plugin_lagapenak_loancomments, glpi_plugin_lagapenak_loanitems, glpi_plugin_lagapenak_loans;
+DELETE FROM glpi_profilerights WHERE name = 'plugin_lagapenak_albaran';
+```
 
 ---
 
@@ -126,6 +137,29 @@ Pon `[]` para no mostrar ninguno. Los labels se obtienen automáticamente de `ge
 
 ---
 
+## Cambios en la 1.6.1 para quienes gestionan préstamos
+
+**Envío del albarán y del enlace de firma**
+
+| # | Situación | Qué ocurre desde la 1.6.1 | Qué hacer |
+|---|---|---|---|
+| 1 | Un solicitante quiere enviar el albarán firmado a alguien que no figura en el préstamo (productora, gestoría, aseguradora…) | No se permite: solo se ofrecen las direcciones del solicitante, del beneficiario y del supervisor | Lo envía el supervisor indicando el motivo, o esa persona se registra como beneficiaria |
+| 2 | Un solicitante quiere copiar el enlace de firma para mandarlo por otro canal | Ya no puede ver el enlace en pantalla | El enlace se envía por correo al firmante, o lo muestra un supervisor |
+| 3 | Firma una persona distinta del beneficiario anotado | El enlace solo se envía al beneficiario | El supervisor corrige el beneficiario del préstamo antes de enviar el enlace |
+| 4 | El beneficiario no tiene correo (o no hay beneficiario y el solicitante no tiene correo en GLPI) | No se puede enviar el enlace | Añadir el correo, firmar en pantalla o pedir al supervisor que muestre el enlace |
+| 5 | Un supervisor envía el albarán a una dirección que no figura en el préstamo | Debe indicar el motivo (mínimo 10 caracteres) | El envío y el motivo quedan registrados en Administración > Registros |
+
+**Otros cambios**
+
+- Un albarán firmado no se puede volver a firmar ni sustituir. Si hay un error, no se corrige desde la aplicación (las versiones firmadas inmutables quedan para una versión futura, sin fecha comprometida).
+- Un préstamo con el albarán firmado no se puede borrar, tampoco por un supervisor. Se puede seguir entregando, devolviendo, prorrogando y comentando.
+- Quien pide un préstamo puede retirar su solicitud solo mientras nadie haya actuado sobre ella: sigue pendiente, no hay material entregado, no se ha enviado enlace de firma, no hay prórroga pedida y nadie más ha comentado. Para borrar préstamos de otras personas hacen falta los derechos «Actualizar» y «Purgar».
+- Para consultar préstamos (lista, ficha, albarán, calendario) hace falta el derecho «Leer» de Lagapenak.
+- Calendario: cada persona tiene su propio enlace de suscripción, que puede regenerar o revocar en Lagapenak > Calendario. Muestra sus préstamos y, si supervisa, los de sus entidades, según sus permisos en cada momento. Los eventos muestran el número del préstamo, su estado y el material, no el nombre del préstamo. **El enlace general anterior deja de funcionar**: quien lo use debe suscribirse con su enlace personal.
+- Para pedir un préstamo hace falta el derecho «Crear» de Lagapenak en el perfil.
+- Cada supervisor gestiona solo los préstamos de las entidades a las que tiene acceso.
+- Solo se puede añadir material marcado con «Permitir reservas».
+
 ## Calendario y suscripción iCal
 
 Accede desde el icono de calendario en el menú de Lagapenak.
@@ -158,7 +192,7 @@ lagapenak/
 ├── CHANGELOG.md
 ├── ajax/
 │   ├── asset_list.php             # Listado de activos para selector
-│   ├── asset_timeline.php         # Historial de préstamos de un activo (calendario)
+│   ├── asset_timeline.php         # Retirado en 1.6.1 (responde 410)
 │   ├── availability.php           # Disponibilidad en rango de fechas
 │   ├── bulk_add.php               # Añadir múltiples activos a un préstamo
 │   ├── calendar_events.php        # Eventos para el calendario FullCalendar
@@ -202,8 +236,8 @@ Plugin for GLPI 10.0.x and 11.0.x to manage asset loans (computers, peripherals,
 
 ## Requirements
 
-- GLPI 10.0.11 or later (tested on 10.0.24) or GLPI 11.0.x (tested on 11.0.9)
-- PHP >= 7.4
+- GLPI 10.0.11 or later (tested on 10.0.11, 10.0.20, 10.0.24 and 10.0.28) or GLPI 11.0.x (tested on 11.0.9 and 11.0.12)
+- PHP as required by your GLPI version (tested with PHP 8.2 on GLPI 10 and 8.3 on GLPI 11)
 - MySQL / MariaDB
 
 ## Installation
@@ -212,7 +246,18 @@ Plugin for GLPI 10.0.x and 11.0.x to manage asset loans (computers, peripherals,
 2. Go to **Setup → Plugins**
 3. Find **Lagapenak**, click **Install** then **Enable**
 
-To uninstall: click **Disable** then **Uninstall**. Database tables are removed automatically.
+To uninstall: click **Disable** then **Uninstall**.
+
+Since 1.6.1, uninstalling **keeps** the loans, their asset lines, comments and signed delivery notes, because they are the record of the handovers. The iCal tokens (general and personal), display preferences and the `plugin_lagapenak_loan` profile right are removed. After a reinstall the loans are back and the rights have to be granted again in the profiles.
+
+Updating the plugin (copying a new version and clicking **Update**) never deletes data: install only creates missing tables and columns.
+
+Deleting the data for good: only with authorization and after a database backup, with the plugin uninstalled:
+
+```sql
+DROP TABLE glpi_plugin_lagapenak_loancomments, glpi_plugin_lagapenak_loanitems, glpi_plugin_lagapenak_loans;
+DELETE FROM glpi_profilerights WHERE name = 'plugin_lagapenak_albaran';
+```
 
 ---
 
@@ -329,6 +374,29 @@ Set to `[]` to show none. Labels are read automatically from `getFieldLabels()`.
 
 ---
 
+## Changes in 1.6.1 for loan managers
+
+**Sending the delivery note and the signing link**
+
+| # | Situation | What happens since 1.6.1 | What to do |
+|---|---|---|---|
+| 1 | A requester wants to send the signed delivery note to someone not on the loan | Not allowed: only the requester's, beneficiary's and supervisor's addresses are offered | The supervisor sends it stating the reason, or that person is recorded as beneficiary |
+| 2 | A requester wants to copy the signing link to send it another way | The link is no longer shown to them | The link is emailed to the signer, or a supervisor shows it |
+| 3 | Someone other than the recorded beneficiary signs | The link only goes to the beneficiary | The supervisor corrects the beneficiary before sending the link |
+| 4 | The beneficiary has no email (or there is no beneficiary and the requester has no GLPI email) | The link cannot be sent | Add the email, sign on screen, or ask a supervisor to show the link |
+| 5 | A supervisor sends the delivery note to an address not on the loan | A reason is required (10 characters minimum) | The sending and the reason are recorded in Administration > Logs |
+
+**Other changes**
+
+- A signed delivery note cannot be signed again or replaced. Mistakes cannot be corrected from the application (immutable signed versions are planned for a future version, with no committed date).
+- A loan with a signed delivery note cannot be deleted, not even by a supervisor. Deliveries, returns, extensions and comments keep working.
+- A requester can withdraw their request only while nobody has acted on it (still pending, no asset delivered, no signing link sent, no date request, no comment from anyone else). Deleting other people's loans needs the "Update" and "Purge" rights.
+- Consulting loans (list, loan, delivery note, calendar) needs the Lagapenak "Read" right.
+- Calendar: everybody has their own subscription URL, which they can regenerate or revoke in Lagapenak > Calendar. It shows their loans and, for supervisors, the loans of their entities, according to their current rights. Events show the loan number, status and assets, not the loan name. **The former general URL stops working**: its users must subscribe with their personal URL.
+- Requesting a loan needs the Lagapenak "Create" right in the profile.
+- Supervisors only manage loans of the entities they have access to.
+- Only assets with "Allow reservations" enabled can be added.
+
 ## Calendar and iCal subscription
 
 Access from the calendar icon in the Lagapenak menu.
@@ -366,7 +434,7 @@ lagapenak/
 ├── CHANGELOG.md
 ├── ajax/
 │   ├── asset_list.php             # Asset list for selector
-│   ├── asset_timeline.php         # Asset loan history (calendar)
+│   ├── asset_timeline.php         # Retired in 1.6.1 (answers 410)
 │   ├── availability.php           # Availability checker for a date range
 │   ├── bulk_add.php               # Bulk add assets to a loan
 │   ├── calendar_events.php        # FullCalendar event feed

@@ -636,3 +636,79 @@ msgstr "El enlace actual dejará de funcionar y los calendarios suscritos tendr�
 
 msgid "Regenerate URL"
 msgstr "Regenerar enlace"
+
+msgid "You do not have access to this entity."
+msgstr "No tienes acceso a esta entidad."
+
+msgid "The recipient must be a supervisor of the selected entity."
+msgstr "El destinatario debe ser un supervisor de la entidad seleccionada."
+
+msgid "This type of item cannot be loaned."
+msgstr "Este tipo de elemento no se puede prestar."
+
+msgid "Asset not found."
+msgstr "Activo no encontrado."
+
+msgid "This asset is not authorized for loan (\"Allow reservations\" is disabled)."
+msgstr "Este activo no está autorizado para préstamo («Permitir reservas» está desactivado)."
+
+msgid "This delivery note is already signed. A signed delivery note cannot be signed again or replaced."
+msgstr "Este albarán ya está firmado. Un albarán firmado no se puede volver a firmar ni sustituir."
+
+msgid "The signature could not be saved: a name and a drawn signature are required."
+msgstr "No se ha podido guardar la firma: se necesitan el nombre y la firma dibujada."
+
+msgid "shown on screen"
+msgstr "mostrado en pantalla"
+
+msgid "exceptional recipient, reason: %s"
+msgstr "destinatario excepcional, motivo: %s"
+
+msgid "Signing link"
+msgstr "Enlace de firma"
+
+msgid "Signed delivery note"
+msgstr "Albarán firmado"
+
+msgid "The link will be sent to the signer"
+msgstr "El enlace se enviará a la persona firmante"
+
+msgid "The signer has no email address: add the beneficiary's email to the loan."
+msgstr "La persona firmante no tiene correo: añade el correo del beneficiario en el préstamo."
+
+msgid "Show link on screen"
+msgstr "Mostrar el enlace en pantalla"
+
+msgid "Other address (exceptional)"
+msgstr "Otra dirección (excepcional)"
+
+msgid "Reason (required for another address, recorded in the log)"
+msgstr "Motivo (obligatorio para otra dirección; queda registrado)"
+
+msgid "Not sent: the delivery note can only be sent to addresses linked to the loan, and the signing link only to the signer. A supervisor may use another address by stating the reason."
+msgstr "No enviado: el albarán solo se puede enviar a direcciones vinculadas al préstamo, y el enlace de firma solo a la persona firmante. Un supervisor puede usar otra dirección indicando el motivo."
+
+
+msgid "A loan with a signed delivery note cannot be deleted: it is kept as the record of the handover."
+msgstr "Un préstamo con el albarán firmado no se puede borrar: se conserva como registro de la entrega."
+
+msgid "You cannot delete this loan. A request can only be withdrawn by its requester while nobody has acted on it."
+msgstr "No puedes borrar este préstamo. Una solicitud solo la puede retirar quien la pidió mientras nadie haya actuado sobre ella."
+
+msgid "Your subscription URL has been revoked. Calendars subscribed to it no longer receive loans."
+msgstr "Tu enlace de suscripción se ha revocado. Los calendarios suscritos ya no reciben préstamos."
+
+msgid "This URL shows <strong>your loans and the loans of the entities you supervise</strong>. It is checked on every update: if your rights change, so does what it shows."
+msgstr "Este enlace muestra <strong>tus préstamos y los de las entidades que supervisas</strong>. Se comprueba en cada actualización: si cambian tus permisos, cambia lo que muestra."
+
+msgid "Events show the loan number, status and assets, not the loan name."
+msgstr "Los eventos muestran el número del préstamo, su estado y el material, no su nombre."
+
+msgid "Create my subscription URL"
+msgstr "Crear mi enlace de suscripción"
+
+msgid "Calendars subscribed to this URL will stop receiving loans. Continue?"
+msgstr "Los calendarios suscritos a este enlace dejarán de recibir préstamos. ¿Continuar?"
+
+msgid "Revoke URL"
+msgstr "Revocar enlace"

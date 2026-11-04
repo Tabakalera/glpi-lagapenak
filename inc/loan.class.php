@@ -4,6 +4,7 @@ class PluginLagapenakLoan extends CommonDBTM {
 
     static $rightname = 'plugin_lagapenak_loan';
 
+
     const STATUS_PENDING     = 1;  // Pendiente   — reserva creada, aún no entregada
     const STATUS_IN_PROGRESS = 5;  // En curso    — algunos activos entregados, otros pendientes
     const STATUS_DELIVERED   = 2;  // Entregado   — todos los activos entregados
@@ -70,6 +71,171 @@ class PluginLagapenakLoan extends CommonDBTM {
     }
 
     /**
+     * Supervisor of this particular loan: READ + UPDATE rights AND access to the loan's entity.
+     * canSupervise() alone ignores entities, so a supervisor of entity A could manage loans of B.
+     */
+    static function canManageLoan(PluginLagapenakLoan $loan): bool {
+        return self::canView()
+            && self::canSupervise()
+            && isset($loan->fields['entities_id'])
+            && Session::haveAccessToEntity((int) $loan->fields['entities_id']);
+    }
+
+    static function isRequester(PluginLagapenakLoan $loan): bool {
+        return (int) ($loan->fields['users_id'] ?? 0) === (int) ($_SESSION['glpiID'] ?? -1);
+    }
+
+    /**
+     * A request nobody has acted on yet: still pending, no asset delivered/returned/with incident,
+     * no signing link issued, no date request and no comment from anyone else.
+     * Only such a request can be withdrawn (deleted) by its own requester.
+     */
+    static function isUntouchedRequest(PluginLagapenakLoan $loan): bool {
+        global $DB;
+        $id = (int) ($loan->fields['id'] ?? 0);
+        if ((int) ($loan->fields['status'] ?? 0) !== self::STATUS_PENDING
+            || !empty($loan->fields['sign_token'])
+            || (int) ($loan->fields['date_request_status'] ?? 0) !== self::DATE_REQUEST_NONE
+            || !empty($loan->fields['requested_date_end'])
+        ) {
+            return false;
+        }
+        $touched_items = countElementsInTable('glpi_plugin_lagapenak_loanitems', [
+            'loans_id' => $id,
+            'NOT'      => ['status' => PluginLagapenakLoanItem::STATUS_PENDING],
+        ]);
+        $others_comments = countElementsInTable('glpi_plugin_lagapenak_loancomments', [
+            'loans_id' => $id,
+            'NOT'      => ['users_id' => (int) ($loan->fields['users_id'] ?? 0)],
+        ]);
+        return $touched_items === 0 && $others_comments === 0;
+    }
+
+    /**
+     * Single deletion rule for every route (loan form, GLPI massive actions, API…):
+     * - a signed loan is never deleted;
+     * - the requester may withdraw their own untouched request (READ + CREATE, entity access), no PURGE needed;
+     * - anybody else needs READ + UPDATE + PURGE and access to the loan's entity.
+     */
+    static function canDeleteLoan(PluginLagapenakLoan $loan): bool {
+        if (empty($loan->fields['id']) || self::isSigned($loan->fields)) {
+            return false;
+        }
+        if (self::isRequester($loan)) {
+            return self::canView() && self::canCreate()
+                && Session::haveAccessToEntity((int) $loan->fields['entities_id'])
+                && self::isUntouchedRequest($loan);
+        }
+        return self::hasPluginRight(self::$rightname, PURGE) && self::canManageLoan($loan);
+    }
+
+    /**
+     * Server-side checks for creating a loan (or moving one to another entity / recipient).
+     * Returns an error message, or '' when allowed.
+     */
+    static function checkEntityAndRecipient(int $entities_id, int $users_id_destinatario): string {
+        if (!Session::haveAccessToEntity($entities_id)) {
+            return __('You do not have access to this entity.', 'lagapenak');
+        }
+        $supervisor_ids = array_column(self::getSupervisorsForEntity($entities_id), 'id');
+        if (!in_array($users_id_destinatario, $supervisor_ids, true)) {
+            return __('The recipient must be a supervisor of the selected entity.', 'lagapenak');
+        }
+        return '';
+    }
+
+    /** Fields written only by the signing workflow (albaran.php / sign.php), never by the loan form. */
+    static function getSignatureFields(): array {
+        return [
+            'signature_data', 'signature_name', 'signature_date', 'has_albaran',
+            'albaran_passport', 'albaran_project', 'sign_token', 'sign_token_expires',
+        ];
+    }
+
+    static function isSigned(array $fields): bool {
+        return !empty($fields['signature_data']);
+    }
+
+    /**
+     * Email addresses linked to a loan, as [lower-cased address => role label]: every GLPI address of
+     * the requester and of the recipient (supervisor), and the beneficiary's address.
+     * Non-supervisors may only send the delivery note to these.
+     */
+    static function getLinkedEmails(PluginLagapenakLoan $loan): array {
+        $linked = [];
+        $add = function (string $email, string $role) use (&$linked) {
+            $email = strtolower(trim($email));
+            if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) && !isset($linked[$email])) {
+                $linked[$email] = $role;
+            }
+        };
+        foreach (UserEmail::getAllForUser((int) ($loan->fields['users_id'] ?? 0)) as $email) {
+            $add($email, __('Requester', 'lagapenak'));
+        }
+        $add((string) ($loan->fields['beneficiary_email'] ?? ''), __('Beneficiary', 'lagapenak'));
+        foreach (UserEmail::getAllForUser((int) ($loan->fields['users_id_destinatario'] ?? 0)) as $email) {
+            $add($email, __('Recipient', 'lagapenak'));
+        }
+        return $linked;
+    }
+
+    /**
+     * Address of the person who signs: the beneficiary when the loan names one, otherwise the requester
+     * (who then picks the material up). '' when the signer has no known address.
+     */
+    static function getSignerEmail(PluginLagapenakLoan $loan): string {
+        if (trim($loan->fields['beneficiary_name'] ?? '') !== '' || trim($loan->fields['beneficiary_email'] ?? '') !== '') {
+            $email = strtolower(trim($loan->fields['beneficiary_email'] ?? ''));
+        } else {
+            $email = strtolower(trim((string) UserEmail::getDefaultForUser((int) ($loan->fields['users_id'] ?? 0))));
+        }
+        return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
+    }
+
+    /**
+     * Audit trail of every delivery-note document sent by hand (GLPI event log: Administration > Logs).
+     * Records who sent what to which address and, for an address not linked to the loan, the reason.
+     */
+    static function logDocumentSend(int $loans_id, string $what, string $to, string $reason = ''): void {
+        $message = sprintf('%s: %s → %s', $_SESSION['glpiname'] ?? '?', $what, $to !== '' ? $to : __('shown on screen', 'lagapenak'));
+        if ($reason !== '') {
+            $message .= ' · ' . sprintf(__('exceptional recipient, reason: %s', 'lagapenak'), $reason);
+        }
+        \Glpi\Event::log($loans_id, 'PluginLagapenakLoan', 3, 'lagapenak', $message);
+    }
+
+    /** The canvas sends a PNG data URL; anything else (or an oversized payload) is rejected. */
+    static function isValidSignatureImage(string $data): bool {
+        return strlen($data) <= 2 * 1024 * 1024
+            && preg_match('#^data:image/png;base64,[A-Za-z0-9+/]+={0,2}$#', $data) === 1;
+    }
+
+    /**
+     * Record the signature of a delivery note, once.
+     * The UPDATE only matches a loan that is not signed yet, so a repeated submit, a second tab or an
+     * old signing link can never replace a closed signature. Any outstanding signing link is voided.
+     *
+     * @return bool true when this call signed the loan
+     */
+    static function recordSignature(int $loans_id, string $data, string $name, string $passport, string $project): bool {
+        global $DB;
+        $DB->update('glpi_plugin_lagapenak_loans', [
+            'signature_data'     => $data,
+            'signature_name'     => $name,
+            'signature_date'     => date('Y-m-d H:i:s'),
+            'has_albaran'        => 1,
+            'albaran_passport'   => $passport,
+            'albaran_project'    => $project,
+            'sign_token'         => null,
+            'sign_token_expires' => null,
+        ], [
+            'id' => $loans_id,
+            'OR' => [['signature_data' => null], ['signature_data' => '']],
+        ]);
+        return $DB->affectedRows() === 1;
+    }
+
+    /**
      * Returns users with UPDATE right on this plugin for the given entity,
      * including parent entities where the profile is recursive.
      */
@@ -130,11 +296,9 @@ class PluginLagapenakLoan extends CommonDBTM {
 
         // Fields managed by the plugin workflows (signature, albarán, date requests) are never
         // taken from the creation form, otherwise a loan could be created already "signed".
-        foreach ([
-            'signature_data', 'signature_name', 'signature_date', 'has_albaran',
-            'albaran_passport', 'albaran_project', 'sign_token', 'sign_token_expires',
+        foreach (array_merge(self::getSignatureFields(), [
             'requested_date_end', 'date_request_status', 'date_request_apply_items', 'date_request_notes',
-        ] as $field) {
+        ]) as $field) {
             unset($input[$field]);
         }
         // Only supervisors may choose the initial status
@@ -144,9 +308,84 @@ class PluginLagapenakLoan extends CommonDBTM {
         return self::sanitizeDates($input);
     }
 
+    /**
+     * GLPI asks these before deleting through its own routes (massive actions, API): same rule as the form.
+     * The table has no is_deleted column, so "delete" is always a purge.
+     */
+    function canDeleteItem(): bool {
+        return self::canDeleteLoan($this);
+    }
+
+    function canPurgeItem(): bool {
+        return self::canDeleteLoan($this);
+    }
+
+    /**
+     * Last check before any deletion, whatever the route. A signed delivery note is evidence of the
+     * handover: nobody can delete it. The loan itself keeps working (deliveries, returns, extensions,
+     * comments). 1.7.0 adds cancellation and kept signed versions.
+     */
+    function pre_deleteItem() {
+        if (self::isSigned($this->fields)) {
+            Session::addMessageAfterRedirect(
+                __('A loan with a signed delivery note cannot be deleted: it is kept as the record of the handover.', 'lagapenak'),
+                false,
+                ERROR
+            );
+            return false;
+        }
+        if (!self::canDeleteLoan($this)) {
+            Session::addMessageAfterRedirect(
+                __('You cannot delete this loan. A request can only be withdrawn by its requester while nobody has acted on it.', 'lagapenak'),
+                false,
+                ERROR
+            );
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * GLPI massive "update" applies a field to many loans without the loan form's checks (recipient,
+     * entity, date conflicts). Only fields with no such rules may be changed in bulk; the fields printed
+     * on the delivery note only while it is not signed.
+     */
+    function canMassiveAction($action, $field, $value) {
+        if (in_array($field, ['observaciones', 'field_3', 'field_4', 'field_5'], true)) {
+            return parent::canMassiveAction($action, $field, $value);
+        }
+        if (in_array($field, ['field_1', 'field_2'], true)) {
+            return !self::isSigned($this->fields) && parent::canMassiveAction($action, $field, $value);
+        }
+        return false;
+    }
+
+    function getForbiddenStandardMassiveAction() {
+        $forbidden   = parent::getForbiddenStandardMassiveAction();
+        $forbidden[] = 'add_transfer_list'; // moving loans between entities goes through the loan form
+        return $forbidden;
+    }
+
     function prepareInputForUpdate($input) {
         // Solicitante cannot be changed after creation
         unset($input['users_id']);
+        // A signature is only ever written by the signing workflow, which updates the row directly.
+        // Without this, saving the loan form could rewrite or back-date a signed delivery note.
+        foreach (self::getSignatureFields() as $field) {
+            unset($input[$field]);
+        }
+        // Entity and recipient rules hold for every update route, not only the loan form
+        $new_entity = (int) ($input['entities_id'] ?? $this->fields['entities_id'] ?? 0);
+        $new_dest   = (int) ($input['users_id_destinatario'] ?? $this->fields['users_id_destinatario'] ?? 0);
+        if ($new_entity !== (int) ($this->fields['entities_id'] ?? 0)
+            || $new_dest !== (int) ($this->fields['users_id_destinatario'] ?? 0)
+        ) {
+            $error = self::checkEntityAndRecipient($new_entity, $new_dest);
+            if ($error !== '') {
+                Session::addMessageAfterRedirect($error, false, ERROR);
+                return false;
+            }
+        }
         return self::sanitizeDates($input);
     }
 
@@ -229,6 +468,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'linkfield' => 'entities_id',
             'name'      => __('Entity', 'lagapenak'),
             'datatype'  => 'dropdown',
+            'massiveaction' => false, // checked again by canMassiveAction()
         ];
 
         $tab[] = [
@@ -238,6 +478,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'linkfield' => 'users_id',
             'name'      => __('Requester', 'lagapenak'),
             'datatype'  => 'dropdown',
+            'massiveaction' => false, // checked again by canMassiveAction()
         ];
 
         $tab[] = [
@@ -247,6 +488,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'linkfield' => 'users_id_destinatario',
             'name'      => __('Recipient', 'lagapenak'),
             'datatype'  => 'dropdown',
+            'massiveaction' => false, // checked again by canMassiveAction()
         ];
 
         $tab[] = [
@@ -255,6 +497,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'field'    => 'fecha_inicio',
             'name'     => __('Start date', 'lagapenak'),
             'datatype' => 'datetime',
+            'massiveaction' => false, // checked again by canMassiveAction()
         ];
 
         $tab[] = [
@@ -263,6 +506,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'field'    => 'fecha_fin',
             'name'     => __('End date', 'lagapenak'),
             'datatype' => 'datetime',
+            'massiveaction' => false, // checked again by canMassiveAction()
         ];
 
         $tab[] = [
@@ -290,6 +534,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'field'    => 'beneficiary_name',
             'name'     => __('Full name', 'lagapenak'),
             'datatype' => 'string',
+            'massiveaction' => false, // beneficiary data: loan form only
         ];
 
         $tab[] = [
@@ -298,6 +543,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'field'    => 'beneficiary_dni',
             'name'     => __('Passport / ID', 'lagapenak'),
             'datatype' => 'string',
+            'massiveaction' => false, // beneficiary data: loan form only
         ];
 
         $tab[] = [
@@ -306,6 +552,7 @@ class PluginLagapenakLoan extends CommonDBTM {
             'field'    => 'beneficiary_email',
             'name'     => __('Email address', 'lagapenak'),
             'datatype' => 'string',
+            'massiveaction' => false, // beneficiary data: loan form only
         ];
 
         $t = $this->getTable();

@@ -526,3 +526,79 @@ msgstr "The current URL will stop working and calendars subscribed to it will ha
 
 msgid "Regenerate URL"
 msgstr "Regenerate URL"
+
+msgid "You do not have access to this entity."
+msgstr "You do not have access to this entity."
+
+msgid "The recipient must be a supervisor of the selected entity."
+msgstr "The recipient must be a supervisor of the selected entity."
+
+msgid "This type of item cannot be loaned."
+msgstr "This type of item cannot be loaned."
+
+msgid "Asset not found."
+msgstr "Asset not found."
+
+msgid "This asset is not authorized for loan (\"Allow reservations\" is disabled)."
+msgstr "This asset is not authorized for loan (\"Allow reservations\" is disabled)."
+
+msgid "This delivery note is already signed. A signed delivery note cannot be signed again or replaced."
+msgstr "This delivery note is already signed. A signed delivery note cannot be signed again or replaced."
+
+msgid "The signature could not be saved: a name and a drawn signature are required."
+msgstr "The signature could not be saved: a name and a drawn signature are required."
+
+msgid "shown on screen"
+msgstr "shown on screen"
+
+msgid "exceptional recipient, reason: %s"
+msgstr "exceptional recipient, reason: %s"
+
+msgid "Signing link"
+msgstr "Signing link"
+
+msgid "Signed delivery note"
+msgstr "Signed delivery note"
+
+msgid "The link will be sent to the signer"
+msgstr "The link will be sent to the signer"
+
+msgid "The signer has no email address: add the beneficiary's email to the loan."
+msgstr "The signer has no email address: add the beneficiary's email to the loan."
+
+msgid "Show link on screen"
+msgstr "Show link on screen"
+
+msgid "Other address (exceptional)"
+msgstr "Other address (exceptional)"
+
+msgid "Reason (required for another address, recorded in the log)"
+msgstr "Reason (required for another address, recorded in the log)"
+
+msgid "Not sent: the delivery note can only be sent to addresses linked to the loan, and the signing link only to the signer. A supervisor may use another address by stating the reason."
+msgstr "Not sent: the delivery note can only be sent to addresses linked to the loan, and the signing link only to the signer. A supervisor may use another address by stating the reason."
+
+
+msgid "A loan with a signed delivery note cannot be deleted: it is kept as the record of the handover."
+msgstr "A loan with a signed delivery note cannot be deleted: it is kept as the record of the handover."
+
+msgid "You cannot delete this loan. A request can only be withdrawn by its requester while nobody has acted on it."
+msgstr "You cannot delete this loan. A request can only be withdrawn by its requester while nobody has acted on it."
+
+msgid "Your subscription URL has been revoked. Calendars subscribed to it no longer receive loans."
+msgstr "Your subscription URL has been revoked. Calendars subscribed to it no longer receive loans."
+
+msgid "This URL shows <strong>your loans and the loans of the entities you supervise</strong>. It is checked on every update: if your rights change, so does what it shows."
+msgstr "This URL shows <strong>your loans and the loans of the entities you supervise</strong>. It is checked on every update: if your rights change, so does what it shows."
+
+msgid "Events show the loan number, status and assets, not the loan name."
+msgstr "Events show the loan number, status and assets, not the loan name."
+
+msgid "Create my subscription URL"
+msgstr "Create my subscription URL"
+
+msgid "Calendars subscribed to this URL will stop receiving loans. Continue?"
+msgstr "Calendars subscribed to this URL will stop receiving loans. Continue?"
+
+msgid "Revoke URL"
+msgstr "Revoke URL"

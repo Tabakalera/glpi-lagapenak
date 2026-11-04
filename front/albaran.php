@@ -22,9 +22,10 @@ if (!$loan->getFromDB($ID)) {
 $_alb_uid        = (int)($_SESSION['glpiID'] ?? 0);
 $_alb_is_req     = (int)($loan->fields['users_id'] ?? 0) === $_alb_uid;
 $_alb_is_dest    = (int)($loan->fields['users_id_destinatario'] ?? 0) === $_alb_uid;
-$_alb_supervise  = PluginLagapenakLoan::canSupervise();
+$_alb_supervise  = PluginLagapenakLoan::canManageLoan($loan);
 $_alb_has_right  = PluginLagapenakLoan::hasPluginRight('plugin_lagapenak_albaran', READ);
-$_alb_allowed    = $_alb_supervise || ($_alb_has_right && ($_alb_is_req || $_alb_is_dest));
+$_alb_allowed    = $_alb_supervise   // canManageLoan(): READ + UPDATE + entity
+    || (PluginLagapenakLoan::canView() && $_alb_has_right && ($_alb_is_req || $_alb_is_dest));
 
 if (!$_alb_allowed) {
     Html::redirect(plugin_lagapenak_web_dir() . '/front/loan.php');
@@ -50,19 +51,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_signature'])) {
     $sig_name     = trim($_UPOST['signature_name']    ?? ($_POST['signature_name']    ?? ''));
     $sig_passport = trim($_UPOST['albaran_passport']  ?? ($_POST['albaran_passport']  ?? ''));
     $sig_project  = trim($_UPOST['albaran_project']   ?? ($_POST['albaran_project']   ?? ''));
-    if (!empty($sig_data) && !empty($sig_name)) {
-        global $DB;
-        $DB->update('glpi_plugin_lagapenak_loans', [
-            'signature_data'   => $sig_data,
-            'signature_name'   => $sig_name,
-            'signature_date'   => date('Y-m-d H:i:s'),
-            'has_albaran'      => 1,
-            'albaran_passport' => $sig_passport,
-            'albaran_project'  => $sig_project,
-        ], ['id' => $ID]);
-        plugin_lagapenak_send_signed_albaran($ID);
+    $sig_result   = 'saved';
+    if (PluginLagapenakLoan::isSigned($loan->fields)) {
+        // A closed signature is never replaced (corrections go through annulment + new version)
+        $sig_result = 'already_signed';
+    } elseif (PluginLagapenakLoan::isValidSignatureImage($sig_data) && $sig_name !== '') {
+        if (PluginLagapenakLoan::recordSignature($ID, $sig_data, $sig_name, $sig_passport, $sig_project)) {
+            plugin_lagapenak_send_signed_albaran($ID);
+        } else {
+            $sig_result = 'already_signed'; // signed meanwhile (other tab, link)
+        }
+    } else {
+        $sig_result = 'sign_invalid';
     }
-    Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&saved=1');
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&' . $sig_result . '=1');
 }
 
 // ── Load display data ────────────────────────────────────────────────────────────
@@ -88,6 +90,10 @@ $ben_name  = htmlspecialchars(trim($loan->fields['beneficiary_name']  ?? ''));
 $ben_email_raw = trim($loan->fields['beneficiary_email'] ?? '');
 $ben_email = htmlspecialchars($ben_email_raw);
 $ben_dni   = htmlspecialchars(trim($loan->fields['beneficiary_dni']   ?? ''));
+
+// Allowed recipients, shown in the sending dialogs (the handlers above check them again)
+$alb_linked_emails = PluginLagapenakLoan::getLinkedEmails($loan);
+$alb_signer_email  = PluginLagapenakLoan::getSignerEmail($loan);
 
 // Pre-fill email modal: beneficiary email first, then requester email as fallback
 $dest_email_prefill = $ben_email_raw;
@@ -117,7 +123,25 @@ if (isset($_GET['action']) && $_GET['action'] === 'pdf') {
 // ── Action: Generate public signing token and send by email ──────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_gen_token'])) {
     global $DB, $CFG_GLPI;
-    $to_email = trim($_POST['sign_to_email'] ?? '');
+    if ($already_signed) {
+        // No signing link for a delivery note that is already signed
+        Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&already_signed=1');
+    }
+    // A signing link only goes to the authorized signer (beneficiary, or the requester when there is
+    // none). Showing it on screen, to hand it over by other means, is reserved to the loan's supervisors.
+    $signer_email   = PluginLagapenakLoan::getSignerEmail($loan);
+    $show_on_screen = !empty($_POST['show_link']);
+    $posted_email   = strtolower(trim($_POST['sign_to_email'] ?? ''));
+    if ($show_on_screen && !$_alb_supervise) {
+        Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&send_denied=1');
+    }
+    if (!$show_on_screen && $signer_email === '') {
+        Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&no_signer=1');
+    }
+    if (!$show_on_screen && $posted_email !== '' && $posted_email !== $signer_email) {
+        Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&send_denied=1');
+    }
+    $to_email = $show_on_screen ? '' : $signer_email;
     $token    = bin2hex(random_bytes(32));
     $expires  = date('Y-m-d H:i:s', strtotime('+48 hours'));
     $DB->update('glpi_plugin_lagapenak_loans', [
@@ -162,15 +186,32 @@ HTML;
             plugin_lagapenak_log_error('[lagapenak] Error sending sign link email: ' . $e->getMessage());
             $sign_result = 'sign_error';
         }
+        if ($sign_result === 'sign_sent') {
+            PluginLagapenakLoan::logDocumentSend($ID, __('Signing link', 'lagapenak'), $to_email);
+        }
         Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&' . $sign_result . '=1');
     }
-    // No email provided — just show the link
-    Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&sign_link=' . urlencode($sign_url));
+    // Supervisor asked to see the link — show it once (kept out of the URL, browser history and access logs)
+    PluginLagapenakLoan::logDocumentSend($ID, __('Signing link', 'lagapenak'), '');
+    $_SESSION['plugin_lagapenak_sign_link'][$ID] = $sign_url;
+    Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&sign_link=1');
 }
 
 // ── Action: Send by email ─────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
-    $to_email = trim($_POST['to_email'] ?? '');
+    // Recipients: an address linked to the loan; any other address only by a supervisor of the loan's
+    // entity, with a stated reason that goes to the audit log
+    $to_email    = strtolower(trim($_POST['to_email'] ?? ''));
+    $other_email = strtolower(trim($_POST['to_email_other'] ?? ''));
+    if ($other_email !== '') {
+        $to_email = $other_email;
+    }
+    $send_reason = trim(str_replace(['<', '>'], '', strip_tags($_UPOST['send_reason'] ?? ($_POST['send_reason'] ?? ''))));
+    $send_reason = mb_substr($send_reason, 0, 250);
+    $exceptional = !isset(PluginLagapenakLoan::getLinkedEmails($loan)[$to_email]);
+    if ($exceptional && (!$_alb_supervise || mb_strlen($send_reason) < 10)) {
+        Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&send_denied=1');
+    }
     if ($to_email && filter_var($to_email, FILTER_VALIDATE_EMAIL) && $already_signed) {
         $pdf         = plugin_lagapenak_generate_albaran_pdf($loan, $items, $condiciones, $header_fs, $footer_fs, $albaran_loan_fields);
         $pdf_content = $pdf->Output('', 'S');
@@ -201,6 +242,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
             } catch (\Throwable $e) {
                 plugin_lagapenak_log_error('[lagapenak] Error sending albaran email: ' . $e->getMessage());
                 $email_result = 'email_error';
+            }
+            if ($email_result === 'email_sent') {
+                PluginLagapenakLoan::logDocumentSend(
+                    $ID, __('Signed delivery note', 'lagapenak'), $to_email, $exceptional ? $send_reason : ''
+                );
             }
             Html::redirect(plugin_lagapenak_web_dir() . '/front/albaran.php?id=' . $ID . '&' . $email_result . '=1');
         }
@@ -255,12 +301,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
         <?php endif; ?>
     </div>
 
-    <?php if (isset($_GET['sign_link'])): ?>
+    <?php $sign_link_once = $_SESSION['plugin_lagapenak_sign_link'][$ID] ?? '';
+          unset($_SESSION['plugin_lagapenak_sign_link'][$ID]); ?>
+    <?php if (isset($_GET['sign_link']) && $sign_link_once !== '' && !$already_signed): ?>
     <div class="alert alert-info no-print">
         <strong><i class="fas fa-share-alt me-2"></i><?= __('Signing link generated (valid 48 hours)', 'lagapenak') ?>:</strong>
         <div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
             <input type="text" class="form-control form-control-sm" id="sign-url-input"
-                   value="<?= htmlspecialchars(urldecode($_GET['sign_link'])) ?>" readonly style="max-width:520px;">
+                   value="<?= htmlspecialchars($sign_link_once) ?>" readonly style="max-width:520px;">
             <button type="button" class="btn btn-sm btn-outline-secondary"
                     onclick="navigator.clipboard.writeText(document.getElementById('sign-url-input').value);this.innerHTML='<i class=\'fas fa-check me-1\'></i><?= __('Copied', 'lagapenak') ?>'">
                 <i class="fas fa-copy me-1"></i><?= __('Copy', 'lagapenak') ?>
@@ -271,6 +319,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
     <?php elseif (isset($_GET['saved'])): ?>
     <div class="alert alert-success no-print">
         <i class="fas fa-check-circle me-2"></i><?= __('Signature saved successfully.', 'lagapenak') ?>
+    </div>
+    <?php elseif (isset($_GET['already_signed'])): ?>
+    <div class="alert alert-warning no-print">
+        <i class="fas fa-lock me-2"></i><?= __('This delivery note is already signed. A signed delivery note cannot be signed again or replaced.', 'lagapenak') ?>
+    </div>
+    <?php elseif (isset($_GET['send_denied'])): ?>
+    <div class="alert alert-danger no-print">
+        <i class="fas fa-ban me-2"></i><?= __('Not sent: the delivery note can only be sent to addresses linked to the loan, and the signing link only to the signer. A supervisor may use another address by stating the reason.', 'lagapenak') ?>
+    </div>
+    <?php elseif (isset($_GET['no_signer'])): ?>
+    <div class="alert alert-warning no-print">
+        <i class="fas fa-exclamation-triangle me-2"></i><?= __('The signer has no email address: add the beneficiary\'s email to the loan.', 'lagapenak') ?>
+    </div>
+    <?php elseif (isset($_GET['sign_invalid'])): ?>
+    <div class="alert alert-danger no-print">
+        <i class="fas fa-exclamation-circle me-2"></i><?= __('The signature could not be saved: a name and a drawn signature are required.', 'lagapenak') ?>
     </div>
     <?php elseif (isset($_GET['email_sent'])): ?>
     <div class="alert alert-success no-print">
@@ -369,15 +433,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
                     </div>
                 </div>
             </div>
-            <div class="mt-3 no-print">
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-resign">
-                    <i class="fas fa-redo me-1"></i><?= __('Sign again (overwrites existing)', 'lagapenak') ?>
-                </button>
-            </div>
-            <div id="sign-form-wrapper" style="display:none">
             <?php else: ?>
             <div id="sign-form-wrapper">
-            <?php endif; ?>
 
                 <!-- Sign form -->
                 <form method="POST" action="" id="sign-form" class="mt-3">
@@ -422,6 +479,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
                 </form>
 
             </div><!-- /sign-form-wrapper -->
+            <?php endif; ?>
 
         </div><!-- /doc-body -->
 
@@ -449,21 +507,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
                 <input type="hidden" name="_glpi_csrf_token" value="<?= Session::getNewCSRFToken() ?>">
                 <input type="hidden" name="action_gen_token" value="1">
                 <div class="modal-body">
-                    <label class="form-label fw-semibold">
-                        <?= __('Email address', 'lagapenak') ?> <span class="text-danger">*</span>
-                    </label>
-                    <input type="email" name="sign_to_email" class="form-control" required
-                           placeholder="recipient@example.com"
-                           value="<?= htmlspecialchars($ben_email_raw ?: '') ?>">
+                    <?php if ($alb_signer_email !== ''): ?>
+                    <label class="form-label fw-semibold"><?= __('The link will be sent to the signer', 'lagapenak') ?></label>
+                    <input type="email" name="sign_to_email" class="form-control" readonly
+                           value="<?= htmlspecialchars($alb_signer_email) ?>">
+                    <?php else: ?>
+                    <div class="alert alert-warning mb-0">
+                        <i class="fas fa-exclamation-triangle me-1"></i><?= __('The signer has no email address: add the beneficiary\'s email to the loan.', 'lagapenak') ?>
+                    </div>
+                    <?php endif; ?>
                     <div class="form-text mt-2">
                         <i class="fas fa-clock me-1"></i><?= __('The link will be valid for 48 hours and can only be used once.', 'lagapenak') ?>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('Cancel', 'lagapenak') ?></button>
+                    <?php if ($_alb_supervise): ?>
+                    <button type="submit" name="show_link" value="1" class="btn btn-outline-secondary" formnovalidate>
+                        <i class="fas fa-eye me-1"></i><?= __('Show link on screen', 'lagapenak') ?>
+                    </button>
+                    <?php endif; ?>
+                    <?php if ($alb_signer_email !== ''): ?>
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-paper-plane me-1"></i><?= __('Send', 'lagapenak') ?>
                     </button>
+                    <?php endif; ?>
                 </div>
             </form>
         </div>
@@ -487,9 +555,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
                     <label class="form-label fw-semibold">
                         <?= __('Email address', 'lagapenak') ?> <span class="text-danger">*</span>
                     </label>
-                    <input type="email" name="to_email" class="form-control" required
-                           placeholder="recipient@example.com"
-                           value="<?= htmlspecialchars($dest_email_prefill) ?>">
+                    <select name="to_email" class="form-select">
+                        <?php foreach ($alb_linked_emails as $_le_email => $_le_role): ?>
+                        <option value="<?= htmlspecialchars($_le_email) ?>"<?= $_le_email === strtolower($dest_email_prefill) ? ' selected' : '' ?>>
+                            <?= htmlspecialchars($_le_role . ' — ' . $_le_email) ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php if ($_alb_supervise): ?>
+                    <div class="mt-3 p-2 border rounded bg-light">
+                        <label class="form-label fw-semibold mb-1"><?= __('Other address (exceptional)', 'lagapenak') ?></label>
+                        <input type="email" name="to_email_other" class="form-control mb-2" placeholder="recipient@example.com">
+                        <label class="form-label fw-semibold mb-1"><?= __('Reason (required for another address, recorded in the log)', 'lagapenak') ?></label>
+                        <textarea name="send_reason" class="form-control" rows="2" maxlength="250"></textarea>
+                    </div>
+                    <?php endif; ?>
                     <div class="form-text mt-2">
                         <i class="fas fa-paperclip me-1"></i><?= __('The delivery note will be attached as a PDF.', 'lagapenak') ?>
                     </div>
@@ -548,15 +628,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
         if (!hasSigned) { e.preventDefault(); alert('<?= __('Please draw your signature before saving.', 'lagapenak') ?>'); return; }
         document.getElementById('signature_data_input').value = canvas.toDataURL('image/png');
     });
-
-    var resignBtn = document.getElementById('btn-resign');
-    if (resignBtn) {
-        resignBtn.addEventListener('click', function () {
-            document.getElementById('sign-form-wrapper').style.display = 'block';
-            resignBtn.style.display = 'none';
-            resizeCanvas(); // canvas was hidden on load → recalculate dimensions now
-        });
-    }
 })();
 </script>
 </body>

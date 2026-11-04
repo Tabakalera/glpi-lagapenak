@@ -138,13 +138,9 @@ function plugin_lagapenak_install() {
     // 3=Estado, 4=Solicitante, 5=Destinatario, 6=F.Inicio, 7=F.Fin
     plugin_lagapenak_set_display_prefs();
 
-    // Generate iCal secret token if not yet created
-    $cfg = Config::getConfigurationValues('plugin:lagapenak');
-    if (empty($cfg['ics_token'])) {
-        Config::setConfigurationValues('plugin:lagapenak', [
-            'ics_token' => bin2hex(random_bytes(20)),
-        ]);
-    }
+    // The general iCal token of 1.6.0 (every loan of every entity) is retired: no new one is created.
+    // An existing value is kept only so that front/loan.ics.php can recognise the old URL and answer it
+    // with a notice instead of loans. Personal tokens (glpi_plugin_lagapenak_icstokens) replace it.
 
     return true;
 }
@@ -172,19 +168,25 @@ function plugin_lagapenak_set_display_prefs() {
     }
 }
 
+/**
+ * Uninstall keeps the loan records: loans (with their signed delivery notes), asset lines and comments
+ * are evidence of handovers and must not disappear with a click. Reinstalling the plugin finds them
+ * again (install only creates what is missing). Deleting them for good is a manual, documented step
+ * (README, "Uninstalling"). Personal iCal tokens are access credentials, not records: they are removed.
+ */
 function plugin_lagapenak_uninstall() {
     global $DB;
 
     foreach ([
-        'glpi_plugin_lagapenak_loans',
-        'glpi_plugin_lagapenak_loanitems',
-        'glpi_plugin_lagapenak_loancomments',
         'glpi_plugin_lagapenak_icstokens',
     ] as $table) {
         if ($DB->tableExists($table)) {
             plugin_lagapenak_query_or_fail("DROP TABLE `$table`");
         }
     }
+
+    // The general iCal token is a credential too; a reinstall generates a new one
+    Config::deleteConfigurationValues('plugin:lagapenak', ['ics_token']);
 
     // Remove display preferences
     $DB->delete('glpi_displaypreferences', ['itemtype' => 'PluginLagapenakLoan']);
