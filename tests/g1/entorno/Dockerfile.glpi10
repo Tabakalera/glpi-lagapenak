@@ -1,0 +1,17 @@
+# GLPI 10.0.x sin plugin (g1.sh copia el plugin). Misma base que el Dockerfile del proyecto; la versión es un parámetro.
+FROM php:8.2-apache
+
+RUN apt-get update && apt-get install -y \
+    libicu-dev libpng-dev libjpeg-dev libzip-dev libldap2-dev libonig-dev libxml2-dev libcurl4-openssl-dev \
+    unzip curl \
+    && docker-php-ext-install intl gd zip mysqli pdo_mysql mbstring opcache curl xml \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ARG GLPI_VERSION=10.0.24
+RUN curl -fL https://github.com/glpi-project/glpi/releases/download/${GLPI_VERSION}/glpi-${GLPI_VERSION}.tgz -o /tmp/glpi.tgz \
+    && tar xzf /tmp/glpi.tgz -C /var/www/html/ && rm /tmp/glpi.tgz \
+    && chown -R www-data:www-data /var/www/html/glpi
+
+RUN a2enmod rewrite && printf '<VirtualHost *:80>\n    DocumentRoot /var/www/html/glpi\n    <Directory /var/www/html/glpi>\n        AllowOverride All\n        Require all granted\n    </Directory>\n</VirtualHost>\n' > /etc/apache2/sites-available/000-default.conf
+
+EXPOSE 80

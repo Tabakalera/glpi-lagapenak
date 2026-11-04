@@ -190,7 +190,7 @@ Requiere servidor SMTP configurado en **Configuración → Notificaciones**. Se 
 
 ## API de integración con Kide-Artean (en desarrollo)
 
-Kide-Artean (residencias y cesiones) **consulta** los préstamos de Lagapenak. Lagapenak ofrece la información completa y estructurada de sus préstamos; Kide-Artean decide qué incorpora, cómo identifica al beneficiario y qué asocia. Contrato completo: `docs/api/openapi-g1.yaml`; guía de integración: `docs/api/integracion-kide-artean.md`; privacidad: `docs/api/privacidad-g1.md`.
+Kide-Artean (residencias y cesiones) **consulta** los préstamos de Lagapenak. Lagapenak ofrece la información completa y estructurada de sus préstamos; Kide-Artean decide qué incorpora, cómo identifica al beneficiario y qué asocia. Contrato completo: `docs/api/openapi-g1.yaml`; guía de integración: `docs/api/integracion-kide-artean.md`; privacidad: `docs/api/privacidad-g1.md`. Pruebas automáticas (entornos aislados, datos ficticios): `tests/g1/README.md`.
 
 - **Qué recibe (permiso `loans:read`):** número e identificador del préstamo, referencia, entidad, ticket, solicitante y supervisor (nombre), campos de gestión (convocatoria, proyecto...), fechas previstas, ampliaciones, estado del préstamo y del material (incluidas las devoluciones con incidencia y las cancelaciones, con quién canceló), material (tipo, activo, nombre, inventario, serie), firma del albarán (si existe y cuándo), número de comentarios y **huellas** del email y del DNI/NIE del beneficiario.
 - **Datos personales (permiso adicional `loans:read:personal`):** nombre y email del beneficiario y nombre de quien firmó, solo en el detalle del préstamo. Cada respuesta que los incluye queda contada en el registro.
@@ -216,6 +216,7 @@ lagapenak/
 ├── docs/api/g1-hmac-vectors.json  # Vectores de prueba de las huellas / fingerprint test vectors
 ├── docs/api/integracion-kide-artean.md # Guía de integración / integration guide
 ├── docs/api/privacidad-g1.md     # Privacidad (DPD) / privacy (DPD)
+├── tests/g1/                     # Pruebas de G1 en entornos aislados (ver tests/g1/README.md) / G1 tests in isolated environments
 ├── ajax/
 │   ├── asset_list.php             # Listado de activos para selector
 │   ├── asset_timeline.php         # Retirado en 1.6.1 (responde 410)
@@ -464,7 +465,7 @@ If sending fails, the error is logged in `files/_log/`.
 
 ## Kide-Artean integration API (in development)
 
-Kide-Artean (residencies and assignments) **reads** Lagapenak loans. Lagapenak provides complete, structured loan data; Kide-Artean decides what to take in, how to identify the beneficiary and what to associate. Full contract: `docs/api/openapi-g1.yaml`; integration guide: `docs/api/integracion-kide-artean.md`; privacy: `docs/api/privacidad-g1.md`.
+Kide-Artean (residencies and assignments) **reads** Lagapenak loans. Lagapenak provides complete, structured loan data; Kide-Artean decides what to take in, how to identify the beneficiary and what to associate. Full contract: `docs/api/openapi-g1.yaml`; integration guide: `docs/api/integracion-kide-artean.md`; privacy: `docs/api/privacidad-g1.md`. Automated tests (isolated environments, fictitious data): `tests/g1/README.md`.
 
 - **What it receives (scope `loans:read`):** loan number and identifier, reference, entity, ticket, requester and recipient (name), management fields (call, project...), planned dates, extensions, loan and material status (returns with incident and cancellations included, with who cancelled), assets (type, asset, name, inventory and serial numbers), whether and when the delivery note was signed, number of comments, and **fingerprints** of the beneficiary's email and DNI/NIE.
 - **Personal data (additional scope `loans:read:personal`):** the beneficiary's name and email and the signer's name, in the loan detail only. Every response that carries them is counted in the log.
@@ -490,6 +491,7 @@ lagapenak/
 ├── docs/api/g1-hmac-vectors.json  # Vectores de prueba de las huellas / fingerprint test vectors
 ├── docs/api/integracion-kide-artean.md # Guía de integración / integration guide
 ├── docs/api/privacidad-g1.md     # Privacidad (DPD) / privacy (DPD)
+├── tests/g1/                     # Pruebas de G1 en entornos aislados (ver tests/g1/README.md) / G1 tests in isolated environments
 ├── ajax/
 │   ├── asset_list.php             # Asset list for selector
 │   ├── asset_timeline.php         # Retired in 1.6.1 (answers 410)

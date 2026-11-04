@@ -77,14 +77,28 @@ contenido: no sería fiable y eliminaría datos útiles para relacionar préstam
 Hoy el único cliente previsto (Kide·artean) tendrá probablemente los dos permisos, así que el impacto práctico
 es bajo.
 
-**Opciones** (ninguna aplicada; requieren decisión):
+**Decisión de desarrollo (4 de noviembre de 2026): opciones A + B, pendiente de validación por el DPD.**
+
+- **A.** Los textos operativos se mantienen en el permiso básico, sin filtrar ni eliminar nada de la API. No
+  cambia ningún permiso existente.
+- **B.** Aviso discreto en los formularios: «No escribas aquí datos personales del beneficiario: usa los
+  campos de Beneficiario.» Aparece bajo la referencia y al principio de los campos adicionales (convocatoria,
+  proyecto, ubicación, área, departamento) del formulario del préstamo, y bajo el proyecto del albarán cuando
+  lo firma el personal en pantalla. No aparece en la página pública de firma (`sign.php`), que usa el propio
+  beneficiario.
+- **Riesgo residual que se acepta, a falta del DPD:** el aviso no impide escribir datos personales y no
+  corrige lo ya escrito en préstamos anteriores. Un cliente con solo `loans:read` puede seguir recibiendo un
+  nombre escrito en esos textos. Si el DPD lo considera insuficiente, las opciones C o D siguen disponibles y
+  no requieren cambios en la base de datos, solo en la API y en el contrato.
+
+Opciones evaluadas:
 
 | Opción | Cambio | Impacto |
 |---|---|---|
-| A. Mantener (actual) | Ninguno; documentado | Un cliente básico recibe los textos tal como están |
-| B. Indicación al personal | Aviso en el formulario: no escribir datos del beneficiario fuera de sus campos | Sin impacto en la API; reduce el riesgo para el futuro, no para lo ya escrito |
-| C. Textos al permiso personal | `reference`, `details.call`, `details.project` y `delivery_note.project` solo con `loans:read:personal` | Un cliente básico pierde los datos que más ayudan a relacionar préstamos con convocatorias y proyectos |
-| D. Nombres del personal al permiso personal | Con el permiso básico, solo el identificador de GLPI | Un cliente básico no sabe quién pidió o gestionó sin otra fuente |
+| **A. Mantener (aplicada)** | Ninguno; documentado | Un cliente básico recibe los textos tal como están |
+| **B. Indicación al personal (aplicada)** | Aviso en el formulario: no escribir datos del beneficiario fuera de sus campos | Sin impacto en la API; reduce el riesgo para el futuro, no para lo ya escrito |
+| C. Textos al permiso personal (no aplicada) | `reference`, `details.call`, `details.project` y `delivery_note.project` solo con `loans:read:personal` | Un cliente básico pierde los datos que más ayudan a relacionar préstamos con convocatorias y proyectos |
+| D. Nombres del personal al permiso personal (no aplicada) | Con el permiso básico, solo el identificador de GLPI | Un cliente básico no sabe quién pidió o gestionó sin otra fuente |
 
 ## 5. Seudonimización (huellas)
 
@@ -174,7 +188,8 @@ puede consultar.
 2. Adecuación del ámbito `loans:read:personal` (nombre y email del beneficiario y nombre del firmante) a la
    finalidad.
 3. Envío con el permiso básico de los textos escritos a mano (referencia, convocatoria, proyecto, proyecto del
-   albarán), que pueden contener nombres: opciones A–D del apartado 4.1.
+   albarán), que pueden contener nombres: se ha optado por A + B (apartado 4.1); el DPD debe validar la
+   clasificación y el riesgo residual, o pedir C o D.
 4. Envío de los nombres del personal de Tabakalera (solicitante, supervisor, quien cancela).
 5. Plazo de conservación del registro de la API (365 días por defecto) y de los datos en Kide·artean.
 6. Información a los interesados sobre la transmisión de sus datos a Kide·artean.

@@ -876,6 +876,8 @@ class PluginLagapenakLoan extends CommonDBTM {
         echo '<label class="form-label fw-bold">' . __('Name / Reference', 'lagapenak') . ' <span class="text-danger">*</span></label>';
         echo '<input type="text" class="form-control" name="name"
                      value="' . htmlspecialchars($loan['name'] ?? '') . '">';
+        // G1 privacy (option B): free texts reach API clients without the personal-data scope
+        echo '<small class="text-muted">' . __("Do not write the beneficiary's personal data here: use the Beneficiary fields.", 'lagapenak') . '</small>';
         echo '</div>';
 
         echo '<div class="col-md-4">';
@@ -1092,6 +1094,7 @@ class PluginLagapenakLoan extends CommonDBTM {
         echo '</div>';
 
         echo '<div class="collapse ' . $collapse_class . '" id="extra-fields">';
+        echo '<p class="small text-muted mb-2"><i class="fas fa-user-shield me-1"></i>' . __("Do not write the beneficiary's personal data here: use the Beneficiary fields.", 'lagapenak') . '</p>';
 
         echo '<div class="row g-3 mb-3">';
         echo '<div class="col-md-6">';

@@ -967,3 +967,6 @@ msgstr "Persona que recibe el material (artista, residente...), no quien lo soli
 
 msgid "Personal data: beneficiary's name and email, signer's name. Every response that carries them is logged"
 msgstr "Datos personales: nombre y email del beneficiario y nombre del firmante. Cada respuesta que los incluye queda registrada"
+
+msgid "Do not write the beneficiary's personal data here: use the Beneficiary fields."
+msgstr "No escribas aquí datos personales del beneficiario: usa los campos de Beneficiario."

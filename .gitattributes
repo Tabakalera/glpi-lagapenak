@@ -1,0 +1,6 @@
+# Scripts que se ejecutan dentro de contenedores Linux: siempre con fin de línea LF, también en Windows
+*.sh text eol=lf
+tests/** text=auto eol=lf
+# Las pruebas no van en los paquetes del plugin (git archive)
+tests export-ignore
+.gitattributes export-ignore

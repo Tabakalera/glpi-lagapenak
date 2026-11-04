@@ -465,6 +465,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_email'])) {
                             <label class="form-label fw-semibold"><?= __('Project', 'lagapenak') ?></label>
                             <input type="text" name="albaran_project" class="form-control"
                                    value="<?= htmlspecialchars($sign_project) ?>" placeholder="<?= __('Project name', 'lagapenak') ?>">
+                            <small class="text-muted"><?= __("Do not write the beneficiary's personal data here: use the Beneficiary fields.", 'lagapenak') ?></small>
                         </div>
                     </div>
 

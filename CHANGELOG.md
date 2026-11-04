@@ -44,6 +44,10 @@ unchanged. Pending: security review, DPD validation (`docs/api/privacidad-g1.md`
 - API log without bodies, with the number of loans returned with personal data per call (`personal_count`);
   daily task `ApiLogClean`; Super-Admin page (*Setup › Plugins › Lagapenak › Configure*)
 - `docs/api/integracion-kide-artean.md` (integration guide) and `docs/api/privacidad-g1.md` (for the DPD)
+- `tests/g1/`: automated G1, permission and regression suites, contract validation against real responses,
+  HMAC vectors (Python reference, plugin PHP, form JavaScript) and the upgrade/rollback rehearsal from 1.6.1,
+  run with `tests/g1/g1.sh` in isolated Docker environments with fictitious data and random credentials.
+  Excluded from deployments and packages
 
 ### Changed
 - Loan form: the beneficiary is no longer pre-filled with the requester's data; a button copies it when they
@@ -57,6 +61,9 @@ unchanged. Pending: security review, DPD validation (`docs/api/privacidad-g1.md`
 - A cancelled loan is never reopened nor changed (G1-F07): no edit, massive update, asset, delivery, date,
   extension or signature. A new request is created instead
 - A loan can no longer be created already cancelled, nor cancelled through the loan form
+- Loan form and on-screen delivery note: a discreet note asks staff not to write the beneficiary's personal
+  data in the reference, management fields or project (free texts reach API clients without the personal-data
+  scope; classification and residual risk in `docs/api/privacidad-g1.md`, pending DPD validation)
 
 ### Notes
 - The API is **disabled** after install or update until a Super-Admin enables it

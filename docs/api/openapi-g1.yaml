@@ -66,7 +66,7 @@ info:
         delivery_note_project: '`delivery_note.project`. Proyecto escrito en el albarán. Puede llevar el nombre del artista o de su proyecto. Riesgo medio.'
         assets: '`items[].name`, `inventory_number`, `serial`. Datos del inventario de GLPI; el nombre de un equipo puede incluir el nombre de su usuario habitual. Riesgo bajo.'
         entity: '`entity.name`. Organizativo. Sin riesgo apreciable.'
-        residual: 'Un cliente sin `loans:read:personal` puede recibir el nombre de un beneficiario si el personal lo escribió en estos textos. No se filtra el contenido (no es fiable y rompería datos útiles). Mitigación: instrucción al personal de no escribir datos personales del beneficiario fuera de sus campos, revisión del DPD y, si se decide, mover estos textos al ámbito personal.'
+        residual: 'Un cliente sin `loans:read:personal` puede recibir el nombre de un beneficiario si el personal lo escribió en estos textos. No se filtra el contenido (no es fiable y rompería datos útiles). Mitigación aplicada: aviso en los formularios para no escribir datos personales del beneficiario fuera de sus campos (no corrige lo ya escrito). Pendiente de validación por el DPD, que puede pedir mover estos textos o los nombres del personal al ámbito personal.'
     personal:
       scope: loans:read:personal (además de loans:read)
       fields: |

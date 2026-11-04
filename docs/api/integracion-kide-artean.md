@@ -141,6 +141,8 @@ La referencia, los campos de gestión y el proyecto del albarán los escribe el 
 campos personales, pueden incluir el nombre de un artista o de su proyecto. Los nombres del personal de
 Tabakalera también son datos personales. Trátalos con el mismo cuidado que el resto de datos personales al
 mostrarlos a tus usuarios (clasificación en `x-data-classification.operational.free_text_risk`).
+Los formularios de Lagapenak recuerdan al personal que no escriba datos del beneficiario en esos textos, pero
+eso no corrige los préstamos antiguos ni lo impide.
 
 Reglas útiles:
 - `signed_at` es lo más cercano a la entrega efectiva: Lagapenak no guarda fechas reales de entrega ni de
@@ -230,7 +232,37 @@ Para decidir el cierre, usa `material_status`:
 - Un préstamo cancelado no se borra ni se reabre. Si hace falta el material, se crea una solicitud nueva, con
   otro `uuid`.
 
-## 7. Lista de comprobación antes de conectar
+## 7. Tratamiento de errores
+
+Todos los errores llegan como `application/problem+json` (RFC 9457) con `status`, `code` estable, `title`,
+`detail` opcional en inglés y `request_id`. Nunca llevan datos personales. Decide por `status` y `code`, no por
+el texto. Los que se producen con la credencial ya validada, la IP admitida y dentro del límite (400, 403
+`forbidden_scope`, 404, 405, 410, 500) también traen `X-Lagapenak-Scope-Version`.
+
+| HTTP | `code` | Cuándo | Qué hacer |
+|---|---|---|---|
+| 400 | `invalid_request` | Falta `since` o es inválido, `limit` fuera de rango, `number` y `uuids` a la vez, más de 50 UUID, UUID mal formado, `X-Acting-User` que no es un UUID o que falta al buscar por número | Error del cliente: no reintentar igual; revisar la petición. No avanzar el cursor |
+| 401 | `unauthorized` | Credencial ausente, incorrecta, caducada o revocada | Parar la sincronización y avisar a un administrador; no reintentar en bucle (20 fallos bloquean la IP 5 minutos) |
+| 403 | `ip_not_allowed` | La petición no sale de una IP autorizada para el cliente | Avisar a sistemas; no reintentar |
+| 403 | `https_required` | Petición por HTTP | Corregir la URL |
+| 403 | `forbidden_scope` | El cliente no tiene el ámbito que pide la operación | Revisar la configuración del cliente con Lagapenak |
+| 404 | `not_found` | Ruta desconocida, API desactivada o préstamo que no existe o no es visible para el cliente | En un préstamo conocido: tratarlo como `not_available` (ver reconciliación). Si falla `GET /v1/meta`, la API está desactivada: parar y avisar |
+| 405 | `method_not_allowed` | Método distinto de `GET` (la API es de solo lectura) | Error del cliente |
+| 410 | `loan_deleted` | El préstamo se borró en Lagapenak | Marcarlo como borrado; no volverá |
+| 429 | `rate_limited` | Demasiadas peticiones o demasiados fallos de autenticación | Esperar lo que indique `Retry-After` (segundos) y reintentar con el mismo cursor |
+| 500 | `internal_error` | Fallo de Lagapenak | Reintentar con espera creciente y el mismo cursor; si persiste, avisar con el `request_id` |
+| 502–504 | — | Fallo del servidor web o de la red | Igual que 500 |
+
+Reglas generales:
+- **El cursor solo avanza cuando una página se ha procesado entera.** Un error a mitad no pierde nada: se repite
+  la misma llamada con el mismo `since`.
+- Procesar es idempotente: recibir dos veces el mismo evento no debe duplicar nada.
+- En los lotes (`?uuids=`), un UUID que no existe o no es visible no es un error: viene en `not_found` con
+  `reason` `deleted` o `not_available`, y la respuesta es 200.
+- Una respuesta incompleta o que no cumple el contrato se trata como un 500: no se aplica a medias.
+- Guarda el `request_id` (o tu `X-Request-Id`) en tus registros para poder cruzarlos con el registro de la API.
+
+## 8. Lista de comprobación antes de conectar
 
 - [ ] Las 28 huellas de `g1-hmac-vectors.json` reproducidas.
 - [ ] Clave de la integración y credencial guardadas en el almacén de secretos; nada en el código ni en los logs.
