@@ -8,7 +8,7 @@ Plugin para GLPI 10.0.x y 11.0.x que permite gestionar préstamos de activos (or
 
 ## Requisitos
 
-- GLPI 10.0.11 o superior (probado en 10.0.11, 10.0.20 y 10.0.28) o GLPI 11.0.x (probado en 11.0.9 y 11.0.12)
+- GLPI 10.0.11 o superior (probado en 10.0.11, 10.0.20, 10.0.24 y 10.0.28) o GLPI 11.0.x (probado en 11.0.9 y 11.0.12)
 - PHP según la versión de GLPI (probado con PHP 8.2 en GLPI 10 y 8.3 en GLPI 11)
 - MySQL / MariaDB
 
@@ -289,7 +289,7 @@ Plugin for GLPI 10.0.x and 11.0.x to manage asset loans (computers, peripherals,
 
 ## Requirements
 
-- GLPI 10.0.11 or later (tested on 10.0.11, 10.0.20 and 10.0.28) or GLPI 11.0.x (tested on 11.0.9 and 11.0.12)
+- GLPI 10.0.11 or later (tested on 10.0.11, 10.0.20, 10.0.24 and 10.0.28) or GLPI 11.0.x (tested on 11.0.9 and 11.0.12)
 - PHP as required by your GLPI version (tested with PHP 8.2 on GLPI 10 and 8.3 on GLPI 11)
 - MySQL / MariaDB
 
