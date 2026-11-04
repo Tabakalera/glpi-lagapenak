@@ -2,13 +2,14 @@
 # Pruebas G1 de Lagapenak en entornos Docker aislados, solo con datos ficticios. Instrucciones: README.md.
 #
 #   g1.sh crear <entorno> <versión GLPI>      crea el entorno, instala GLPI y el plugin (copia de trabajo) y los datos ficticios
-#   g1.sh desplegar <entorno> [rama]          vuelve a copiar el plugin (copia de trabajo, o la rama/commit indicado)
+#   g1.sh desplegar <entorno> [rama|paquete]  vuelve a copiar el plugin (copia de trabajo, rama/commit o paquete .tar.gz)
 #   g1.sh bateria <entorno> [g1|permisos|general|todas]
 #   g1.sh contrato <entorno>                  respuestas reales de la API validadas contra docs/api/openapi-g1.yaml
 #   g1.sh vectores [entorno]                  vectores HMAC: referencia Python; con entorno, también PHP y el JS del formulario
 #   g1.sh comprobar <entorno>                 todas las baterías + contrato + vectores
 #   g1.sh ensayo <entorno> [origen] [destino] actualización origen→destino, desinstalación, reinstalación y reversión
-#                                             (por defecto release/1.6.1-seguridad → copia de trabajo)
+#                                             (ramas o paquetes .tar.gz; por defecto release/1.6.1-seguridad → copia
+#                                             de trabajo)
 #   g1.sh arrancar <entorno> | parar <entorno> | eliminar <entorno> | lista
 #                                             (arrancar: vuelve a encender un entorno parado tal como quedó)
 #
@@ -39,14 +40,37 @@ entorno() { # entorno <nombre>: valida el nombre y que el entorno exista
   [ "${2:-}" = nuevo ] || [ -f "$(ENVF)" ] || die "el entorno «$E» no existe: créalo con g1.sh crear $E <versión GLPI>"
 }
 
-# paquete <rama|-> → tar del plugin por la salida estándar. «-» = copia de trabajo (también lo no confirmado).
-# Nunca incluye tests/ (en las ramas, por export-ignore de .gitattributes).
+# paquete <rama|-|paquete.tar.gz> → tar del plugin (sin la carpeta lagapenak/) por la salida estándar.
+# «-» = copia de trabajo (también lo no confirmado); un .tar.gz = un paquete de entrega tal cual.
+# Nunca incluye tests/ (en las ramas, por export-ignore de .gitattributes). Sin conversión de fin de línea: los
+# archivos llevan exactamente los bytes del repositorio, como los paquetes de entrega.
+es_paquete() { [[ $1 == *.tar.gz ]] && [ -f "$1" ]; }
 paquete() {
   if [ "$1" = - ]; then
     (cd "$REPO" && git ls-files -co --exclude-standard | grep -v '^tests/' | while read -r f; do [ -e "$f" ] && echo "$f"; done | tar -cf - -T -)
+  elif es_paquete "$1"; then
+    local t; t=$(mktemp -d); tar --force-local -xzf "$1" -C "$t" && tar -cf - -C "$t/lagapenak" .; rm -rf "$t"
   else
-    git -C "$REPO" archive --format=tar "$1"
+    git -C "$REPO" -c core.autocrlf=false archive --format=tar "$1"
   fi
+}
+# version_de <rama|-|paquete.tar.gz> → versión declarada en setup.php
+version_de() {
+  if [ "$1" = - ]; then cat "$REPO/setup.php"
+  elif es_paquete "$1"; then tar --force-local -xzOf "$1" lagapenak/setup.php
+  else git -C "$REPO" show "$1:setup.php"; fi | grep -o "VERSION', '[0-9a-z.-]*" | sed "s/.*'//"
+}
+# tiene_api <rama|-|paquete.tar.gz>
+tiene_api() {
+  if [ "$1" = - ]; then [ -f "$REPO/front/api.php" ]
+  elif es_paquete "$1"; then tar --force-local -tzf "$1" | grep -q '^lagapenak/front/api.php$'
+  else git -C "$REPO" cat-file -e "$1:front/api.php" 2>/dev/null; fi
+}
+# origen <rama|paquete.tar.gz> → texto para los informes (rama y commit, o paquete y su SHA-256)
+origen() {
+  if es_paquete "$1"; then echo "$(basename "$1"), sha256 $(sha256sum "$1" | cut -c1-12)…"
+  elif [ "$1" = - ]; then echo "copia de trabajo"
+  else echo "$1, $(git -C "$REPO" rev-parse --short "$1")"; fi
 }
 
 poner_plugin() { # poner_plugin <rama|-> : sustituye la carpeta del plugin (la anterior queda en /tmp del contenedor)
@@ -190,15 +214,9 @@ ensayo() {
   # Origen: la versión instalada antes (una rama o commit). Destino: la que se instala («-» = copia de trabajo).
   local ref161=${1:-release/1.6.1-seguridad} destino=${2:--} c db; c=$(C); db=$(DB)
   local v161 vg1 api=no
-  v161=$(git -C "$REPO" show "$ref161:setup.php" | grep -o "VERSION', '[0-9a-z.-]*" | sed "s/.*'//")
-  if [ "$destino" = - ]; then
-    vg1=$(grep -o "VERSION', '[0-9a-z.-]*" "$REPO/setup.php" | sed "s/.*'//"); [ -f "$REPO/front/api.php" ] && api=sí
-  else
-    vg1=$(git -C "$REPO" show "$destino:setup.php" | grep -o "VERSION', '[0-9a-z.-]*" | sed "s/.*'//")
-    git -C "$REPO" cat-file -e "$destino:front/api.php" 2>/dev/null && api=sí
-  fi
+  v161=$(version_de "$ref161"); vg1=$(version_de "$destino"); tiene_api "$destino" && api=sí
   [ -n "$v161" ] && [ -n "$vg1" ] || die "no se pudieron leer las versiones"
-  local dest_txt; dest_txt=$([ "$destino" = - ] && echo "copia de trabajo" || echo "$destino, $(git -C "$REPO" rev-parse --short "$destino")")
+  local dest_txt; dest_txt=$(origen "$destino")
   local DUMP=/tmp/copia-previa-$(date +%H%M%S).sql problemas=0
   st() { q "select concat(version,' state=',state) from glpi_plugins where directory='lagapenak'"; }
   datos() { q "select concat('prestamos=',(select count(*) from glpi_plugin_lagapenak_loans),
@@ -224,7 +242,7 @@ ensayo() {
   resultado() { grep "^Resultado" "$RES/paso$1-$2.txt" 2>/dev/null; }
   paso() { echo; echo "== $*"; }
 
-  paso "0. Producción simulada: GLPI $(q "select value from glpi_configs where context='core' and name='version'") + Lagapenak $v161 ($ref161, $(git -C "$REPO" rev-parse --short "$ref161")) con actividad"
+  paso "0. Producción simulada: GLPI $(q "select value from glpi_configs where context='core' and name='version'") + Lagapenak $v161 ($(origen "$ref161")) con actividad"
   docker exec "$db" sh -c 'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" -e "drop database if exists $MARIADB_DATABASE; create database $MARIADB_DATABASE; grant all on $MARIADB_DATABASE.* to $MARIADB_USER@\"%\""'
   docker exec -u www-data -w $GLPI "$c" sh -c 'php bin/console db:install --db-host=db --db-name="$G1_DB_NAME" --db-user="$G1_DB_USER" \
     --db-password="$G1_DB_PASSWORD" --default-language=es_ES --no-interaction --force --reconfigure' 2>&1 | grep -v '^\s*$' | tail -1
@@ -281,7 +299,7 @@ ensayo() {
   console maintenance:enable >/dev/null
   poner_plugin "$ref161"; console plugin:install lagapenak -u glpi --force >/dev/null; console plugin:activate lagapenak >/dev/null
   # Tarea automática de la versión nueva que la anterior no conoce (la 1.7.0 la vuelve a crear al actualizar)
-  [ -n "$(git -C "$REPO" show "$ref161:setup.php" | grep -o ApiLogClean)" ] || q "delete from glpi_crontasks where itemtype='PluginLagapenakLoan' and name='ApiLogClean'"
+  { tiene_api "$ref161"; } || q "delete from glpi_crontasks where itemtype='PluginLagapenakLoan' and name='ApiLogClean'"
   console cache:clear >/dev/null
   need "$v161 activo tras revertir conservando datos" "select count(*) from glpi_plugins where directory='lagapenak' and version='$v161' and state=1"
   console maintenance:disable >/dev/null
@@ -327,5 +345,5 @@ case $cmd in
   eliminar)  entorno "${1:-}"; echo "Se borran los contenedores y volúmenes de $(proyecto) (solo datos ficticios)."
              compose down -v && rm -f "$(ENVF)" ;;
   lista)     docker ps -a --filter "name=lagapenak-g1-" --format '{{.Names}}\t{{.Status}}\t{{.Image}}' ;;
-  *)         sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *)         sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

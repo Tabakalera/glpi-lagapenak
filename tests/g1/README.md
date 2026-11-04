@@ -48,7 +48,7 @@ tests/g1/g1.sh comprobar t10          # las tres baterías + contrato + vectores
 | Orden | Qué hace |
 |---|---|
 | `crear <entorno> <versión GLPI>` | Crea el entorno (GLPI 10.0.x u 11.0.x). Si ya existe, solo vuelve a desplegar el plugin |
-| `desplegar <entorno> [rama]` | Copia otra vez el plugin: la copia de trabajo (también lo no confirmado) o la rama o commit indicado |
+| `desplegar <entorno> [rama\|paquete]` | Copia otra vez el plugin: la copia de trabajo (también lo no confirmado), la rama o commit indicado, o un paquete de entrega `.tar.gz` tal cual |
 | `bateria <entorno> [g1\|permisos\|general\|todas]` | Ejecuta una batería o todas |
 | `contrato <entorno>` | Captura respuestas reales de la API y las valida contra `docs/api/openapi-g1.yaml` (después de la batería g1) |
 | `vectores [entorno]` | Vectores HMAC con la referencia Python; con entorno, también con el PHP del plugin y el JavaScript del formulario |
@@ -88,8 +88,9 @@ el diagnóstico.
 
 `g1.sh ensayo <entorno> [origen] [destino]` reproduce el procedimiento de despliegue en un entorno creado con la
 versión de GLPI de producción. **Borra y vuelve a crear la base de datos de ese entorno**, que solo contiene datos
-ficticios. El origen es una rama o commit (por defecto `release/1.6.1-seguridad`); el destino, otra rama o, por
-defecto, la copia de trabajo. Las ramas solo se leen.
+ficticios. El origen es una rama, un commit o un paquete `.tar.gz` (por defecto `release/1.6.1-seguridad`); el
+destino, otra rama, commit o paquete o, por defecto, la copia de trabajo. Las ramas solo se leen. Para validar una
+entrega, ensaya con los paquetes mismos.
 
 | Ruta | Orden |
 |---|---|
