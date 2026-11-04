@@ -170,7 +170,7 @@ Pon `[]` para no mostrar ninguno. Los labels se obtienen automáticamente de `ge
 
 **Otros cambios**
 
-- Un albarán firmado no se puede volver a firmar ni sustituir. Si hay un error, no se corrige desde la aplicación (las versiones firmadas inmutables quedan para una versión posterior a la 1.7.0).
+- Un albarán firmado no se puede volver a firmar ni sustituir. Si hay un error, no se corrige desde la aplicación (las versiones firmadas inmutables quedan para una versión futura, sin fecha comprometida).
 - Un préstamo con el albarán firmado no se puede borrar, tampoco por un supervisor. Se puede seguir entregando, devolviendo, prorrogando y comentando.
 - Quien pide un préstamo puede retirar su solicitud solo mientras nadie haya actuado sobre ella: sigue pendiente, no hay material entregado, no se ha enviado enlace de firma, no hay prórroga pedida y nadie más ha comentado. Para borrar préstamos de otras personas hacen falta los derechos «Actualizar» y «Purgar».
 - Para consultar préstamos (lista, ficha, albarán, calendario) hace falta el derecho «Leer» de Lagapenak.
@@ -184,7 +184,7 @@ Pon `[]` para no mostrar ninguno. Los labels se obtienen automáticamente de `ge
 - **Beneficiario:** en los préstamos nuevos el nombre completo es obligatorio, junto con un email o un DNI/NIE válidos. El formulario ya no copia los datos del solicitante: si son la misma persona, usa el botón *El beneficiario es el solicitante*. Ver [Datos del beneficiario](#datos-del-beneficiario).
 - **Cancelar en vez de borrar:** una solicitud cuyo material no se ha entregado se cancela con un motivo (supervisor de la entidad o el propio solicitante). Un préstamo cancelado no se borra ni se reabre; si hace falta el material, se crea una solicitud nueva. Ver [Cancelar una solicitud](#cancelar-una-solicitud).
 - **Textos libres:** la referencia, los campos adicionales (convocatoria, proyecto...) y el proyecto del albarán muestran un aviso: los datos personales del beneficiario van solo en sus campos.
-- **Albarán firmado:** sigue sin poder corregirse ni sustituirse desde la aplicación. Las versiones firmadas inmutables quedan para una versión posterior.
+- **Albarán firmado:** sigue sin poder corregirse ni sustituirse desde la aplicación. Las versiones firmadas inmutables quedan para una versión futura, sin fecha comprometida.
 - La API de consulta para Kide-Artean viene **desactivada**; no cambia nada para quien gestiona préstamos hasta que se active.
 
 ## Calendario y suscripción iCal
@@ -460,7 +460,7 @@ Set to `[]` to show none. Labels are read automatically from `getFieldLabels()`.
 
 **Other changes**
 
-- A signed delivery note cannot be signed again or replaced. Mistakes cannot be corrected from the application (immutable signed versions are planned for a version after 1.7.0).
+- A signed delivery note cannot be signed again or replaced. Mistakes cannot be corrected from the application (immutable signed versions are planned for a future version, with no committed date).
 - A loan with a signed delivery note cannot be deleted, not even by a supervisor. Deliveries, returns, extensions and comments keep working.
 - A requester can withdraw their request only while nobody has acted on it (still pending, no asset delivered, no signing link sent, no date request, no comment from anyone else). Deleting other people's loans needs the "Update" and "Purge" rights.
 - Consulting loans (list, loan, delivery note, calendar) needs the Lagapenak "Read" right.
@@ -474,7 +474,7 @@ Set to `[]` to show none. Labels are read automatically from `getFieldLabels()`.
 - **Beneficiary:** new loans need the full name plus a valid email or DNI/NIE. The form no longer copies the requester's data: if they are the same person, use the *The beneficiary is the requester* button. See [Beneficiary fields](#beneficiary-fields).
 - **Cancel instead of delete:** a request whose material was never handed over is cancelled with a reason (entity supervisor or the requester). A cancelled loan cannot be deleted or reopened; if the material is needed, create a new request. See [Cancelling a request](#cancelling-a-request).
 - **Free texts:** the reference, the additional fields (call, project...) and the delivery note project show a note: the beneficiary's personal data goes only in its own fields.
-- **Signed delivery note:** still cannot be corrected or replaced from the application. Immutable signed versions are planned for a later version.
+- **Signed delivery note:** still cannot be corrected or replaced from the application. Immutable signed versions are planned for a future version, with no committed date.
 - The query API for Kide-Artean ships **disabled**; nothing changes for loan managers until it is enabled.
 
 ## Calendar and iCal subscription

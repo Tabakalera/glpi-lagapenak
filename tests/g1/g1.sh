@@ -9,7 +9,8 @@
 #   g1.sh comprobar <entorno>                 todas las baterías + contrato + vectores
 #   g1.sh ensayo <entorno> [origen] [destino] actualización origen→destino, desinstalación, reinstalación y reversión
 #                                             (por defecto release/1.6.1-seguridad → copia de trabajo)
-#   g1.sh parar <entorno> | eliminar <entorno> | lista
+#   g1.sh arrancar <entorno> | parar <entorno> | eliminar <entorno> | lista
+#                                             (arrancar: vuelve a encender un entorno parado tal como quedó)
 #
 # Resultados (salidas completas y diagnóstico de cada fallo): tests/g1/resultados/<entorno>-<fecha>/, fuera de Git.
 set -uo pipefail
@@ -210,6 +211,7 @@ ensayo() {
   uuids() { q "select concat(count(uuid),'/',count(*),' distintos=',count(distinct uuid),' huella=',left(sha2(group_concat(concat(id,uuid) order by id),256),12)) from glpi_plugin_lagapenak_loans"; }
   eventos() { q "select left(sha2(group_concat(concat(id,event,loan_uuid) order by id),256),12) from glpi_plugin_lagapenak_loanevents"; }
   apicfg() { q "select ifnull(group_concat(concat(name,'=',value) order by name),'(sin configuración de API)') from glpi_configs where context='plugin:lagapenak' and name like 'api\\_%' and name not in ('api_hmac_keys','api_hmac_keys_mod')"; }
+  derechos() { q "select left(sha2(group_concat(concat(profiles_id,name,rights) order by profiles_id,name),256),12) from glpi_profilerights where name like 'plugin_lagapenak%'"; }
   meta() { docker exec "$c" curl -s -o /dev/null -w '%{http_code}' http://localhost/plugins/lagapenak/front/api.php/v1/meta; }
   need() { local n; n=$(q "$2"); if [ -z "$n" ] || [ "$n" = 0 ]; then echo "  ALTO: no se cumple «$1»."; exit 1; fi; }
   same() { if [ "$2" = "$3" ]; then echo "  $1: idénticos"; else echo "  $1: DIFERENCIAS ($2 ≠ $3)"; problemas=$((problemas+1)); fi; }
@@ -274,6 +276,25 @@ ensayo() {
   same "eventos de préstamo" "$EV" "$(eventos)"
   echo "  API tras reinstalar: $(apicfg) · GET /v1/meta → $(meta)"
 
+  paso "4a. Reversión a $v161 conservando los datos (solo archivos; la base queda como la dejó la $vg1)"
+  local PRE4 DER4; PRE4=$(datos); DER4=$(derechos)
+  console maintenance:enable >/dev/null
+  poner_plugin "$ref161"; console plugin:install lagapenak -u glpi --force >/dev/null; console plugin:activate lagapenak >/dev/null
+  # Tarea automática de la versión nueva que la anterior no conoce (la 1.7.0 la vuelve a crear al actualizar)
+  [ -n "$(git -C "$REPO" show "$ref161:setup.php" | grep -o ApiLogClean)" ] || q "delete from glpi_crontasks where itemtype='PluginLagapenakLoan' and name='ApiLogClean'"
+  console cache:clear >/dev/null
+  need "$v161 activo tras revertir conservando datos" "select count(*) from glpi_plugins where directory='lagapenak' and version='$v161' and state=1"
+  console maintenance:disable >/dev/null
+  echo "  $(st) · tablas: $(tablas)"
+  same "préstamos, líneas, comentarios y firmas" "$PRE4" "$(datos)"
+  same "derechos de los perfiles" "$DER4" "$(derechos)"
+  docker exec "$c" sh -c ': > '$GLPI'/files/_log/php-errors.log'
+  local t; for t in LoanReminder ApiLogClean; do docker exec -u www-data -w $GLPI "$c" php front/cron.php --force $t >/dev/null 2>&1; done
+  if grep -q " 0 FALLO" <<< "$(resultado 0 general)"; then run "batería general $v161 sobre la base de la $vg1" 4a general suite.sh
+  else run "batería general $v161 sobre la base de la $vg1" 4a general suite.sh info; fi
+  local errs; errs=$(docker exec "$c" sh -c "grep -c 'PHP\|Fatal\|Uncaught\|no definida\|not defined' $GLPI/files/_log/php-errors.log")
+  echo "  errores de PHP o de tareas automáticas: $errs"; [ "$errs" = 0 ] || problemas=$((problemas+1))
+
   paso "4. Reversión completa a $v161 (archivos + base de la copia del paso 1)"
   console maintenance:enable >/dev/null
   docker exec "$c" sh -c "rm -rf $PLUGIN && cp -a $COPIA $PLUGIN" && echo "  carpeta $v161 restaurada"
@@ -301,9 +322,10 @@ case $cmd in
   comprobar) entorno "${1:-}"; salida; r=0; bateria todas || r=1; contrato || r=1; vectores || r=1
              echo; echo "Comprobación de «$E»: $([ $r = 0 ] && echo "todo correcto" || echo "HAY FALLOS (ver $RES)")"; exit $r ;;
   ensayo)    entorno "${1:-}"; salida; ensayo "${2:-}" "${3:-}" 2>&1 | tee "$RES/ensayo.txt"; exit "${PIPESTATUS[0]}" ;;
+  arrancar)  entorno "${1:-}"; compose start && for i in $(seq 1 60); do q "select 1" >/dev/null && break; sleep 2; done ;;
   parar)     entorno "${1:-}"; compose stop ;;
   eliminar)  entorno "${1:-}"; echo "Se borran los contenedores y volúmenes de $(proyecto) (solo datos ficticios)."
              compose down -v && rm -f "$(ENVF)" ;;
   lista)     docker ps -a --filter "name=lagapenak-g1-" --format '{{.Names}}\t{{.Status}}\t{{.Image}}' ;;
-  *)         sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *)         sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

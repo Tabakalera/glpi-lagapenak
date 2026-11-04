@@ -54,7 +54,8 @@ tests/g1/g1.sh comprobar t10          # las tres baterías + contrato + vectores
 | `vectores [entorno]` | Vectores HMAC con la referencia Python; con entorno, también con el PHP del plugin y el JavaScript del formulario |
 | `comprobar <entorno>` | Todo lo anterior. Sale con código distinto de 0 si algo falla |
 | `ensayo <entorno> [origen] [destino]` | Ensayo de actualización y reversión (ver abajo) |
-| `parar <entorno>` / `eliminar <entorno>` / `lista` | Parar; borrar contenedores, volúmenes y contraseñas del entorno; ver los entornos |
+| `arrancar <entorno>` / `parar <entorno>` | Encender un entorno parado tal como quedó (sin volver a copiar el plugin) / pararlo sin borrar nada |
+| `eliminar <entorno>` / `lista` | Borrar contenedores, volúmenes y contraseñas del entorno / ver los entornos |
 
 Entornos recomendados antes de una entrega:
 
@@ -77,6 +78,7 @@ dos baterías a la vez en el mismo entorno.
 | Contrato | `contrato/captura.sh`, `contrato/validar_contrato.py` | 11 respuestas | Meta, páginas de eventos, detalle con y sin datos personales, lote, búsqueda por número y errores contra los esquemas del contrato |
 | Vectores | `vectores/` | 28 × 3 | Los 28 casos de `g1-hmac-vectors.json` con la referencia Python independiente, el PHP del plugin y el JavaScript del formulario tal como lo sirve GLPI |
 | Ensayo | `g1.sh ensayo` | — | Ver abajo |
+| Migración de GLPI | `migracion_glpi11.sh <entorno GLPI 10> <entorno GLPI 11>` | — | Copia la base de un GLPI 10 con la 1.6.0 y datos a un GLPI 11, migra con `db:update`, reanuda los plugins (`plugin:resume_execution`) y actualiza a 1.6.1 y 1.7.0 con las baterías. **Sustituye la base del entorno GLPI 11** |
 
 `suites/prueba_g1c.php` es una sonda que la batería G1 copia en el plugin del entorno solo durante unas pruebas
 (carreras al cancelar y vías internas de GLPI) y retira después. `suites/lib.sh` reúne las funciones comunes y
@@ -102,6 +104,10 @@ defecto, la copia de trabajo. Las ramas solo se leen.
    baterías (la de la API, solo si el destino la incluye).
 2. Desinstalación: no deben quedar credenciales, configuración ni claves de la API.
 3. Reinstalación: los préstamos, sus `uuid` y los eventos se conservan.
+4a. Reversión al origen **conservando los datos**: solo se cambian los archivos (con `plugin:install --force` y la
+   retirada de la tarea automática `ApiLogClean` si el origen no la conoce). Los préstamos y los derechos de los
+   perfiles deben quedar idénticos, sin errores de PHP ni de tareas automáticas, y la batería general del origen
+   debe pasar si pasaba en el paso 0.
 4. Reversión completa al origen con la copia del paso 1: datos idénticos, sin columnas nuevas, y la batería
    general da el mismo resultado que en el paso 0.
 
