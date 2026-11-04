@@ -94,9 +94,9 @@ entrega, ensaya con los paquetes mismos.
 
 | Ruta | Orden |
 |---|---|
-| 1.6.0 → 1.6.1 | `g1.sh ensayo rv main release/1.6.1-seguridad` |
+| 1.6.0 → 1.6.1 | `g1.sh ensayo rv v1.6.0 release/1.6.1-seguridad` |
 | 1.6.1 → 1.7.0 | `g1.sh ensayo rv release/1.6.1-seguridad release/1.7.0` |
-| 1.6.0 → 1.7.0 | `g1.sh ensayo rv main release/1.7.0` |
+| 1.6.0 → 1.7.0 | `g1.sh ensayo rv v1.6.0 release/1.7.0` |
 
 0. GLPI limpio con la versión de origen y actividad generada por la batería general. Su resultado es la
    referencia: la 1.6.0 tiene fallos de seguridad conocidos que corrige la 1.6.1, y no cuentan como problema.

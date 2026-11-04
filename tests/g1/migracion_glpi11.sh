@@ -4,7 +4,7 @@
 #   tests/g1/migracion_glpi11.sh <entorno GLPI 10> <entorno GLPI 11>
 # Los dos entornos se crean antes con g1.sh crear. El de GLPI 10 pasa a tener la 1.6.0 (conserva sus datos); la
 # base del de GLPI 11 se SUSTITUYE por una copia de la del GLPI 10 (solo datos ficticios).
-# Ramas: main (1.6.0), release/1.6.1-seguridad y release/1.7.0. Resultados en pantalla.
+# Versiones: etiqueta v1.6.0 (1.6.0), ramas release/1.6.1-seguridad y release/1.7.0. Resultados en pantalla.
 set -u
 export MSYS_NO_PATHCONV=1
 cd "$(dirname "$0")/../.."
@@ -23,7 +23,7 @@ paso() { echo; echo "== $*"; }
 
 paso "0. Origen: GLPI $(qo "select value from glpi_configs where context='core' and name='version'") con Lagapenak 1.6.0 y datos"
 docker exec -u www-data -w $GL $O-glpi-1 php bin/console maintenance:enable --no-interaction >/dev/null 2>&1
-bash $G desplegar $EO main 2>&1 | tail -1
+bash $G desplegar $EO v1.6.0 2>&1 | tail -1
 docker exec -u www-data -w $GL $O-glpi-1 php bin/console maintenance:disable --no-interaction >/dev/null 2>&1
 A=$(datos qo); R=$(derechos qo); echo "  $(qo "select concat(version,' state=',state) from glpi_plugins where directory='lagapenak'") · $A · derechos=$R"
 
@@ -40,7 +40,7 @@ k1=$(docker exec $O-glpi-1 sha256sum $GL/config/glpicrypt.key | cut -c1-64); k2=
 echo "  base cargada en GLPI 11: versión de GLPI en la base = $(qd "select value from glpi_configs where context='core' and name='version'")"
 
 paso "2. Plugin 1.6.0 en la carpeta del GLPI 11 y migración de GLPI (db:update)"
-bash $G desplegar $ED main >/dev/null 2>&1   # copia la 1.6.0; su install fallará o no se ejecutará hasta migrar GLPI
+bash $G desplegar $ED v1.6.0 >/dev/null 2>&1   # copia la 1.6.0; su install fallará o no se ejecutará hasta migrar GLPI
 cd_ maintenance:enable >/dev/null
 echo "  db:update: $(cd_ db:update --allow-unstable)"
 echo "  GLPI: $(qd "select value from glpi_configs where context='core' and name='version'") · Lagapenak tras migrar: $(qd "select concat(version,' state=',state) from glpi_plugins where directory='lagapenak'")"
