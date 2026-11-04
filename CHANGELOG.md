@@ -2,13 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.7.0] - YYYY-MM-DD (release date to be set on publication)
+## [1.7.0] - 2026-11-04
 
 Loan query API G1 (read-only, first consumer Kide-Artean), beneficiary identification (G1-ID01) and explicit
 cancellation (G1-F05 to G1-F07). Contract: `docs/api/openapi-g1.yaml` (3.1.0-draft). Built on 1.6.1, which is
 unchanged. Tested on GLPI 10.0.11, 10.0.20, 10.0.28, 11.0.9 and 11.0.12, with the upgrade from 1.6.0 and
-1.6.1 and the rollback rehearsed. Pending before publishing: security review, DPD validation
-(`docs/api/privacidad-g1.md`), release authorisation. The API stays disabled until a Super-Admin enables it.
+1.6.1 and the rollback rehearsed. The API ships disabled; enabling it requires a security review, DPD
+validation (`docs/api/privacidad-g1.md`) and authorisation.
 Immutable signed delivery notes are not included: planned for a future version, with no committed date.
 
 ### Added
@@ -78,7 +78,7 @@ Immutable signed delivery notes are not included: planned for a future version, 
 - Uninstall removes API clients and integration keys (credentials) and keeps loans, the loan event log and
   the API log (records)
 
-## [1.6.1] - YYYY-MM-DD (release date to be set on publication)
+## [1.6.1] - 2026-11-04
 
 Security release. Every issue below was reproduced first and checked after the fix with fictitious
 data on an isolated GLPI 10.0.24 and GLPI 11.0.9. Release tests: GLPI 10.0.11, 10.0.20, 10.0.28 and 11.0.12,
