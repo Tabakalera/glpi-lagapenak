@@ -970,3 +970,42 @@ msgstr "Datos personales: nombre y email del beneficiario y nombre del firmante.
 
 msgid "Do not write the beneficiary's personal data here: use the Beneficiary fields."
 msgstr "No escribas aquí datos personales del beneficiario: usa los campos de Beneficiario."
+
+msgid "Copied"
+msgstr "Copiado"
+
+msgid "Error sending signing link. Please check the email settings in GLPI."
+msgstr "Error al enviar el enlace de firma. Revisa la configuración de correo de GLPI."
+
+msgid "Please sign the delivery note — %s"
+msgstr "Firma del albarán pendiente — %s"
+
+msgid "Send signing link"
+msgstr "Enviar enlace de firma"
+
+msgid "Send signing link by email"
+msgstr "Enviar el enlace de firma por correo"
+
+msgid "Share this link with the person who needs to sign. No GLPI login required."
+msgstr "Comparte este enlace con la persona que debe firmar. No necesita iniciar sesión en GLPI."
+
+msgid "Sign delivery note"
+msgstr "Firmar albarán"
+
+msgid "Signed delivery note — %s"
+msgstr "Albarán firmado — %s"
+
+msgid "Signing link generated (valid 48 hours)"
+msgstr "Enlace de firma generado (válido 48 horas)"
+
+msgid "Signing link sent by email successfully."
+msgstr "Enlace de firma enviado por correo correctamente."
+
+msgid "The delivery note for loan <strong>%s</strong> has been signed. Please find the signed PDF attached."
+msgstr "Se ha firmado el albarán del préstamo <strong>%s</strong>. Se adjunta el PDF firmado."
+
+msgid "The link will be valid for 48 hours and can only be used once."
+msgstr "El enlace será válido durante 48 horas y solo se puede usar una vez."
+
+msgid "You have been asked to sign the delivery note for loan <strong>%s</strong>. Please click the button below to sign. The link will expire in 48 hours."
+msgstr "Se te ha pedido que firmes el albarán del préstamo <strong>%s</strong>. Pulsa el botón de abajo para firmarlo. El enlace caduca en 48 horas."

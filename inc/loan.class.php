@@ -490,7 +490,7 @@ class PluginLagapenakLoan extends CommonDBTM {
     /**
      * Last check before any deletion, whatever the route. A signed delivery note is evidence of the
      * handover: nobody can delete it. The loan itself keeps working (deliveries, returns, extensions,
-     * comments). 1.7.0 adds cancellation and kept signed versions.
+     * comments). Since 1.7.0 a request whose material was never handed over can be cancelled instead.
      */
     function pre_deleteItem() {
         if (self::isSigned($this->fields)) {

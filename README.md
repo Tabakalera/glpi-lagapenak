@@ -8,8 +8,8 @@ Plugin para GLPI 10.0.x y 11.0.x que permite gestionar préstamos de activos (or
 
 ## Requisitos
 
-- GLPI 10.0.11 o superior (probado en 10.0.24) o GLPI 11.0.x (probado en 11.0.9)
-- PHP >= 7.4
+- GLPI 10.0.11 o superior (probado en 10.0.11, 10.0.20 y 10.0.28) o GLPI 11.0.x (probado en 11.0.9 y 11.0.12)
+- PHP según la versión de GLPI (probado con PHP 8.2 en GLPI 10 y 8.3 en GLPI 11)
 - MySQL / MariaDB
 
 ## Instalación
@@ -20,14 +20,26 @@ Plugin para GLPI 10.0.x y 11.0.x que permite gestionar préstamos de activos (or
 
 Para desinstalar, pulsa **Desactivar** y luego **Desinstalar** desde el mismo menú.
 
-Desde la versión 1.6.1, desinstalar **conserva** los préstamos, sus líneas de material, los comentarios y las firmas de los albaranes, porque son el registro de las entregas. Sí se eliminan los tokens iCal (general y personales), las preferencias de visualización y el derecho `plugin_lagapenak_loan` de los perfiles. Al reinstalar, los préstamos vuelven a aparecer y hay que volver a asignar los derechos en los perfiles.
+Desde la versión 1.6.1, desinstalar **conserva** los préstamos, sus líneas de material, los comentarios y las firmas de los albaranes, porque son el registro de las entregas. Sí se eliminan los tokens iCal (general y personales), las preferencias de visualización y el derecho `plugin_lagapenak_loan` de los perfiles. Desde la 1.7.0 también se eliminan los clientes de la API, sus credenciales, las claves de identificación y la configuración de la API (al reinstalar vuelve desactivada); se conservan el registro de cambios de préstamos (`loanevents`) y el registro de llamadas a la API (`apilogs`). Al reinstalar, los préstamos vuelven a aparecer y hay que volver a asignar los derechos en los perfiles.
 
 Actualizar el plugin (copiar una versión nueva y pulsar **Actualizar**) nunca borra datos: la instalación solo crea las tablas y columnas que faltan.
+
+**Procedimiento recomendado en producción** (ensayado con `tests/g1/g1.sh ensayo`):
+
+1. Modo mantenimiento: `php bin/console maintenance:enable`.
+2. Copia de seguridad de la base de datos y de la carpeta `plugins/lagapenak`.
+3. Sustituir la carpeta del plugin por la nueva versión y recargar Apache (o PHP-FPM) para vaciar la caché de PHP.
+4. `php bin/console plugin:install lagapenak -u <administrador> --force` y `php bin/console plugin:activate lagapenak` (equivale a **Actualizar** y **Activar**).
+5. `php bin/console cache:clear` y comprobar en **Configuración → Plugins** que Lagapenak aparece activado con la versión nueva.
+6. `php bin/console maintenance:disable`.
+
+Para volver atrás: restaurar a la vez la carpeta y la base de datos de la copia del paso 2. Restaurar solo la carpeta deja el plugin desactivado.
 
 Borrado definitivo de los datos: solo con autorización y tras una copia de seguridad de la base de datos, ejecutar con el plugin desinstalado:
 
 ```sql
-DROP TABLE glpi_plugin_lagapenak_loancomments, glpi_plugin_lagapenak_loanitems, glpi_plugin_lagapenak_loans;
+DROP TABLE IF EXISTS glpi_plugin_lagapenak_loancomments, glpi_plugin_lagapenak_loanitems, glpi_plugin_lagapenak_loans,
+  glpi_plugin_lagapenak_loanevents, glpi_plugin_lagapenak_apilogs;
 DELETE FROM glpi_profilerights WHERE name = 'plugin_lagapenak_albaran';
 ```
 
@@ -158,7 +170,7 @@ Pon `[]` para no mostrar ninguno. Los labels se obtienen automáticamente de `ge
 
 **Otros cambios**
 
-- Un albarán firmado no se puede volver a firmar ni sustituir. Si hay un error, no se corrige desde la aplicación hasta la 1.7.0 (anulación y nueva versión).
+- Un albarán firmado no se puede volver a firmar ni sustituir. Si hay un error, no se corrige desde la aplicación (las versiones firmadas inmutables quedan para una versión posterior a la 1.7.0).
 - Un préstamo con el albarán firmado no se puede borrar, tampoco por un supervisor. Se puede seguir entregando, devolviendo, prorrogando y comentando.
 - Quien pide un préstamo puede retirar su solicitud solo mientras nadie haya actuado sobre ella: sigue pendiente, no hay material entregado, no se ha enviado enlace de firma, no hay prórroga pedida y nadie más ha comentado. Para borrar préstamos de otras personas hacen falta los derechos «Actualizar» y «Purgar».
 - Para consultar préstamos (lista, ficha, albarán, calendario) hace falta el derecho «Leer» de Lagapenak.
@@ -166,6 +178,14 @@ Pon `[]` para no mostrar ninguno. Los labels se obtienen automáticamente de `ge
 - Para pedir un préstamo hace falta el derecho «Crear» de Lagapenak en el perfil.
 - Cada supervisor gestiona solo los préstamos de las entidades a las que tiene acceso.
 - Solo se puede añadir material marcado con «Permitir reservas».
+
+## Cambios en la 1.7.0 para quienes gestionan préstamos
+
+- **Beneficiario:** en los préstamos nuevos el nombre completo es obligatorio, junto con un email o un DNI/NIE válidos. El formulario ya no copia los datos del solicitante: si son la misma persona, usa el botón *El beneficiario es el solicitante*. Ver [Datos del beneficiario](#datos-del-beneficiario).
+- **Cancelar en vez de borrar:** una solicitud cuyo material no se ha entregado se cancela con un motivo (supervisor de la entidad o el propio solicitante). Un préstamo cancelado no se borra ni se reabre; si hace falta el material, se crea una solicitud nueva. Ver [Cancelar una solicitud](#cancelar-una-solicitud).
+- **Textos libres:** la referencia, los campos adicionales (convocatoria, proyecto...) y el proyecto del albarán muestran un aviso: los datos personales del beneficiario van solo en sus campos.
+- **Albarán firmado:** sigue sin poder corregirse ni sustituirse desde la aplicación. Las versiones firmadas inmutables quedan para una versión posterior.
+- La API de consulta para Kide-Artean viene **desactivada**; no cambia nada para quien gestiona préstamos hasta que se active.
 
 ## Calendario y suscripción iCal
 
@@ -188,7 +208,7 @@ Requiere servidor SMTP configurado en **Configuración → Notificaciones**. Se 
 
 ---
 
-## API de integración con Kide-Artean (en desarrollo)
+## API de integración con Kide-Artean
 
 Kide-Artean (residencias y cesiones) **consulta** los préstamos de Lagapenak. Lagapenak ofrece la información completa y estructurada de sus préstamos; Kide-Artean decide qué incorpora, cómo identifica al beneficiario y qué asocia. Contrato completo: `docs/api/openapi-g1.yaml`; guía de integración: `docs/api/integracion-kide-artean.md`; privacidad: `docs/api/privacidad-g1.md`. Pruebas automáticas (entornos aislados, datos ficticios): `tests/g1/README.md`.
 
@@ -269,8 +289,8 @@ Plugin for GLPI 10.0.x and 11.0.x to manage asset loans (computers, peripherals,
 
 ## Requirements
 
-- GLPI 10.0.11 or later (tested on 10.0.24) or GLPI 11.0.x (tested on 11.0.9)
-- PHP >= 7.4
+- GLPI 10.0.11 or later (tested on 10.0.11, 10.0.20 and 10.0.28) or GLPI 11.0.x (tested on 11.0.9 and 11.0.12)
+- PHP as required by your GLPI version (tested with PHP 8.2 on GLPI 10 and 8.3 on GLPI 11)
 - MySQL / MariaDB
 
 ## Installation
@@ -281,14 +301,26 @@ Plugin for GLPI 10.0.x and 11.0.x to manage asset loans (computers, peripherals,
 
 To uninstall: click **Disable** then **Uninstall**.
 
-Since 1.6.1, uninstalling **keeps** the loans, their asset lines, comments and signed delivery notes, because they are the record of the handovers. The iCal tokens (general and personal), display preferences and the `plugin_lagapenak_loan` profile right are removed. After a reinstall the loans are back and the rights have to be granted again in the profiles.
+Since 1.6.1, uninstalling **keeps** the loans, their asset lines, comments and signed delivery notes, because they are the record of the handovers. The iCal tokens (general and personal), display preferences and the `plugin_lagapenak_loan` profile right are removed. Since 1.7.0 the API clients, their credentials, the identification keys and the API settings are removed too (a reinstall starts with the API disabled); the loan event log (`loanevents`) and the API call log (`apilogs`) are kept. After a reinstall the loans are back and the rights have to be granted again in the profiles.
 
 Updating the plugin (copying a new version and clicking **Update**) never deletes data: install only creates missing tables and columns.
+
+**Recommended production procedure** (rehearsed with `tests/g1/g1.sh ensayo`):
+
+1. Maintenance mode: `php bin/console maintenance:enable`.
+2. Back up the database and the `plugins/lagapenak` folder.
+3. Replace the plugin folder with the new version and reload Apache (or PHP-FPM) to clear PHP's cache.
+4. `php bin/console plugin:install lagapenak -u <administrator> --force` and `php bin/console plugin:activate lagapenak` (same as **Update** and **Enable**).
+5. `php bin/console cache:clear` and check in **Setup → Plugins** that Lagapenak is enabled with the new version.
+6. `php bin/console maintenance:disable`.
+
+To roll back: restore both the folder and the database from step 2. Restoring only the folder leaves the plugin disabled.
 
 Deleting the data for good: only with authorization and after a database backup, with the plugin uninstalled:
 
 ```sql
-DROP TABLE glpi_plugin_lagapenak_loancomments, glpi_plugin_lagapenak_loanitems, glpi_plugin_lagapenak_loans;
+DROP TABLE IF EXISTS glpi_plugin_lagapenak_loancomments, glpi_plugin_lagapenak_loanitems, glpi_plugin_lagapenak_loans,
+  glpi_plugin_lagapenak_loanevents, glpi_plugin_lagapenak_apilogs;
 DELETE FROM glpi_profilerights WHERE name = 'plugin_lagapenak_albaran';
 ```
 
@@ -428,7 +460,7 @@ Set to `[]` to show none. Labels are read automatically from `getFieldLabels()`.
 
 **Other changes**
 
-- A signed delivery note cannot be signed again or replaced. Mistakes cannot be corrected from the application until 1.7.0 (annulment and new version).
+- A signed delivery note cannot be signed again or replaced. Mistakes cannot be corrected from the application (immutable signed versions are planned for a version after 1.7.0).
 - A loan with a signed delivery note cannot be deleted, not even by a supervisor. Deliveries, returns, extensions and comments keep working.
 - A requester can withdraw their request only while nobody has acted on it (still pending, no asset delivered, no signing link sent, no date request, no comment from anyone else). Deleting other people's loans needs the "Update" and "Purge" rights.
 - Consulting loans (list, loan, delivery note, calendar) needs the Lagapenak "Read" right.
@@ -436,6 +468,14 @@ Set to `[]` to show none. Labels are read automatically from `getFieldLabels()`.
 - Requesting a loan needs the Lagapenak "Create" right in the profile.
 - Supervisors only manage loans of the entities they have access to.
 - Only assets with "Allow reservations" enabled can be added.
+
+## Changes in 1.7.0 for loan managers
+
+- **Beneficiary:** new loans need the full name plus a valid email or DNI/NIE. The form no longer copies the requester's data: if they are the same person, use the *The beneficiary is the requester* button. See [Beneficiary fields](#beneficiary-fields).
+- **Cancel instead of delete:** a request whose material was never handed over is cancelled with a reason (entity supervisor or the requester). A cancelled loan cannot be deleted or reopened; if the material is needed, create a new request. See [Cancelling a request](#cancelling-a-request).
+- **Free texts:** the reference, the additional fields (call, project...) and the delivery note project show a note: the beneficiary's personal data goes only in its own fields.
+- **Signed delivery note:** still cannot be corrected or replaced from the application. Immutable signed versions are planned for a later version.
+- The query API for Kide-Artean ships **disabled**; nothing changes for loan managers until it is enabled.
 
 ## Calendar and iCal subscription
 
@@ -463,7 +503,7 @@ If sending fails, the error is logged in `files/_log/`.
 
 ---
 
-## Kide-Artean integration API (in development)
+## Kide-Artean integration API
 
 Kide-Artean (residencies and assignments) **reads** Lagapenak loans. Lagapenak provides complete, structured loan data; Kide-Artean decides what to take in, how to identify the beneficiary and what to associate. Full contract: `docs/api/openapi-g1.yaml`; integration guide: `docs/api/integracion-kide-artean.md`; privacy: `docs/api/privacidad-g1.md`. Automated tests (isolated environments, fictitious data): `tests/g1/README.md`.
 

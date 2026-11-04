@@ -860,3 +860,123 @@ msgstr "Personal data: beneficiary's name and email, signer's name. Every respon
 
 msgid "Do not write the beneficiary's personal data here: use the Beneficiary fields."
 msgstr "Do not write the beneficiary's personal data here: use the Beneficiary fields."
+
+msgid "%s has left a comment on loan <strong>%s</strong>:"
+msgstr "%s has left a comment on loan <strong>%s</strong>:"
+
+msgid "%s has requested to extend the end date of loan <strong>%s</strong> to <strong>%s</strong>."
+msgstr "%s has requested to extend the end date of loan <strong>%s</strong> to <strong>%s</strong>."
+
+msgid "%s requests to extend the end date to <strong>%s</strong>."
+msgstr "%s requests to extend the end date to <strong>%s</strong>."
+
+msgid "Add a comment…"
+msgstr "Add a comment…"
+
+msgid "Apply to all loan assets too"
+msgstr "Apply to all loan assets too"
+
+msgid "Approve"
+msgstr "Approve"
+
+msgid "Comments"
+msgstr "Comments"
+
+msgid "Copied"
+msgstr "Copied"
+
+msgid "Date extension approved — %s"
+msgstr "Date extension approved — %s"
+
+msgid "Date extension rejected — %s"
+msgstr "Date extension rejected — %s"
+
+msgid "Date extension request"
+msgstr "Date extension request"
+
+msgid "Date extension request — %s"
+msgstr "Date extension request — %s"
+
+msgid "Error sending signing link. Please check the email settings in GLPI."
+msgstr "Error sending signing link. Please check the email settings in GLPI."
+
+msgid "New comment on loan %s"
+msgstr "New comment on loan %s"
+
+msgid "New end date requested"
+msgstr "New end date requested"
+
+msgid "No comments yet."
+msgstr "No comments yet."
+
+msgid "Optional — visible to the supervisor"
+msgstr "Optional — visible to the supervisor"
+
+msgid "Pending signature"
+msgstr "Pending signature"
+
+msgid "Please sign the delivery note — %s"
+msgstr "Please sign the delivery note — %s"
+
+msgid "Reject"
+msgstr "Reject"
+
+msgid "Request end date change"
+msgstr "Request end date change"
+
+msgid "Review request"
+msgstr "Review request"
+
+msgid "Send request"
+msgstr "Send request"
+
+msgid "Send signing link"
+msgstr "Send signing link"
+
+msgid "Send signing link by email"
+msgstr "Send signing link by email"
+
+msgid "Share this link with the person who needs to sign. No GLPI login required."
+msgstr "Share this link with the person who needs to sign. No GLPI login required."
+
+msgid "Sign delivery note"
+msgstr "Sign delivery note"
+
+msgid "Signed"
+msgstr "Signed"
+
+msgid "Signed delivery note — %s"
+msgstr "Signed delivery note — %s"
+
+msgid "Signing link generated (valid 48 hours)"
+msgstr "Signing link generated (valid 48 hours)"
+
+msgid "Signing link sent by email successfully."
+msgstr "Signing link sent by email successfully."
+
+msgid "The delivery note for loan <strong>%s</strong> has been signed. Please find the signed PDF attached."
+msgstr "The delivery note for loan <strong>%s</strong> has been signed. Please find the signed PDF attached."
+
+msgid "The end date of loan <strong>%s</strong> has been extended to <strong>%s</strong>."
+msgstr "The end date of loan <strong>%s</strong> has been extended to <strong>%s</strong>."
+
+msgid "The link will be valid for 48 hours and can only be used once."
+msgstr "The link will be valid for 48 hours and can only be used once."
+
+msgid "View conversation"
+msgstr "View conversation"
+
+msgid "You have been asked to sign the delivery note for loan <strong>%s</strong>. Please click the button below to sign. The link will expire in 48 hours."
+msgstr "You have been asked to sign the delivery note for loan <strong>%s</strong>. Please click the button below to sign. The link will expire in 48 hours."
+
+msgid "Your date extension request has been sent to the supervisor."
+msgstr "Your date extension request has been sent to the supervisor."
+
+msgid "Your date extension request was rejected by the supervisor."
+msgstr "Your date extension request was rejected by the supervisor."
+
+msgid "Your request to extend the end date of loan <strong>%s</strong> has been rejected by the supervisor."
+msgstr "Your request to extend the end date of loan <strong>%s</strong> has been rejected by the supervisor."
+
+msgid "Your request to extend the end date to <strong>%s</strong> is pending supervisor approval."
+msgstr "Your request to extend the end date to <strong>%s</strong> is pending supervisor approval."

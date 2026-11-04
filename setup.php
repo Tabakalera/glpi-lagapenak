@@ -1,7 +1,7 @@
 <?php
 
 // Development build of the G1 integration API (branch feature/api-g1); final number decided at release
-define('PLUGIN_LAGAPENAK_VERSION', '1.7.0-dev');
+define('PLUGIN_LAGAPENAK_VERSION', '1.7.0');
 
 include_once __DIR__ . '/inc/compat.php';
 

@@ -2,11 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.7.0-dev] - Unreleased (branch `feature/api-g1`, number to be decided at release)
+## [1.7.0] - Unreleased (date set when published)
 
 Loan query API G1 (read-only, first consumer Kide-Artean), beneficiary identification (G1-ID01) and explicit
 cancellation (G1-F05 to G1-F07). Contract: `docs/api/openapi-g1.yaml` (3.1.0-draft). Built on 1.6.1, which is
-unchanged. Pending: security review, DPD validation (`docs/api/privacidad-g1.md`), release authorisation.
+unchanged. Tested on GLPI 10.0.11, 10.0.20, 10.0.28, 11.0.9 and 11.0.12, with the upgrade from 1.6.0 and
+1.6.1 and the rollback rehearsed. Pending before publishing: security review, DPD validation
+(`docs/api/privacidad-g1.md`), release authorisation. The API stays disabled until a Super-Admin enables it.
+Immutable signed delivery notes, announced for 1.7.0 in the 1.6.1 notes, are not included: planned for a
+later version.
 
 ### Added
 - `front/api.php/v1/...`: read-only server-to-server API with four operations: `meta`, `loan-events` (level 1,
@@ -65,6 +69,9 @@ unchanged. Pending: security review, DPD validation (`docs/api/privacidad-g1.md`
   data in the reference, management fields or project (free texts reach API clients without the personal-data
   scope; classification and residual risk in `docs/api/privacidad-g1.md`, pending DPD validation)
 
+### Fixed
+- Spanish translations of the signing link (screen and email) and of the signed delivery note email
+
 ### Notes
 - The API is **disabled** after install or update until a Super-Admin enables it
 - GLPI 11: the API path is declared stateless in `plugin_lagapenak_boot()`; GLPI 10: the script disables
@@ -98,7 +105,7 @@ data on an isolated GLPI 10.0.24 and GLPI 11.0.9.
 
 ### Known open items
 - Subscribers of the general iCal URL of 1.6.0 have to subscribe again with their personal URL (Lagapenak > Calendar > Subscribe)
-- The signed PDF is still regenerated from current loan data; immutable signed versions come in 1.7.0
+- The signed PDF is still regenerated from current loan data; immutable signed versions are planned for a later version (not in 1.7.0)
 - The audit trail of manual sendings lives in the GLPI event log, whose cleanup task (if enabled) keeps 30 days by default
 
 ## [1.6.0] - 2026-09-23

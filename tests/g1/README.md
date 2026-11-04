@@ -53,7 +53,7 @@ tests/g1/g1.sh comprobar t10          # las tres baterías + contrato + vectores
 | `contrato <entorno>` | Captura respuestas reales de la API y las valida contra `docs/api/openapi-g1.yaml` (después de la batería g1) |
 | `vectores [entorno]` | Vectores HMAC con la referencia Python; con entorno, también con el PHP del plugin y el JavaScript del formulario |
 | `comprobar <entorno>` | Todo lo anterior. Sale con código distinto de 0 si algo falla |
-| `ensayo <entorno> [rama 1.6.1]` | Ensayo de actualización y reversión (ver abajo) |
+| `ensayo <entorno> [origen] [destino]` | Ensayo de actualización y reversión (ver abajo) |
 | `parar <entorno>` / `eliminar <entorno>` / `lista` | Parar; borrar contenedores, volúmenes y contraseñas del entorno; ver los entornos |
 
 Entornos recomendados antes de una entrega:
@@ -84,19 +84,26 @@ el diagnóstico.
 
 ## Ensayo de actualización y reversión
 
-`g1.sh ensayo rv` reproduce el procedimiento de despliegue en un entorno creado con la versión de producción
-(`g1.sh crear rv 10.0.20`). **Borra y vuelve a crear la base de datos de ese entorno**, que solo contiene datos
-ficticios.
+`g1.sh ensayo <entorno> [origen] [destino]` reproduce el procedimiento de despliegue en un entorno creado con la
+versión de GLPI de producción. **Borra y vuelve a crear la base de datos de ese entorno**, que solo contiene datos
+ficticios. El origen es una rama o commit (por defecto `release/1.6.1-seguridad`); el destino, otra rama o, por
+defecto, la copia de trabajo. Las ramas solo se leen.
 
-0. GLPI limpio con la 1.6.1 de la rama `release/1.6.1-seguridad` (solo se lee, nunca se modifica) y actividad
-   generada por la batería general.
-1. Modo mantenimiento, copia de la base y del plugin, sustitución por la versión G1 (copia de trabajo),
-   Actualizar + Activar, `cache:clear`. Comprueba que los datos no cambian, que la API queda desactivada y
-   ejecuta las tres baterías.
+| Ruta | Orden |
+|---|---|
+| 1.6.0 → 1.6.1 | `g1.sh ensayo rv main release/1.6.1-seguridad` |
+| 1.6.1 → 1.7.0 | `g1.sh ensayo rv release/1.6.1-seguridad release/1.7.0` |
+| 1.6.0 → 1.7.0 | `g1.sh ensayo rv main release/1.7.0` |
+
+0. GLPI limpio con la versión de origen y actividad generada por la batería general. Su resultado es la
+   referencia: la 1.6.0 tiene fallos de seguridad conocidos que corrige la 1.6.1, y no cuentan como problema.
+1. Modo mantenimiento, copia de la base y del plugin, sustitución por la versión de destino, Actualizar +
+   Activar, `cache:clear`. Comprueba que los datos no cambian, que la API queda desactivada y ejecuta las
+   baterías (la de la API, solo si el destino la incluye).
 2. Desinstalación: no deben quedar credenciales, configuración ni claves de la API.
 3. Reinstalación: los préstamos, sus `uuid` y los eventos se conservan.
-4. Reversión completa a la 1.6.1 con la copia del paso 1: datos idénticos, sin columnas nuevas, y la batería
-   general vuelve a pasar.
+4. Reversión completa al origen con la copia del paso 1: datos idénticos, sin columnas nuevas, y la batería
+   general da el mismo resultado que en el paso 0.
 
 El ensayo termina con «sin diferencias ni fallos» o con el número de problemas.
 

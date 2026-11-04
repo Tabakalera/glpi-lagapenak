@@ -7,7 +7,8 @@
 #   g1.sh contrato <entorno>                  respuestas reales de la API validadas contra docs/api/openapi-g1.yaml
 #   g1.sh vectores [entorno]                  vectores HMAC: referencia Python; con entorno, también PHP y el JS del formulario
 #   g1.sh comprobar <entorno>                 todas las baterías + contrato + vectores
-#   g1.sh ensayo <entorno> [rama 1.6.1]       actualización desde 1.6.1, desinstalación, reinstalación y reversión
+#   g1.sh ensayo <entorno> [origen] [destino] actualización origen→destino, desinstalación, reinstalación y reversión
+#                                             (por defecto release/1.6.1-seguridad → copia de trabajo)
 #   g1.sh parar <entorno> | eliminar <entorno> | lista
 #
 # Resultados (salidas completas y diagnóstico de cada fallo): tests/g1/resultados/<entorno>-<fecha>/, fuera de Git.
@@ -181,11 +182,18 @@ vectores() {
 }
 
 ensayo() {
-  local ref161=${1:-release/1.6.1-seguridad} c db; c=$(C); db=$(DB)
-  local v161 vg1
+  # Origen: la versión instalada antes (una rama o commit). Destino: la que se instala («-» = copia de trabajo).
+  local ref161=${1:-release/1.6.1-seguridad} destino=${2:--} c db; c=$(C); db=$(DB)
+  local v161 vg1 api=no
   v161=$(git -C "$REPO" show "$ref161:setup.php" | grep -o "VERSION', '[0-9a-z.-]*" | sed "s/.*'//")
-  vg1=$(grep -o "VERSION', '[0-9a-z.-]*" "$REPO/setup.php" | sed "s/.*'//")
+  if [ "$destino" = - ]; then
+    vg1=$(grep -o "VERSION', '[0-9a-z.-]*" "$REPO/setup.php" | sed "s/.*'//"); [ -f "$REPO/front/api.php" ] && api=sí
+  else
+    vg1=$(git -C "$REPO" show "$destino:setup.php" | grep -o "VERSION', '[0-9a-z.-]*" | sed "s/.*'//")
+    git -C "$REPO" cat-file -e "$destino:front/api.php" 2>/dev/null && api=sí
+  fi
   [ -n "$v161" ] && [ -n "$vg1" ] || die "no se pudieron leer las versiones"
+  local dest_txt; dest_txt=$([ "$destino" = - ] && echo "copia de trabajo" || echo "$destino, $(git -C "$REPO" rev-parse --short "$destino")")
   local DUMP=/tmp/copia-previa-$(date +%H%M%S).sql problemas=0
   st() { q "select concat(version,' state=',state) from glpi_plugins where directory='lagapenak'"; }
   datos() { q "select concat('prestamos=',(select count(*) from glpi_plugin_lagapenak_loans),
@@ -201,9 +209,13 @@ ensayo() {
   meta() { docker exec "$c" curl -s -o /dev/null -w '%{http_code}' http://localhost/plugins/lagapenak/front/api.php/v1/meta; }
   need() { local n; n=$(q "$2"); if [ -z "$n" ] || [ "$n" = 0 ]; then echo "  ALTO: no se cumple «$1»."; exit 1; fi; }
   same() { if [ "$2" = "$3" ]; then echo "  $1: idénticos"; else echo "  $1: DIFERENCIAS ($2 ≠ $3)"; problemas=$((problemas+1)); fi; }
-  run() { # run <etiqueta> <paso> <clave> <fichero>: un fallo o una batería sin terminar cuentan como problema
-          bateria_una "$3" "$4" "paso$2-$3" >/dev/null || problemas=$((problemas+1)); local f=$RES/paso$2-$3.txt
-          echo "  $1: $(grep "^Resultado" "$f" || echo "SIN RESULTADO")"; grep "| FALLO" "$f" | cut -c1-250; }
+  run() { # run <etiqueta> <paso> <clave> <fichero> [info]: un fallo o una batería sin terminar cuentan como
+          # problema, salvo con «info» (la versión de origen puede tener fallos ya conocidos, p. ej. la 1.6.0)
+          bateria_una "$3" "$4" "paso$2-$3" >/dev/null || { [ "${5:-}" = info ] || problemas=$((problemas+1)); }
+          local f=$RES/paso$2-$3.txt
+          echo "  $1: $(grep "^Resultado" "$f" || echo "SIN RESULTADO")$([ "${5:-}" = info ] && echo " (referencia, no cuenta)")"
+          [ "${5:-}" = info ] || grep "| FALLO" "$f" | cut -c1-250; }
+  resultado() { grep "^Resultado" "$RES/paso$1-$2.txt" 2>/dev/null; }
   paso() { echo; echo "== $*"; }
 
   paso "0. Producción simulada: GLPI $(q "select value from glpi_configs where context='core' and name='version'") + Lagapenak $v161 ($ref161, $(git -C "$REPO" rev-parse --short "$ref161")) con actividad"
@@ -216,7 +228,7 @@ ensayo() {
   docker exec "$c" php /tmp/fixtures_sql.php >/dev/null; docker exec "$c" php /tmp/fixtures_perm.php >/dev/null; console cache:clear >/dev/null
   need "$v161 activo" "select count(*) from glpi_plugins where directory='lagapenak' and version='$v161' and state=1"
   docker exec "$c" bash -c "echo 80 > /tmp/suite_n; echo 0 > /tmp/suite_g1_n"
-  run "batería general $v161" 0 general suite.sh
+  run "batería general $v161" 0 general suite.sh info
   local ANTES; ANTES=$(datos); echo "  $(st) · datos: $ANTES"; echo "  tablas: $(tablas)"
 
   paso "1. Actualización con el procedimiento de despliegue"
@@ -225,30 +237,32 @@ ensayo() {
     && echo "  2) copia de la base: $(docker exec "$db" stat -c %s $DUMP) bytes"
   local COPIA=/tmp/plugin-$v161-$(date +%H%M%S)
   docker exec "$c" cp -a $PLUGIN $COPIA && echo "     copia del plugin: $COPIA"
-  poner_plugin -; echo "  3) carpeta sustituida por la versión G1 ($vg1, copia de trabajo) · 4) Apache recargado"
+  poner_plugin "$destino"; echo "  3) carpeta sustituida por la $vg1 ($dest_txt) · 4) Apache recargado"
   console plugin:install lagapenak -u glpi --force >/dev/null; console plugin:activate lagapenak >/dev/null; echo "  5) Actualizar + Activar"
   console cache:clear >/dev/null; echo "  6) cache:clear"
-  need "versión G1 activa" "select count(*) from glpi_plugins where directory='lagapenak' and version='$vg1' and state=1"
+  need "$vg1 activa" "select count(*) from glpi_plugins where directory='lagapenak' and version='$vg1' and state=1"
   echo "  7) estado: $(st)"
   console maintenance:disable >/dev/null; echo "  8) fin del mantenimiento"
   same "datos de préstamos" "$ANTES" "$(datos)"
   echo "  uuid: $(uuids)"
   echo "  tablas: $(tablas)"
   echo "  configuración: $(apicfg)"
-  echo "  API tras actualizar (desactivada): GET /v1/meta → $(meta)"
+  echo "  API tras actualizar (desactivada o inexistente): GET /v1/meta → $(meta)"
   [ "$(meta)" = 404 ] || { echo "  DIFERENCIAS: la API debería estar desactivada"; problemas=$((problemas+1)); }
-  echo "  préstamos anteriores marcados como no comprobados: $(q "select concat(sum(beneficiary_validated=0),'/',count(*)) from glpi_plugin_lagapenak_loans")"
-  run "batería API G1" 1 g1 suite_g1.sh
+  if [ $api = sí ]; then
+    echo "  préstamos anteriores marcados como no comprobados: $(q "select concat(sum(beneficiary_validated=0),'/',count(*)) from glpi_plugin_lagapenak_loans")"
+    run "batería API G1" 1 g1 suite_g1.sh
+  fi
   run "batería de permisos" 1 perm suite_perm.sh
   run "batería general" 1 general suite.sh
 
-  paso "2. Desinstalar la versión G1"
+  paso "2. Desinstalar la $vg1"
   local EV PRE PREU; EV=$(eventos); PRE=$(datos); PREU=$(uuids)
   console plugin:deactivate lagapenak >/dev/null; echo "  $(console plugin:uninstall lagapenak)"
   echo "  tablas que quedan: $(tablas)"
   echo "  clientes de la API (credenciales): $(q "select count(*) from information_schema.tables where table_schema=database() and table_name='glpi_plugin_lagapenak_apiclients'") tablas · configuración: $(apicfg) · claves de identificación: $(q "select count(*) from glpi_configs where context='plugin:lagapenak' and name in ('api_hmac_keys','api_hmac_keys_mod')")"
 
-  paso "3. Reinstalar la versión G1"
+  paso "3. Reinstalar la $vg1"
   console plugin:install lagapenak -u glpi >/dev/null; console plugin:activate lagapenak >/dev/null; console cache:clear >/dev/null
   echo "  $(st)"
   same "préstamos, líneas, comentarios y firmas" "$PRE" "$(datos)"
@@ -267,7 +281,8 @@ ensayo() {
   echo "  $(st) · tablas: $(tablas)"
   same "datos respecto a la copia previa" "$ANTES" "$(datos)"
   echo "  columnas nuevas: $(q "select count(*) from information_schema.columns where table_schema=database() and table_name='glpi_plugin_lagapenak_loans' and column_name in ('uuid','beneficiary_validated','cancel_date','cancel_users_id','cancel_reason')") · front/api.php: $(docker exec "$c" test -f $PLUGIN/front/api.php && echo existe || echo no existe)"
-  run "batería general $v161 tras revertir" 4 general suite.sh
+  run "batería general $v161 tras revertir" 4 general suite.sh info
+  same "batería general de $v161 antes y después" "$(resultado 0 general | sed 's/ · 0 abiertos//')" "$(resultado 4 general | sed 's/ · 0 abiertos//')"
   echo; echo "Ensayo: $([ $problemas = 0 ] && echo "sin diferencias ni fallos" || echo "$problemas PROBLEMAS (ver $RES)")"
   [ $problemas = 0 ]
 }
@@ -281,7 +296,7 @@ case $cmd in
   vectores)  if [ -n "${1:-}" ]; then entorno "$1"; fi; vectores ;;
   comprobar) entorno "${1:-}"; salida; r=0; bateria todas || r=1; contrato || r=1; vectores || r=1
              echo; echo "Comprobación de «$E»: $([ $r = 0 ] && echo "todo correcto" || echo "HAY FALLOS (ver $RES)")"; exit $r ;;
-  ensayo)    entorno "${1:-}"; salida; ensayo "${2:-}" 2>&1 | tee "$RES/ensayo.txt"; exit "${PIPESTATUS[0]}" ;;
+  ensayo)    entorno "${1:-}"; salida; ensayo "${2:-}" "${3:-}" 2>&1 | tee "$RES/ensayo.txt"; exit "${PIPESTATUS[0]}" ;;
   parar)     entorno "${1:-}"; compose stop ;;
   eliminar)  entorno "${1:-}"; echo "Se borran los contenedores y volúmenes de $(proyecto) (solo datos ficticios)."
              compose down -v && rm -f "$(ENVF)" ;;
