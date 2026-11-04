@@ -103,12 +103,14 @@ entrega, ensaya con los paquetes mismos.
 1. Modo mantenimiento, copia de la base y del plugin, sustitución por la versión de destino, Actualizar +
    Activar, `cache:clear`. Comprueba que los datos no cambian, que la API queda desactivada y ejecuta las
    baterías (la de la API, solo si el destino la incluye).
+1b. Reversión al origen **conservando los datos**, como se haría en producción si aparece un problema tras
+   actualizar: solo se cambian los archivos (con `plugin:install --force` y la retirada de la tarea automática
+   `ApiLogClean` si el origen no la conoce), sin desinstalar. Los préstamos y los derechos de los perfiles deben
+   quedar idénticos, sin errores de PHP ni de tareas automáticas, y la batería general del origen debe pasar si
+   pasaba en el paso 0.
+1c. Volver a actualizar al destino sobre esa base: datos y derechos idénticos y baterías correctas.
 2. Desinstalación: no deben quedar credenciales, configuración ni claves de la API.
 3. Reinstalación: los préstamos, sus `uuid` y los eventos se conservan.
-4a. Reversión al origen **conservando los datos**: solo se cambian los archivos (con `plugin:install --force` y la
-   retirada de la tarea automática `ApiLogClean` si el origen no la conoce). Los préstamos y los derechos de los
-   perfiles deben quedar idénticos, sin errores de PHP ni de tareas automáticas, y la batería general del origen
-   debe pasar si pasaba en el paso 0.
 4. Reversión completa al origen con la copia del paso 1: datos idénticos, sin columnas nuevas, y la batería
    general da el mismo resultado que en el paso 0.
 

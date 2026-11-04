@@ -280,6 +280,38 @@ ensayo() {
   run "batería de permisos" 1 perm suite_perm.sh
   run "batería general" 1 general suite.sh
 
+  paso "1b. Reversión a $v161 conservando los datos (solo archivos, sin desinstalar; la base queda como la dejó la $vg1)"
+  local PRE1 DER1; PRE1=$(datos); DER1=$(derechos)
+  console maintenance:enable >/dev/null
+  poner_plugin "$ref161"; console plugin:install lagapenak -u glpi --force >/dev/null; console plugin:activate lagapenak >/dev/null
+  # Tarea automática de la versión nueva que la anterior no conoce (la 1.7.0 la vuelve a crear al actualizar)
+  { tiene_api "$ref161"; } || q "delete from glpi_crontasks where itemtype='PluginLagapenakLoan' and name='ApiLogClean'"
+  console cache:clear >/dev/null
+  need "$v161 activo tras revertir conservando datos" "select count(*) from glpi_plugins where directory='lagapenak' and version='$v161' and state=1"
+  console maintenance:disable >/dev/null
+  echo "  $(st) · tablas: $(tablas)"
+  same "préstamos, líneas, comentarios y firmas" "$PRE1" "$(datos)"
+  same "derechos de los perfiles" "$DER1" "$(derechos)"
+  docker exec "$c" sh -c ': > '$GLPI'/files/_log/php-errors.log'
+  local t; for t in LoanReminder ApiLogClean; do docker exec -u www-data -w $GLPI "$c" php front/cron.php --force $t >/dev/null 2>&1; done
+  if grep -q " 0 FALLO" <<< "$(resultado 0 general)"; then run "batería general $v161 sobre la base de la $vg1" 1b general suite.sh
+  else run "batería general $v161 sobre la base de la $vg1" 1b general suite.sh info; fi
+  local errs; errs=$(docker exec "$c" sh -c "grep -c 'PHP\|Fatal\|Uncaught\|no definida\|not defined' $GLPI/files/_log/php-errors.log")
+  echo "  errores de PHP o de tareas automáticas: $errs"; [ "$errs" = 0 ] || problemas=$((problemas+1))
+
+  paso "1c. Volver a actualizar a la $vg1 sobre esa base (procedimiento de despliegue)"
+  local PRE1C; PRE1C=$(datos)
+  console maintenance:enable >/dev/null
+  poner_plugin "$destino"; console plugin:install lagapenak -u glpi --force >/dev/null; console plugin:activate lagapenak >/dev/null
+  console cache:clear >/dev/null
+  need "$vg1 activa de nuevo" "select count(*) from glpi_plugins where directory='lagapenak' and version='$vg1' and state=1"
+  console maintenance:disable >/dev/null
+  echo "  $(st)"
+  same "préstamos, líneas, comentarios y firmas" "$PRE1C" "$(datos)"
+  same "derechos de los perfiles" "$DER1" "$(derechos)"
+  if [ $api = sí ]; then run "batería API G1" 1c g1 suite_g1.sh; fi
+  run "batería general" 1c general suite.sh
+
   paso "2. Desinstalar la $vg1"
   local EV PRE PREU; EV=$(eventos); PRE=$(datos); PREU=$(uuids)
   console plugin:deactivate lagapenak >/dev/null; echo "  $(console plugin:uninstall lagapenak)"
@@ -293,25 +325,6 @@ ensayo() {
   same "uuid de los préstamos" "$PREU" "$(uuids)"
   same "eventos de préstamo" "$EV" "$(eventos)"
   echo "  API tras reinstalar: $(apicfg) · GET /v1/meta → $(meta)"
-
-  paso "4a. Reversión a $v161 conservando los datos (solo archivos; la base queda como la dejó la $vg1)"
-  local PRE4 DER4; PRE4=$(datos); DER4=$(derechos)
-  console maintenance:enable >/dev/null
-  poner_plugin "$ref161"; console plugin:install lagapenak -u glpi --force >/dev/null; console plugin:activate lagapenak >/dev/null
-  # Tarea automática de la versión nueva que la anterior no conoce (la 1.7.0 la vuelve a crear al actualizar)
-  { tiene_api "$ref161"; } || q "delete from glpi_crontasks where itemtype='PluginLagapenakLoan' and name='ApiLogClean'"
-  console cache:clear >/dev/null
-  need "$v161 activo tras revertir conservando datos" "select count(*) from glpi_plugins where directory='lagapenak' and version='$v161' and state=1"
-  console maintenance:disable >/dev/null
-  echo "  $(st) · tablas: $(tablas)"
-  same "préstamos, líneas, comentarios y firmas" "$PRE4" "$(datos)"
-  same "derechos de los perfiles" "$DER4" "$(derechos)"
-  docker exec "$c" sh -c ': > '$GLPI'/files/_log/php-errors.log'
-  local t; for t in LoanReminder ApiLogClean; do docker exec -u www-data -w $GLPI "$c" php front/cron.php --force $t >/dev/null 2>&1; done
-  if grep -q " 0 FALLO" <<< "$(resultado 0 general)"; then run "batería general $v161 sobre la base de la $vg1" 4a general suite.sh
-  else run "batería general $v161 sobre la base de la $vg1" 4a general suite.sh info; fi
-  local errs; errs=$(docker exec "$c" sh -c "grep -c 'PHP\|Fatal\|Uncaught\|no definida\|not defined' $GLPI/files/_log/php-errors.log")
-  echo "  errores de PHP o de tareas automáticas: $errs"; [ "$errs" = 0 ] || problemas=$((problemas+1))
 
   paso "4. Reversión completa a $v161 (archivos + base de la copia del paso 1)"
   console maintenance:enable >/dev/null

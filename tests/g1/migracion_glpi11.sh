@@ -10,7 +10,8 @@ export MSYS_NO_PATHCONV=1
 cd "$(dirname "$0")/../.."
 G=tests/g1/g1.sh
 [ $# = 2 ] || { sed -n '2,8p' "$0"; exit 2; }
-TMPD=$(mktemp -d)   # copia temporal de la base y de la clave de GLPI 10; se borra al final
+TMPD=$(cd "$(mktemp -d)" && { pwd -W 2>/dev/null || pwd; })   # copia temporal de la base y de la clave de GLPI 10 (ruta
+# que entienda también Docker en Windows); se borra al final
 EO=$1; ED=$2; O=lagapenak-g1-$EO; D=lagapenak-g1-$ED
 GL=/var/www/html/glpi
 qo() { docker exec $O-db-1 sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE" -N -e "$1"' sh "$1" 2>/dev/null; }
@@ -34,6 +35,8 @@ docker exec -i $D-db-1 sh -c 'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" "$MARIAD
 docker exec $D-glpi-1 sh -c "cp -a $GL/config/glpicrypt.key /tmp/glpicrypt.key.propio-\$(date +%H%M%S)"
 docker cp $O-glpi-1:$GL/config/glpicrypt.key "$TMPD/glpicrypt.key" >/dev/null && docker cp "$TMPD/glpicrypt.key" $D-glpi-1:$GL/config/glpicrypt.key >/dev/null
 docker exec $D-glpi-1 chown www-data:www-data $GL/config/glpicrypt.key
+k1=$(docker exec $O-glpi-1 sha256sum $GL/config/glpicrypt.key | cut -c1-64); k2=$(docker exec $D-glpi-1 sha256sum $GL/config/glpicrypt.key | cut -c1-64)
+[ "$k1" = "$k2" ] && echo "  glpicrypt.key de GLPI 10 copiada al GLPI 11: idéntica" || { echo "  ALTO: glpicrypt.key no se copió"; exit 1; }
 echo "  base cargada en GLPI 11: versión de GLPI en la base = $(qd "select value from glpi_configs where context='core' and name='version'")"
 
 paso "2. Plugin 1.6.0 en la carpeta del GLPI 11 y migración de GLPI (db:update)"
