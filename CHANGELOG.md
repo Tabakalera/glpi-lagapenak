@@ -2,10 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.6.1] - Unreleased
+## [1.6.1] - YYYY-MM-DD (release date to be set on publication)
 
 Security release. Every issue below was reproduced first and checked after the fix with fictitious
-data on an isolated GLPI 10.0.24 and GLPI 11.0.9.
+data on an isolated GLPI 10.0.24 and GLPI 11.0.9. Release tests: GLPI 10.0.11, 10.0.20, 10.0.28 and 11.0.12,
+including the upgrade from 1.6.0 and the rollback.
 
 ### Security
 - Creating a loan now requires the CREATE right, also to open the form (the "New" button was hidden, the page and its submission were not). The entity must be one the user can access and the recipient must be a supervisor of that entity. A requester needs CREATE to add assets to their own loan
@@ -28,7 +29,7 @@ data on an isolated GLPI 10.0.24 and GLPI 11.0.9.
 
 ### Known open items
 - Subscribers of the general iCal URL of 1.6.0 have to subscribe again with their personal URL (Lagapenak > Calendar > Subscribe)
-- The signed PDF is still regenerated from current loan data; immutable signed versions come in 1.7.0
+- The signed PDF is still regenerated from current loan data; immutable signed versions are planned for a future version, with no committed date
 - The audit trail of manual sendings lives in the GLPI event log, whose cleanup task (if enabled) keeps 30 days by default
 
 ## [1.6.0] - 2026-09-23

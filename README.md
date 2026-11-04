@@ -8,8 +8,8 @@ Plugin para GLPI 10.0.x y 11.0.x que permite gestionar préstamos de activos (or
 
 ## Requisitos
 
-- GLPI 10.0.11 o superior (probado en 10.0.24) o GLPI 11.0.x (probado en 11.0.9)
-- PHP >= 7.4
+- GLPI 10.0.11 o superior (probado en 10.0.11, 10.0.20, 10.0.24 y 10.0.28) o GLPI 11.0.x (probado en 11.0.9 y 11.0.12)
+- PHP según la versión de GLPI (probado con PHP 8.2 en GLPI 10 y 8.3 en GLPI 11)
 - MySQL / MariaDB
 
 ## Instalación
@@ -151,7 +151,7 @@ Pon `[]` para no mostrar ninguno. Los labels se obtienen automáticamente de `ge
 
 **Otros cambios**
 
-- Un albarán firmado no se puede volver a firmar ni sustituir. Si hay un error, no se corrige desde la aplicación hasta la 1.7.0 (anulación y nueva versión).
+- Un albarán firmado no se puede volver a firmar ni sustituir. Si hay un error, no se corrige desde la aplicación (las versiones firmadas inmutables quedan para una versión futura, sin fecha comprometida).
 - Un préstamo con el albarán firmado no se puede borrar, tampoco por un supervisor. Se puede seguir entregando, devolviendo, prorrogando y comentando.
 - Quien pide un préstamo puede retirar su solicitud solo mientras nadie haya actuado sobre ella: sigue pendiente, no hay material entregado, no se ha enviado enlace de firma, no hay prórroga pedida y nadie más ha comentado. Para borrar préstamos de otras personas hacen falta los derechos «Actualizar» y «Purgar».
 - Para consultar préstamos (lista, ficha, albarán, calendario) hace falta el derecho «Leer» de Lagapenak.
@@ -236,8 +236,8 @@ Plugin for GLPI 10.0.x and 11.0.x to manage asset loans (computers, peripherals,
 
 ## Requirements
 
-- GLPI 10.0.11 or later (tested on 10.0.24) or GLPI 11.0.x (tested on 11.0.9)
-- PHP >= 7.4
+- GLPI 10.0.11 or later (tested on 10.0.11, 10.0.20, 10.0.24 and 10.0.28) or GLPI 11.0.x (tested on 11.0.9 and 11.0.12)
+- PHP as required by your GLPI version (tested with PHP 8.2 on GLPI 10 and 8.3 on GLPI 11)
 - MySQL / MariaDB
 
 ## Installation
@@ -388,7 +388,7 @@ Set to `[]` to show none. Labels are read automatically from `getFieldLabels()`.
 
 **Other changes**
 
-- A signed delivery note cannot be signed again or replaced. Mistakes cannot be corrected from the application until 1.7.0 (annulment and new version).
+- A signed delivery note cannot be signed again or replaced. Mistakes cannot be corrected from the application (immutable signed versions are planned for a future version, with no committed date).
 - A loan with a signed delivery note cannot be deleted, not even by a supervisor. Deliveries, returns, extensions and comments keep working.
 - A requester can withdraw their request only while nobody has acted on it (still pending, no asset delivered, no signing link sent, no date request, no comment from anyone else). Deleting other people's loans needs the "Update" and "Purge" rights.
 - Consulting loans (list, loan, delivery note, calendar) needs the Lagapenak "Read" right.
