@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.6.1] - YYYY-MM-DD (release date to be set on publication)
+## [1.6.1] - 2026-11-04
 
 Security release. Every issue below was reproduced first and checked after the fix with fictitious
 data on an isolated GLPI 10.0.24 and GLPI 11.0.9. Release tests: GLPI 10.0.11, 10.0.20, 10.0.28 and 11.0.12,
