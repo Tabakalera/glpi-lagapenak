@@ -98,10 +98,14 @@ crear() {
   fi
   grep -q "^G1_GLPI_VERSION=$v$" "$(ENVF)" || die "el entorno «$E» ya existe con otra versión de GLPI"
   if ! grep -q '^G1_SUBNET=' "$(ENVF)"; then   # una subred /24 que no use ninguna red de Docker
+    # Bloqueo: dos entornos creados a la vez no deben elegir la misma subred
+    local w; for w in $(seq 1 60); do mkdir "$LOCAL/.subred.lock" 2>/dev/null && break; sleep 1; done
+    trap 'rmdir "$LOCAL/.subred.lock" 2>/dev/null' EXIT
     local used n; used=$(docker network inspect $(docker network ls -q) --format '{{range .IPAM.Config}}{{.Subnet}} {{end}}' 2>/dev/null)
     used+=" $(cat "$LOCAL"/*.env 2>/dev/null | grep '^G1_SUBNET=' | cut -d= -f2)"
     for n in $(seq 200 254) x; do [ $n = x ] && die "no hay subred libre en 10.250.200-254.0/24"; grep -q "10\.250\.$n\.0/24" <<< "$used" || break; done
     echo "G1_SUBNET=10.250.$n.0/24" >> "$(ENVF)"
+    rmdir "$LOCAL/.subred.lock" 2>/dev/null
   fi
   echo "== $E: GLPI $v (proyecto Docker $(proyecto))"
   compose up -d --build --quiet-pull 2>&1 | grep -iv 'pulling\|pulled\|waiting\|downloading\|extracting' | tail -3
