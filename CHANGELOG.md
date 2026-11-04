@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.7.0] - YYYY-MM-DD (release candidate; date to be set on publication, after final authorisation)
+## [1.7.0] - YYYY-MM-DD (release date to be set on publication)
 
 Loan query API G1 (read-only, first consumer Kide-Artean), beneficiary identification (G1-ID01) and explicit
 cancellation (G1-F05 to G1-F07). Contract: `docs/api/openapi-g1.yaml` (3.1.0-draft). Built on 1.6.1, which is

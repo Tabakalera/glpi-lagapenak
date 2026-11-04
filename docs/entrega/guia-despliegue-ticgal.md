@@ -1,9 +1,8 @@
 # Lagapenak 1.6.1 y 1.7.0: guía de despliegue y reversión
 
 Destinatario: Ticgal, para actualizar Lagapenak en el GLPI corporativo de Tabakalera.
-Estado: **para revisión**. La 1.6.1 está lista para publicarse cuando Tabakalera lo autorice. La 1.7.0 es una
-**versión candidata**: no debe instalarse en producción hasta que estén cerradas las aprobaciones del
-apartado 13.
+Estado: la 1.6.1 y la 1.7.0 están cerradas en la rama principal y se publicarán cuando Tabakalera lo autorice.
+La 1.7.0 no debe instalarse en producción hasta que estén cerradas las aprobaciones del apartado 13.
 
 Los paquetes, sus sumas SHA-256 y los commits de los que proceden están en `MANIFIESTO.md`, que se entrega junto a
 esta guía (fuera de los paquetes). Comprueba siempre la suma antes de instalar.
@@ -100,6 +99,12 @@ hasta que se dé por buena la actualización.
 3. **Configuración de GLPI**: la carpeta de configuración (`<glpi>/config`, o la que indique
    `GLPI_CONFIG_DIR`), sobre todo `glpicrypt.key`. En la 1.7.0 la clave de identificación de la API se guarda
    cifrada con ella; sin esa clave no se puede descifrar.
+4. **Derechos de los perfiles sobre Lagapenak**, aparte, para poder restaurarlos solos (apartado 9):
+   ```bash
+   mysqldump --no-create-info --replace --skip-triggers -u <usuario> -p <base_glpi> glpi_profilerights \
+     --where="name LIKE 'plugin_lagapenak%'" > derechos-lagapenak-<fecha>.sql
+   ```
+   El archivo solo debe contener una sentencia `REPLACE INTO` y ningún `DROP TABLE` ni `CREATE TABLE`.
 
 **Foto previa** para comparar después (guárdala con las copias):
 
@@ -230,7 +235,19 @@ grave. Hay dos métodos, ambos ensayados en GLPI 10.0.20 y 11.0.12:
 | B. Completa (archivos + base) | Exactamente el estado de antes de actualizar | **Todo lo registrado en GLPI después de la copia** (no solo en Lagapenak) | Fallo durante la ventana, antes de reabrir GLPI, o datos dañados |
 
 **No uses «Desinstalar» como reversión**: desinstalar elimina los derechos de los perfiles sobre Lagapenak, los
-enlaces iCal personales y la configuración de la API.
+enlaces iCal personales y la configuración de la API. Comprobado en los ensayos: tras desinstalar y reinstalar, los
+usuarios pierden el permiso de pedir y gestionar préstamos.
+
+**Protección de los derechos de los perfiles.** Tras cualquier reversión, compara los derechos con la foto previa
+(apartado 4). Si no coinciden (por ejemplo, porque alguien desinstaló el plugin), restáuralos solos con la copia
+del apartado 4, punto 4, sin tocar el resto de la base:
+
+```bash
+mysql -u <usuario> -p <base_glpi> < derechos-lagapenak-<fecha>.sql
+php bin/console cache:clear
+```
+
+Ensayado: los derechos vuelven a quedar idénticos y el resto de la tabla `glpi_profilerights` no cambia.
 
 ### Método A: conservando datos
 
@@ -353,6 +370,15 @@ préstamos idénticos en cada paso.
 
 La batería general sobre la 1.6.0 da 24 correctas y 40 fallos: son los problemas de seguridad que corrige la
 1.6.1, y desaparecen al actualizar.
+
+**Límites de lo probado**
+- Solo datos ficticios y volúmenes pequeños (decenas de préstamos). No se ha medido la duración de la
+  actualización con el volumen real de producción.
+- MariaDB 10.11 y PHP 8.2 y 8.3. Si producción usa MySQL u otras versiones de PHP, conviene indicarlo.
+- GLPI 11 probado en 11.0.9 y 11.0.12. Con otra versión hay que repetir las pruebas.
+- La migración a GLPI 11 se ha ensayado solo con Lagapenak, no con el resto de plugins del GLPI corporativo.
+- El correo se ha probado con un servidor de pruebas interno, no con el SMTP corporativo.
+- Las pruebas de aceptación del apartado 8 deben hacerse en el GLPI corporativo tras cada ventana.
 
 ## 13. Aprobaciones pendientes antes de instalar
 
