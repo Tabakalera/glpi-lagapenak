@@ -2,6 +2,82 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.0] - YYYY-MM-DD (release date to be set on publication)
+
+Loan query API G1 (read-only, first consumer Kide-Artean), beneficiary identification (G1-ID01) and explicit
+cancellation (G1-F05 to G1-F07). Contract: `docs/api/openapi-g1.yaml` (3.1.0-draft). Built on 1.6.1, which is
+unchanged. Tested on GLPI 10.0.11, 10.0.20, 10.0.28, 11.0.9 and 11.0.12, with the upgrade from 1.6.0 and
+1.6.1 and the rollback rehearsed. Pending before publishing: security review, DPD validation
+(`docs/api/privacidad-g1.md`), release authorisation. The API stays disabled until a Super-Admin enables it.
+Immutable signed delivery notes are not included: planned for a future version, with no committed date.
+
+### Added
+- `front/api.php/v1/...`: read-only server-to-server API with four operations: `meta`, `loan-events` (level 1,
+  light incremental discovery), `loans?number=` / `loans?uuids=` and `loans/{uuid}` (level 2, full detail of
+  any loan of the authorised entities, whether or not the consumer recognised the beneficiary). Lagapenak
+  does not know residencies or assignments: the consumer identifies the beneficiary and decides what to
+  associate
+- Full structured detail: reference, entity, linked ticket, requester and recipient (GLPI id and name),
+  management fields (call, project, location, area, department), planned period, extension request (status,
+  requested date, whether it applies to the assets), delivery note (signed, date, project, pending signing link
+  and its expiry, never the link), cancellation (date and who), number of comments and date of the last one,
+  and per asset line: line id, type, GLPI asset id, name, inventory and serial numbers, status, planned period,
+  last change
+- Two scopes: `loans:read` (operational data and beneficiary fingerprints) and `loans:read:personal` (adds the
+  beneficiary's name and email and the signer's name to the detail). A new client gets `loans:read` only. The
+  DNI/NIE is never sent in clear; signatures, documents, signing links, observations, notes, comments,
+  incident texts and reasons are never sent
+- Beneficiary identification: HMAC-SHA256 fingerprints of the normalised email and DNI/NIE ("g1-v1", shared
+  test vectors in `docs/api/g1-hmac-vectors.json`), with a key that belongs to the integration, stored
+  encrypted with GLPI's key, identified by `kid`, rotated with a transition period
+- Warning `requester_autofill_possible` on older loans whose beneficiary email equals the requester's (1.6.1
+  pre-filled it): the consumer must not associate them by email alone. Historical data is not changed
+- Computed material status: pending delivery, partially delivered, delivered, partially returned, returned,
+  returned with incident, cancelled (G1-F01, G1-F02)
+- Change feed from 2026-01-01 (loans active from that date, including older loans still running), with
+  deletions and moves out of the authorised entities; total order and opaque cursor; changes of comments, of
+  the client's entities or scopes, or of the keys send the loans again
+- Explicit cancellation of requests whose material was never handed over, by the supervisor of the loan's
+  entity or by the original requester of their own request (G1-F05), reason required, checked again in the
+  write itself against concurrent deliveries or signatures; the loan is kept with who, when and why
+- Scope version (`scope_version`) in every discovery page, in `meta` and in the `X-Lagapenak-Scope-Version`
+  header: it changes whenever what the client may see changes (authorised entities, GLPI sub-entities, scopes),
+  so the consumer reconciles the loans it knows; loans out of scope come back as `not_available`, with no data
+- Every loan gets a random UUID (filled in for existing loans on update), not editable
+- API log without bodies, with the number of loans returned with personal data per call (`personal_count`);
+  daily task `ApiLogClean`; Super-Admin page (*Setup › Plugins › Lagapenak › Configure*)
+- `docs/api/integracion-kide-artean.md` (integration guide) and `docs/api/privacidad-g1.md` (for the DPD)
+- `tests/g1/`: automated G1, permission and regression suites, contract validation against real responses,
+  HMAC vectors (Python reference, plugin PHP, form JavaScript) and the upgrade/rollback rehearsal from 1.6.1,
+  run with `tests/g1/g1.sh` in isolated Docker environments with fictitious data and random credentials.
+  Excluded from deployments and packages
+
+### Changed
+- Loan form: the beneficiary is no longer pre-filled with the requester's data; a button copies it when they
+  really are the same person. New loans need the beneficiary's full name (G1-F08) and at least one valid
+  identifier: a valid email or a valid DNI/NIE (format and letter). Passports and foreign documents are
+  accepted, with an email. Checked in the browser and on the server; what was typed is kept when the check
+  fails. Editing the beneficiary of an existing loan applies the same rule; older loans keep their data until
+  someone edits the beneficiary
+- A cancelled loan can never be deleted (G1-F06), by any route (loan form, GLPI massive actions, GLPI API),
+  even with the purge right
+- A cancelled loan is never reopened nor changed (G1-F07): no edit, massive update, asset, delivery, date,
+  extension or signature. A new request is created instead
+- A loan can no longer be created already cancelled, nor cancelled through the loan form
+- Loan form and on-screen delivery note: a discreet note asks staff not to write the beneficiary's personal
+  data in the reference, management fields or project (free texts reach API clients without the personal-data
+  scope; classification and residual risk in `docs/api/privacidad-g1.md`, pending DPD validation)
+
+### Fixed
+- Spanish translations of the signing link (screen and email) and of the signed delivery note email
+
+### Notes
+- The API is **disabled** after install or update until a Super-Admin enables it
+- GLPI 11: the API path is declared stateless in `plugin_lagapenak_boot()`; GLPI 10: the script disables
+  session cookies itself
+- Uninstall removes API clients and integration keys (credentials) and keeps loans, the loan event log and
+  the API log (records)
+
 ## [1.6.1] - YYYY-MM-DD (release date to be set on publication)
 
 Security release. Every issue below was reproduced first and checked after the fix with fictitious

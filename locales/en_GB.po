@@ -602,3 +602,381 @@ msgstr "Calendars subscribed to this URL will stop receiving loans. Continue?"
 
 msgid "Revoke URL"
 msgstr "Revoke URL"
+
+msgid "API enabled (when disabled, every call answers 404)"
+msgstr "API enabled (when disabled, every call answers 404)"
+
+msgid "Allowed IPs"
+msgstr "Allowed IPs"
+
+msgid "Allowed source IPs (one per line; address or range)"
+msgstr "Allowed source IPs (one per line; address or range)"
+
+msgid "Authorised entities"
+msgstr "Authorised entities"
+
+msgid "Choose at least one entity."
+msgstr "Choose at least one entity."
+
+msgid "Choose at least one scope."
+msgstr "Choose at least one scope."
+
+msgid "Client saved."
+msgstr "Client saved."
+
+msgid "Client"
+msgstr "Client"
+
+msgid "Clients"
+msgstr "Clients"
+
+msgid "Copy this credential now: it will not be shown again."
+msgstr "Copy this credential now: it will not be shown again."
+
+msgid "Create client and show credential"
+msgstr "Create client and show credential"
+
+msgid "Credential revoked: it stopped working immediately."
+msgstr "Credential revoked: it stopped working immediately."
+
+msgid "Days the current credential keeps working"
+msgstr "Days the current credential keeps working"
+
+msgid "Deletes integration API log entries older than the retention period"
+msgstr "Deletes integration API log entries older than the retention period"
+
+msgid "Edit client: %s"
+msgstr "Edit client: %s"
+
+msgid "Enter at least one allowed IP address."
+msgstr "Enter at least one allowed IP address."
+
+msgid "Expires (12 months at most)"
+msgstr "Expires (12 months at most)"
+
+msgid "Expires"
+msgstr "Expires"
+
+msgid "Expiry date must be in the future and within 12 months."
+msgstr "Expiry date must be in the future and within 12 months."
+
+msgid "Include sub-entities"
+msgstr "Include sub-entities"
+
+msgid "Integration API (Kide-Artean)"
+msgstr "Integration API (Kide-Artean)"
+
+msgid "Invalid IP address or range: %s"
+msgstr "Invalid IP address or range: %s"
+
+msgid "Issue new credential"
+msgstr "Issue new credential"
+
+msgid "Keep API log (days)"
+msgstr "Keep API log (days)"
+
+msgid "Kide-Artean user"
+msgstr "Kide-Artean user"
+
+msgid "Lagapenak · Integration API"
+msgstr "Lagapenak · Integration API"
+
+msgid "Last 50 calls"
+msgstr "Last 50 calls"
+
+msgid "Last used"
+msgstr "Last used"
+
+msgid "Name is required: up to 100 letters, digits, spaces and . _ ( ) -"
+msgstr "Name is required: up to 100 letters, digits, spaces and . _ ( ) -"
+
+msgid "New client"
+msgstr "New client"
+
+msgid "No clients yet."
+msgstr "No clients yet."
+
+msgid "Read-only access to loans of the authorised entities and links with residencies and assignments. Contract: docs/api/openapi-g1.yaml in the plugin folder."
+msgstr "Read-only access to loans of the authorised entities and links with residencies and assignments. Contract: docs/api/openapi-g1.yaml in the plugin folder."
+
+msgid "Request"
+msgstr "Request"
+
+msgid "Requests per minute per client"
+msgstr "Requests per minute per client"
+
+msgid "Require HTTPS (only disable in test environments)"
+msgstr "Require HTTPS (only disable in test environments)"
+
+msgid "Result"
+msgstr "Result"
+
+msgid "Revoke now"
+msgstr "Revoke now"
+
+msgid "Scopes"
+msgstr "Scopes"
+
+msgid "Settings saved."
+msgstr "Settings saved."
+
+msgid "Settings"
+msgstr "Settings"
+
+msgid "Source must be 2-32 lower-case letters, digits or dashes."
+msgstr "Source must be 2-32 lower-case letters, digits or dashes."
+
+msgid "Source"
+msgstr "Source"
+
+msgid "The client will stop working immediately. Continue?"
+msgstr "The client will stop working immediately. Continue?"
+
+msgid "Trusted reverse proxies (IP or range; only these may set X-Forwarded-For / X-Forwarded-Proto)"
+msgstr "Trusted reverse proxies (IP or range; only these may set X-Forwarded-For / X-Forwarded-Proto)"
+
+msgid "previous credential valid until %s"
+msgstr "previous credential valid until %s"
+
+msgid "sub-entities"
+msgstr "sub-entities"
+
+msgid "A loan with a signed delivery note cannot be cancelled: the material was handed over."
+msgstr "A loan with a signed delivery note cannot be cancelled: the material was handed over."
+
+msgid "A new key changes every fingerprint: Kide-Artean must load it before the transition ends. Continue?"
+msgstr "A new key changes every fingerprint: Kide-Artean must load it before the transition ends. Continue?"
+
+msgid "Beneficiary identification keys (HMAC)"
+msgstr "Beneficiary identification keys (HMAC)"
+
+msgid "Cancel request"
+msgstr "Cancel request"
+
+msgid "Cancelled request"
+msgstr "Cancelled request"
+
+msgid "Change feed from (loans active from this date)"
+msgstr "Change feed from (loans active from this date)"
+
+msgid "Copy this identification key now: it will not be shown again. Hand it to Kide-Artean through a secure channel."
+msgstr "Copy this identification key now: it will not be shown again. Hand it to Kide-Artean through a secure channel."
+
+msgid "DNI/NIE or passport"
+msgstr "DNI/NIE or passport"
+
+msgid "Days the current key keeps working"
+msgstr "Days the current key keeps working"
+
+msgid "Enter the beneficiary's email address or DNI/NIE (at least one)."
+msgstr "Enter the beneficiary's email address or DNI/NIE (at least one)."
+
+msgid "Enter the reason for the cancellation."
+msgstr "Enter the reason for the cancellation."
+
+msgid "Generate key"
+msgstr "Generate key"
+
+msgid "No key yet: the API sends no fingerprints until one is generated."
+msgstr "No key yet: the API sends no fingerprints until one is generated."
+
+msgid "Only requests whose material has not been delivered can be cancelled."
+msgstr "Only requests whose material has not been delivered can be cancelled."
+
+msgid "Person who receives the material (artist, resident...), not who requests it. Email or DNI/NIE required (at least one); with a passport or foreign document, the email."
+msgstr "Person who receives the material (artist, resident...), not who requests it. Email or DNI/NIE required (at least one); with a passport or foreign document, the email."
+
+msgid "Previous identification keys retired."
+msgstr "Previous identification keys retired."
+
+msgid "Read-only access to the loans of the authorised entities: change feed with beneficiary fingerprints, and detail. Contract: docs/api/openapi-g1.yaml in the plugin folder."
+msgstr "Read-only access to the loans of the authorised entities: change feed with beneficiary fingerprints, and detail. Contract: docs/api/openapi-g1.yaml in the plugin folder."
+
+msgid "Reason"
+msgstr "Reason"
+
+msgid "Retire previous keys now"
+msgstr "Retire previous keys now"
+
+msgid "Retired"
+msgstr "Retired"
+
+msgid "Rotate key"
+msgstr "Rotate key"
+
+msgid "The API sends fingerprints of the beneficiary's email and DNI/NIE, never the values. Kide-Artean needs the same key to compare them. Pending DPD validation before production."
+msgstr "The API sends fingerprints of the beneficiary's email and DNI/NIE, never the values. Kide-Artean needs the same key to compare them. Pending DPD validation before production."
+
+msgid "The beneficiary is the requester"
+msgstr "The beneficiary is the requester"
+
+msgid "The beneficiary's DNI/NIE is not valid: check the number and the letter."
+msgstr "The beneficiary's DNI/NIE is not valid: check the number and the letter."
+
+msgid "The beneficiary's email address is not valid."
+msgstr "The beneficiary's email address is not valid."
+
+msgid "The loan is already cancelled."
+msgstr "The loan is already cancelled."
+
+msgid "The loan is cancelled: it can no longer be changed."
+msgstr "The loan is cancelled: it can no longer be changed."
+
+msgid "The request has been cancelled. It stays in the list with its history."
+msgstr "The request has been cancelled. It stays in the list with its history."
+
+msgid "The request stays in the list with its history and can no longer be changed. Use it when the material will not be delivered."
+msgstr "The request stays in the list with its history and can no longer be changed. Use it when the material will not be delivered."
+
+msgid "The sync start date is not valid."
+msgstr "The sync start date is not valid."
+
+msgid "Transition"
+msgstr "Transition"
+
+msgid "Valid until"
+msgstr "Valid until"
+
+msgid "With a passport or foreign document, the beneficiary's email address is required."
+msgstr "With a passport or foreign document, the beneficiary's email address is required."
+
+msgid "%d with personal data"
+msgstr "%d with personal data"
+
+msgid "A cancelled loan cannot be deleted: it is kept with its history."
+msgstr "A cancelled loan cannot be deleted: it is kept with its history."
+
+msgid "Enter the beneficiary's full name."
+msgstr "Enter the beneficiary's full name."
+
+msgid "Loans, material, states, dates, entity, staff and operational fields; beneficiary fingerprints"
+msgstr "Loans, material, states, dates, entity, staff and operational fields; beneficiary fingerprints"
+
+msgid "Person who receives the material (artist, resident...), not who requests it. Full name required, and email or DNI/NIE (at least one); with a passport or foreign document, the email."
+msgstr "Person who receives the material (artist, resident...), not who requests it. Full name required, and email or DNI/NIE (at least one); with a passport or foreign document, the email."
+
+msgid "Personal data: beneficiary's name and email, signer's name. Every response that carries them is logged"
+msgstr "Personal data: beneficiary's name and email, signer's name. Every response that carries them is logged"
+
+msgid "Do not write the beneficiary's personal data here: use the Beneficiary fields."
+msgstr "Do not write the beneficiary's personal data here: use the Beneficiary fields."
+
+msgid "%s has left a comment on loan <strong>%s</strong>:"
+msgstr "%s has left a comment on loan <strong>%s</strong>:"
+
+msgid "%s has requested to extend the end date of loan <strong>%s</strong> to <strong>%s</strong>."
+msgstr "%s has requested to extend the end date of loan <strong>%s</strong> to <strong>%s</strong>."
+
+msgid "%s requests to extend the end date to <strong>%s</strong>."
+msgstr "%s requests to extend the end date to <strong>%s</strong>."
+
+msgid "Add a comment…"
+msgstr "Add a comment…"
+
+msgid "Apply to all loan assets too"
+msgstr "Apply to all loan assets too"
+
+msgid "Approve"
+msgstr "Approve"
+
+msgid "Comments"
+msgstr "Comments"
+
+msgid "Copied"
+msgstr "Copied"
+
+msgid "Date extension approved — %s"
+msgstr "Date extension approved — %s"
+
+msgid "Date extension rejected — %s"
+msgstr "Date extension rejected — %s"
+
+msgid "Date extension request"
+msgstr "Date extension request"
+
+msgid "Date extension request — %s"
+msgstr "Date extension request — %s"
+
+msgid "Error sending signing link. Please check the email settings in GLPI."
+msgstr "Error sending signing link. Please check the email settings in GLPI."
+
+msgid "New comment on loan %s"
+msgstr "New comment on loan %s"
+
+msgid "New end date requested"
+msgstr "New end date requested"
+
+msgid "No comments yet."
+msgstr "No comments yet."
+
+msgid "Optional — visible to the supervisor"
+msgstr "Optional — visible to the supervisor"
+
+msgid "Pending signature"
+msgstr "Pending signature"
+
+msgid "Please sign the delivery note — %s"
+msgstr "Please sign the delivery note — %s"
+
+msgid "Reject"
+msgstr "Reject"
+
+msgid "Request end date change"
+msgstr "Request end date change"
+
+msgid "Review request"
+msgstr "Review request"
+
+msgid "Send request"
+msgstr "Send request"
+
+msgid "Send signing link"
+msgstr "Send signing link"
+
+msgid "Send signing link by email"
+msgstr "Send signing link by email"
+
+msgid "Share this link with the person who needs to sign. No GLPI login required."
+msgstr "Share this link with the person who needs to sign. No GLPI login required."
+
+msgid "Sign delivery note"
+msgstr "Sign delivery note"
+
+msgid "Signed"
+msgstr "Signed"
+
+msgid "Signed delivery note — %s"
+msgstr "Signed delivery note — %s"
+
+msgid "Signing link generated (valid 48 hours)"
+msgstr "Signing link generated (valid 48 hours)"
+
+msgid "Signing link sent by email successfully."
+msgstr "Signing link sent by email successfully."
+
+msgid "The delivery note for loan <strong>%s</strong> has been signed. Please find the signed PDF attached."
+msgstr "The delivery note for loan <strong>%s</strong> has been signed. Please find the signed PDF attached."
+
+msgid "The end date of loan <strong>%s</strong> has been extended to <strong>%s</strong>."
+msgstr "The end date of loan <strong>%s</strong> has been extended to <strong>%s</strong>."
+
+msgid "The link will be valid for 48 hours and can only be used once."
+msgstr "The link will be valid for 48 hours and can only be used once."
+
+msgid "View conversation"
+msgstr "View conversation"
+
+msgid "You have been asked to sign the delivery note for loan <strong>%s</strong>. Please click the button below to sign. The link will expire in 48 hours."
+msgstr "You have been asked to sign the delivery note for loan <strong>%s</strong>. Please click the button below to sign. The link will expire in 48 hours."
+
+msgid "Your date extension request has been sent to the supervisor."
+msgstr "Your date extension request has been sent to the supervisor."
+
+msgid "Your date extension request was rejected by the supervisor."
+msgstr "Your date extension request was rejected by the supervisor."
+
+msgid "Your request to extend the end date of loan <strong>%s</strong> has been rejected by the supervisor."
+msgstr "Your request to extend the end date of loan <strong>%s</strong> has been rejected by the supervisor."
+
+msgid "Your request to extend the end date to <strong>%s</strong> is pending supervisor approval."
+msgstr "Your request to extend the end date to <strong>%s</strong> is pending supervisor approval."

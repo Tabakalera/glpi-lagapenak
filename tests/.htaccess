@@ -1,0 +1,2 @@
+# Las pruebas no forman parte del plugin servido por GLPI 10 (en GLPI 11 solo se sirve public/).
+Require all denied

@@ -1,0 +1,53 @@
+# Entorno aislado para las pruebas G1 de Lagapenak. Lo crea y maneja tests/g1/g1.sh (ver README.md).
+# - Red interna: sin salida a Internet ni a la red corporativa y sin puertos publicados en el equipo.
+# - Volúmenes propios del proyecto (lagapenak-g1-<entorno>): no comparte nada con otros GLPI.
+# - Correo: Mailpit dentro de la red; nada sale fuera.
+# - Contraseñas y subred: aleatorias o libres, generadas por g1.sh en tests/g1/.local/<entorno>.env (fuera de Git).
+# - El plugin no va en la imagen: g1.sh lo copia desde la copia de trabajo o desde una rama.
+services:
+  db:
+    image: mariadb:10.11
+    environment:
+      MARIADB_ROOT_PASSWORD: ${G1_DB_ROOT_PASSWORD:?crea el entorno con g1.sh}
+      MARIADB_DATABASE: ${G1_DB_NAME:?}
+      MARIADB_USER: ${G1_DB_USER:?}
+      MARIADB_PASSWORD: ${G1_DB_PASSWORD:?}
+    volumes:
+      - db:/var/lib/mysql
+    networks: [interna]
+
+  glpi:
+    image: lagapenak-g1-glpi:${G1_GLPI_VERSION:?}
+    build:
+      context: .
+      dockerfile: ${G1_DOCKERFILE:?}
+      args:
+        GLPI_VERSION: ${G1_GLPI_VERSION}
+    environment:
+      TIMEZONE: Europe/Madrid
+      G1_DB_NAME: ${G1_DB_NAME}
+      G1_DB_USER: ${G1_DB_USER}
+      G1_DB_PASSWORD: ${G1_DB_PASSWORD}
+      G1_USER_PASSWORD: ${G1_USER_PASSWORD:?}
+      G1_ADMIN_PASSWORD: ${G1_ADMIN_PASSWORD:?}
+    volumes:
+      - config:/var/www/html/glpi/config
+      - files:/var/www/html/glpi/files
+    networks: [interna]
+    depends_on: [db]
+
+  mailpit:
+    image: axllent/mailpit:v1.31.2
+    networks: [interna]
+
+networks:
+  interna:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${G1_SUBNET:?}   # la elige g1.sh entre las libres (Docker puede agotar sus rangos automáticos)
+
+volumes:
+  db:
+  config:
+  files:

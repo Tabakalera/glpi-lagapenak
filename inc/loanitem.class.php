@@ -337,9 +337,29 @@ class PluginLagapenakLoanItem extends CommonDBTM {
         return '';
     }
 
+    /**
+     * G1-F07: the lines of a cancelled loan never change (whatever the caller: form, AJAX, GLPI routes).
+     * $loans_id, or the loan of line $line_id.
+     */
+    static function isLoanCancelled(int $loans_id, int $line_id = 0): bool {
+        global $DB;
+        if ($line_id > 0) {
+            $loans_id = 0;
+            foreach ($DB->request(['SELECT' => ['loans_id'], 'FROM' => 'glpi_plugin_lagapenak_loanitems', 'WHERE' => ['id' => $line_id]]) as $r) {
+                $loans_id = (int) $r['loans_id'];
+            }
+        }
+        return countElementsInTable('glpi_plugin_lagapenak_loans', [
+            'id' => $loans_id, 'status' => PluginLagapenakLoan::STATUS_CANCELLED,
+        ]) > 0;
+    }
+
     static function addItem($loans_id, $itemtype, $items_id, $date_checkout = null, $date_checkin = null) {
         global $DB;
 
+        if (self::isLoanCancelled((int) $loans_id)) {
+            return false;
+        }
         if (empty($itemtype) || $items_id <= 0 || self::checkAsset($itemtype, $items_id) !== '') {
             return false;
         }
@@ -377,6 +397,9 @@ class PluginLagapenakLoanItem extends CommonDBTM {
 
     static function removeItem($id) {
         global $DB;
+        if (self::isLoanCancelled(0, (int) $id)) {
+            return;
+        }
         $DB->delete('glpi_plugin_lagapenak_loanitems', ['id' => (int) $id]);
     }
 
@@ -385,6 +408,9 @@ class PluginLagapenakLoanItem extends CommonDBTM {
      */
     static function applyLoanDateToAllItems(int $loans_id, string $fecha_fin): void {
         global $DB;
+        if (self::isLoanCancelled($loans_id)) {
+            return;
+        }
         $DB->update('glpi_plugin_lagapenak_loanitems',
             ['date_checkin' => $fecha_fin, 'date_mod' => date('Y-m-d H:i:s')],
             ['loans_id' => $loans_id]
@@ -393,6 +419,9 @@ class PluginLagapenakLoanItem extends CommonDBTM {
 
     static function updateItemStatus($id, $status) {
         global $DB;
+        if (self::isLoanCancelled(0, (int) $id)) {
+            return;
+        }
         $DB->update('glpi_plugin_lagapenak_loanitems', [
             'status'  => (int) $status,
             'date_mod' => date('Y-m-d H:i:s'),
@@ -401,6 +430,9 @@ class PluginLagapenakLoanItem extends CommonDBTM {
 
     static function updateItem($id, $status, $date_checkout, $date_checkin) {
         global $DB;
+        if (self::isLoanCancelled(0, (int) $id)) {
+            return;
+        }
         $DB->update('glpi_plugin_lagapenak_loanitems', [
             'status'        => (int) $status,
             'date_checkout' => !empty($date_checkout) ? $date_checkout : null,
@@ -488,7 +520,8 @@ class PluginLagapenakLoanItem extends CommonDBTM {
      */
     private function managesParentLoan(): bool {
         $loan = new PluginLagapenakLoan();
-        return $loan->getFromDB((int) ($this->fields['loans_id'] ?? 0)) && PluginLagapenakLoan::canManageLoan($loan);
+        return $loan->getFromDB((int) ($this->fields['loans_id'] ?? 0)) && PluginLagapenakLoan::canManageLoan($loan)
+            && !PluginLagapenakLoan::isCancelled($loan->fields);
     }
 
     function canUpdateItem(): bool {

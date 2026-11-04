@@ -1,0 +1,5 @@
+# Resultados de las pruebas (salidas, diagnóstico, respuestas capturadas): pueden contener credenciales de
+# prueba y datos del entorno; nunca se versionan.
+resultados/
+# Contraseñas aleatorias de cada entorno, generadas por g1.sh
+.local/

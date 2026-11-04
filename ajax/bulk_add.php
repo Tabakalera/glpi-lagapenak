@@ -41,6 +41,10 @@ $_ba_uid         = (int)($_SESSION['glpiID'] ?? 0);
 $_ba_can_sup     = PluginLagapenakLoan::canManageLoan($loan);
 $_ba_is_owner    = (int)($loan->fields['users_id'] ?? 0) === $_ba_uid;
 $_ba_loan_status = (int)($loan->fields['status'] ?? 0);
+if (PluginLagapenakLoan::isCancelled($loan->fields)) {
+    echo json_encode(['error' => 'El préstamo está cancelado']);
+    exit;
+}
 if (!$_ba_can_sup
     && !(PluginLagapenakLoan::canView() && $_ba_is_owner && $_ba_loan_status === PluginLagapenakLoan::STATUS_PENDING
          && PluginLagapenakLoan::canCreate())
