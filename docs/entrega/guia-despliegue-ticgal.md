@@ -1,8 +1,9 @@
 # Lagapenak 1.6.1 y 1.7.0: guía de despliegue y reversión
 
 Destinatario: Ticgal, para actualizar Lagapenak en el GLPI corporativo de Tabakalera.
-Estado: la 1.6.1 y la 1.7.0 están cerradas en la rama principal y se publicarán cuando Tabakalera lo autorice.
-La 1.7.0 no debe instalarse en producción hasta que estén cerradas las aprobaciones del apartado 13.
+Estado: Lagapenak 1.6.1 y 1.7.0 publicadas el 4 de noviembre de 2026. Tabakalera autoriza instalar la 1.7.0
+(que incluye la 1.6.1) con la API **desactivada**. La API no se activa hasta cerrar las aprobaciones del
+apartado 13.
 
 Los paquetes, sus sumas SHA-256 y los commits de los que proceden están en `MANIFIESTO.md`, que se entrega junto a
 esta guía (fuera de los paquetes). Comprueba siempre la suma antes de instalar.
@@ -23,9 +24,9 @@ hacerlo todo a la vez.
 
 | Ruta | Cuándo |
 |---|---|
-| 1.6.0 → 1.6.1 | En cuanto se autorice. Recomendada como primer paso |
-| 1.6.1 → 1.7.0 | Cuando se autorice la 1.7.0 |
-| 1.6.0 → 1.7.0 (directa) | Solo si la 1.6.1 no se ha instalado antes y ya está autorizada la 1.7.0 |
+| 1.6.0 → 1.7.0 (directa) | **La prevista**: desde la 1.6.0 de producción, instala todo de una vez |
+| 1.6.0 → 1.6.1 | Solo si se prefiere un paso intermedio (por ejemplo, si la 1.7.0 tuviera que esperar) |
+| 1.6.1 → 1.7.0 | Si ya se instaló la 1.6.1 |
 
 ### Compatibilidad comprobada
 
@@ -161,9 +162,8 @@ paso 6.
 - Cambia el formulario de préstamo (apartado 11): avisar antes al personal.
 
 ### 6.3 De 1.6.0 a 1.7.0 directamente
-- Instala de una vez todo lo de 6.1 y 6.2. Se ha ensayado y funciona igual que en dos pasos.
-- Se recomienda en dos pasos (6.1 y luego 6.2) si las ventanas lo permiten: es más fácil saber qué cambio causa
-  un problema, y la 1.6.1 corrige problemas de seguridad que no conviene retrasar.
+- Es la ruta prevista. Instala de una vez todo lo de 6.1 y 6.2; se ha ensayado y funciona igual que en dos pasos.
+- Después, haz lo indicado en 6.1 (aviso del calendario, revisión de perfiles) y en 6.2 (aviso al personal).
 
 ## 7. Comprobaciones técnicas después de actualizar
 
@@ -312,8 +312,8 @@ normalidad):
 
 | Opción | Ventana 1 | Ventana 2 | Ventana 3 |
 |---|---|---|---|
-| Recomendada | Migrar GLPI 10.0.20 → 11 con Lagapenak 1.6.0; `plugin:resume_execution`; comprobar | Lagapenak 1.6.0 → 1.6.1 | Lagapenak 1.6.1 → 1.7.0 (cuando se autorice) |
-| Alternativa | Lagapenak 1.6.0 → 1.6.1 en GLPI 10.0.20 | Migrar GLPI → 11 con la 1.6.1; `plugin:resume_execution`; comprobar | Lagapenak 1.6.1 → 1.7.0 (cuando se autorice) |
+| Prevista | Migrar GLPI 10.0.20 → 11 con Lagapenak 1.6.0; `plugin:resume_execution`; comprobar | Lagapenak 1.6.0 → 1.7.0 | — |
+| Alternativa | Migrar GLPI 10.0.20 → 11 con Lagapenak 1.6.0; `plugin:resume_execution`; comprobar | Lagapenak 1.6.0 → 1.6.1 | Lagapenak 1.6.1 → 1.7.0 |
 
 Si en una misma ventana se migra GLPI y se actualiza Lagapenak, hazlo en dos pasos separados, con sus copias y
 comprobaciones: primero GLPI, comprobar, después el plugin.
@@ -326,7 +326,7 @@ Otras notas para GLPI 11:
 
 ## 11. Lagapenak 1.7.0: cambios para el personal y API
 
-**Cambios en el trabajo diario** (requieren aprobación y aviso al personal):
+**Cambios en el trabajo diario** (avisar al personal antes de instalar):
 - Beneficiario: en los préstamos nuevos el nombre completo es obligatorio, junto con un email o un DNI/NIE
   válidos. El formulario ya no copia los datos del solicitante (hay un botón para hacerlo cuando son la misma
   persona).
@@ -380,17 +380,17 @@ La batería general sobre la 1.6.0 da 24 correctas y 40 fallos: son los problema
 - El correo se ha probado con un servidor de pruebas interno, no con el SMTP corporativo.
 - Las pruebas de aceptación del apartado 8 deben hacerse en el GLPI corporativo tras cada ventana.
 
-## 13. Aprobaciones pendientes antes de instalar
+## 13. Requisitos y aprobaciones
 
-| Requisito | Responsable propuesto | 1.6.1 | 1.7.0 |
-|---|---|---|---|
-| Autorización de publicación y despliegue | Tabakalera (responsable del servicio) | Pendiente | Pendiente |
-| Versión exacta de GLPI 11 que instalará Ticgal | Ticgal | Pendiente | Pendiente |
-| Pruebas sobre esa versión exacta | Desarrollo de Lagapenak | Pendiente si no es 11.0.12 | Pendiente si no es 11.0.12 |
-| Ventanas de mantenimiento y copias de seguridad | Ticgal, con Tabakalera | Pendiente | Pendiente |
-| Aprobación de los cambios operativos del formulario y aviso al personal | Responsables de préstamos de Tabakalera | — | Pendiente |
-| Revisión de seguridad | Responsable de seguridad designado por Tabakalera | Recomendable | **Necesaria** |
-| Validación del DPD (`docs/api/privacidad-g1.md`) | Delegado de Protección de Datos | — | **Necesaria** antes de activar la API; recomendable antes de instalar |
+| Requisito | Responsable | Estado |
+|---|---|---|
+| Publicación y autorización de instalar la 1.7.0 con la API desactivada | Tabakalera | Concedida (4 de noviembre de 2026) |
+| Versión exacta de GLPI 11 | Ticgal | Comunicarla a Tabakalera. Probadas: 11.0.9 y 11.0.12; con otra, hacer las pruebas de aceptación del apartado 8 con especial atención y avisar de cualquier error |
+| Ventanas de mantenimiento y copias de seguridad | Ticgal, con Tabakalera | Según este documento |
+| Aviso al personal de los cambios del formulario (apartado 11) | Responsables de préstamos de Tabakalera | Antes de instalar |
+| Revisión de seguridad | Responsable de seguridad designado por Tabakalera | **Necesaria antes de activar la API** |
+| Validación del DPD (`docs/api/privacidad-g1.md`) | Delegado de Protección de Datos | **Necesaria antes de activar la API** |
+| Activación de la API y alta del cliente Kide·artean | Super-Admin de GLPI | No hacer hasta las dos anteriores y nueva autorización |
 
 ## 14. Qué devolver a Tabakalera tras cada ventana
 
